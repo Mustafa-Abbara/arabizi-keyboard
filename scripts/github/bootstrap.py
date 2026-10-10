@@ -24,6 +24,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -36,6 +37,12 @@ WEEK1_FRIDAY = date(2026, 10, 16)  # ASSUMPTION A1: Project Week 1 = Mon 12 – 
 N_WEEKS = 10
 OWNERS = ("omar", "mohamad", "moustafa")
 RULESET_NAME = "protect-main"
+
+RETRY_DELAYS_S = (2, 5, 15, 30)
+CREATE_PAUSE_S = 1.0  # GitHub asks for about 1 s between content-creating requests
+TRANSIENT_ERRORS = ("dial tcp", "read tcp", "wsarecv", "connectex", "tls handshake timeout",
+                    "connection reset", "i/o timeout",
+                    "unexpected eof", "http 502", "http 503", "http 504", "secondary rate limit")
 
 LABELS: dict[str, tuple[str, str]] = {
     **{f"stage:S{i}": ("c5def5", f"Roadmap stage S{i}") for i in range(13)},
@@ -69,16 +76,34 @@ class Issue:
 
 # --------------------------------------------------------------------------- gh helpers
 
-def gh(args: list[str], dry_run: bool, stdin: str | None = None, read_only: bool = False) -> str:
-    """Run `gh`. In dry-run, writes are printed and skipped; reads return an empty result."""
+class GhError(RuntimeError):
+    def __init__(self, message: str, transient: bool):
+        super().__init__(message)
+        self.transient = transient
+
+
+def gh(args: list[str], dry_run: bool, stdin: str | None = None, read_only: bool = False,
+       retry: bool = True) -> str:
+    """Run `gh`. In dry-run, writes are printed and skipped; reads return an empty result.
+
+    Network errors are retried with backoff when `retry` is true. Pass retry=False for
+    non-idempotent calls (issue creation) and handle the retry at the call site.
+    """
     if dry_run:
         if not read_only:
             print("  [dry-run] gh " + " ".join(args[:6]) + (" ..." if len(args) > 6 else ""))
         return ""
-    result = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, encoding="utf-8")
-    if result.returncode != 0:
-        raise RuntimeError(f"gh {' '.join(args[:4])} failed: {result.stderr.strip()}")
-    return result.stdout
+    for delay in (*RETRY_DELAYS_S, None):
+        result = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, encoding="utf-8")
+        if result.returncode == 0:
+            return result.stdout
+        error = result.stderr.strip()
+        transient = any(marker in error.lower() for marker in TRANSIENT_ERRORS)
+        if not (retry and transient and delay is not None):
+            raise GhError(f"gh {' '.join(args[:4])} failed: {error}", transient)
+        print(f"  network error, retrying in {delay}s", file=sys.stderr)
+        time.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 def gh_json(args: list[str], dry_run: bool, default):
@@ -229,11 +254,30 @@ def cmd_milestones(repo: str, dry: bool) -> None:
             "-f", f"due_on={friday.isoformat()}T23:59:59Z"], dry)
 
 
+def issue_titles(repo: str, dry: bool) -> set[str]:
+    return {i["title"] for i in gh_json(
+        ["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "title"], dry, [])}
+
+
+def create_issue(repo: str, dry: bool, args: list[str], issue: Issue) -> None:
+    """Creating an issue is not idempotent: after a network error, retry only if it did not land."""
+    for delay in (*RETRY_DELAYS_S, None):
+        try:
+            gh(args, dry, stdin=issue.body, retry=False)
+            return
+        except GhError as exc:
+            if not exc.transient or delay is None:
+                raise
+            print(f"  network error, checking and retrying in {delay}s", file=sys.stderr)
+            time.sleep(delay)
+            if issue.title in issue_titles(repo, dry):
+                return
+
+
 def cmd_issues(repo: str, dry: bool, project: str | None) -> None:
     team = {k: v for k, v in json.loads(TEAM_FILE.read_text(encoding="utf-8")).items() if k in OWNERS}
     issues = parse_roadmap()
-    existing = {i["title"] for i in gh_json(
-        ["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "title"], dry, [])}
+    existing = issue_titles(repo, dry)
     print(f"Issues: {len(issues)} parsed from roadmap, {len(existing)} already on GitHub")
     for issue in issues:
         if issue.title in existing:
@@ -248,7 +292,9 @@ def cmd_issues(repo: str, dry: bool, project: str | None) -> None:
                 args += ["--assignee", team[owner]]
         if project:
             args += ["--project", project]
-        gh(args, dry, stdin=issue.body)
+        create_issue(repo, dry, args, issue)
+        if not dry:
+            time.sleep(CREATE_PAUSE_S)
 
 
 def cmd_protect(repo: str, dry: bool, checks: list[str]) -> None:
