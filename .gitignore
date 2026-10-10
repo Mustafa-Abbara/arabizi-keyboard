@@ -1,0 +1,45 @@
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Xcode / Swift ---
+build/
+DerivedData/
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+# Package.resolved IS committed (pinned dependencies).
+
+# --- Python (eval/, bench/, scripts/) ---
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+mlruns/
+
+# --- Secrets: only .env.example is committed ---
+.env
+.env.*
+!.env.example
+
+# --- Model weights and LM binaries: fetched by scripts/fetch_models.sh, never committed ---
+models/
+*.gguf
+*.arpa
+*.klm
+
+# --- Restricted or private data: never committed (see docs/DATA.md once written) ---
+data/private/
+data/**/*[Mm][Aa][Dd][Aa][Rr]*
+research/consent/signed/
+research/**/raw/
+eval/results/private/
+
+# --- Local traces (may contain eval-mode text) ---
+traces/

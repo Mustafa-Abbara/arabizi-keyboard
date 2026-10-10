@@ -1,0 +1,24 @@
+# Local guards that run before every commit, on macOS and Windows alike.
+# Install once per clone:  pip install pre-commit  &&  pre-commit install
+# Bump pinned versions with: pre-commit autoupdate  (in its own PR)
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files   # stops model weights / datasets sneaking in
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+        exclude: '\.(ps1|bat|cmd)$'
+      - id: trailing-whitespace
+        exclude: '\.md$'
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
