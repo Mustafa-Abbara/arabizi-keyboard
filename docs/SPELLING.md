@@ -2,7 +2,7 @@
 
 This guide fixes **how the Arabic side of every data pair is written**, so the test set, the training data and the model all agree. Read it before writing any pair, and re-read it during the delayed self-check (roadmap P2, [ADR 0011](decisions/0011-solo-build.md)).
 
-> **Status: draft v0.1, 12 Oct 2026.** Written by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling. Every rule marked **[confirm]** is a choice that Moustafa, as the native speaker, must confirm or change before the first 50 pairs are written (see Section 9). After that, changing a rule means fixing every existing pair, so the guide is versioned.
+> **Status: v1.0, 12 Oct 2026.** Drafted by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling. Moustafa confirmed all nine choices marked **[confirm]** as written (Section 9). Changing a rule from now on means fixing every existing pair, so bump the version and say why in the PR.
 
 ---
 
@@ -206,9 +206,9 @@ The most frequent words. Add a word here the first time you are unsure about it,
 
 ---
 
-## 9. Decisions Moustafa must confirm (before the first 50 pairs)
+## 9. Confirmed decisions
 
-| # | Rule | Default in this draft | Alternative |
+| # | Rule | Decision (confirmed) | Alternative (not chosen) |
 |---|---|---|---|
 | 1 | ث/ذ/ظ in everyday words (2.1) | Pronunciation (تلاتة، هيدا، ضهر) | Always the MSA letter (ثلاثة، هذا) |
 | 2 | Glottal-stop ق (2.2) | ق (قلب، قهوة), أ accepted for listed words | أ (ألب، أهوة) |
@@ -220,7 +220,7 @@ The most frequent words. Add a word here the first time you are unsure about it,
 | 8 | Punctuation (7) | Arabic ؟ ، ؛ | keep Latin ? , ; |
 | 9 | `3a` before a word without "the" (3) | separate (ع جونيه) | attached (عجونيه) |
 
-All defaults are **Claude's recommendation**. Record the answers here (change the draft status to v1.0) and in the PR that closes the spelling-guide issue.
+All nine defaults were **Claude's recommendation** and were **confirmed by Moustafa on 12 Oct 2026** ("all defaults"). The "Alternative" column is kept for the record.
 
 ---
 
