@@ -1,12 +1,13 @@
 """Pair format (docs/DATA.md) and spelling rules that can be checked automatically (docs/SPELLING.md)."""
 
 import json
+from datetime import date, timedelta
 
 import pytest
 from jsonschema import Draft202012Validator
 
 from arabizi_eval import pairs as P
-from arabizi_eval.pairs_cli import default_split, next_id, parse_accepted
+from arabizi_eval.pairs_cli import default_split, main, next_id, parse_accepted
 
 
 def make_row(**overrides) -> dict:
@@ -138,3 +139,55 @@ def test_next_id_and_split_cycle(monkeypatch, tmp_path):
     assert splits.count("dev") == 3 and splits.count("test") == 7
     (tmp_path / "manifest.json").write_text("{}")
     assert default_split([]) == "train"
+
+
+# --------------------------------------------------------------------------- review fixes (PR #165)
+
+def days_ago(n: int) -> str:
+    return (date.today() - timedelta(days=n)).isoformat()
+
+
+def answer(monkeypatch, *replies):
+    replies = iter(replies)
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(replies))
+
+
+def test_link_followed_by_converted_punctuation_is_kept():
+    row = make_row(arabizi="shuf www.x.com? w https://a.b/c, ok", arabic="شوف www.x.com؟ و https://a.b/c، ok")
+    assert P.row_errors(row, "test", None) == []
+
+
+def test_non_object_line_is_reported_not_crashing(tmp_path):
+    (tmp_path / "test.jsonl").write_text('[1]\n"text"\n', encoding="utf-8")
+    messages = [p.message for p in P.validate(tmp_path).errors]
+    assert messages == ["line is not a JSON object"] * 2
+
+
+def test_check_skips_files_with_broken_lines(monkeypatch, tmp_path):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    content = json.dumps(make_row(date=days_ago(3)), ensure_ascii=False) + "\n{broken\n"
+    (tmp_path / "test.jsonl").write_text(content, encoding="utf-8")
+    answer(monkeypatch, "")
+    main(["check"])
+    assert (tmp_path / "test.jsonl").read_text(encoding="utf-8") == content
+
+
+def test_check_discards_a_rejected_edit(monkeypatch, tmp_path):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    first = make_row(arabizi="b3at 100$", arabic="بعت 100$", date=days_ago(3))
+    second = make_row(id="hw-0002", date=days_ago(3))
+    write(tmp_path, "test.jsonl", [first, second])
+    answer(monkeypatch, "e", "بعت مية", "")  # edit drops the number -> rejected; then confirm the second row
+    main(["check"])
+    rows = [json.loads(line) for line in (tmp_path / "test.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rows[0] == first
+    assert rows[1]["checked_by"] == "moustafa-delayed"
+
+
+def test_check_waits_at_least_24_hours(monkeypatch, tmp_path):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    write(tmp_path, "test.jsonl", [make_row(date=days_ago(1)), make_row(id="hw-0002", date=days_ago(2))])
+    answer(monkeypatch, "")  # only one row may be offered: the one from two days ago
+    main(["check"])
+    rows = [json.loads(line) for line in (tmp_path / "test.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["checked_by"] for r in rows] == [None, "moustafa-delayed"]

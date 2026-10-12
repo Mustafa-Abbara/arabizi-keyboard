@@ -27,6 +27,7 @@ ARABIC_LETTER = re.compile("[ء-ي]")
 # ("3am" is the word عم, so "am" is deliberately not a number suffix).
 NUMBER = re.compile(r"(?<![A-Za-z0-9])[$€£]?\d+(?:[.,:]\d+)*(?:[$€£%]|k|K|pm|PM)?(?![A-Za-z0-9])")
 UNTOUCHED = re.compile(r"https?://\S+|www\.\S+|[\w.+-]+@[\w-]+\.[\w.]+|[@#]\w+")
+TRAILING_PUNCTUATION = "?,;!.:)\"'"  # typed after a link, not part of it; SPELLING.md 7 may convert it
 
 
 @dataclass
@@ -75,20 +76,22 @@ def expected_split(path: Path) -> tuple[str, str | None]:
     raise ValueError(f"unexpected pair file name {path.name}: use test.jsonl, dev.jsonl or train-<method>.jsonl")
 
 
-def pair_files(pairs_dir: Path = PAIRS_DIR) -> list[Path]:
-    return sorted(pairs_dir.glob("*.jsonl"))
+def pair_files(pairs_dir: Path | None = None) -> list[Path]:
+    return sorted((pairs_dir or PAIRS_DIR).glob("*.jsonl"))
 
 
 def read_jsonl(path: Path) -> list[tuple[int, dict | None, str | None]]:
-    """(line number, row or None, JSON error or None) for each non-empty line."""
+    """(line number, row or None, error or None) for each non-empty line. Rows are always JSON objects."""
     out = []
     for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
         try:
-            out.append((n, json.loads(line), None))
+            row = json.loads(line)
         except json.JSONDecodeError as exc:
-            out.append((n, None, str(exc)))
+            out.append((n, None, f"invalid JSON: {exc}"))
+            continue
+        out.append((n, row, None) if isinstance(row, dict) else (n, None, "line is not a JSON object"))
     return out
 
 
@@ -123,6 +126,7 @@ def row_errors(row: dict, split: str | None = None, method: str | None = None) -
     if missing:
         errors.append(f"numbers not kept as typed (SPELLING.md 6): {sorted(missing)}")
     for token in UNTOUCHED.findall(arabizi):
+        token = token.rstrip(TRAILING_PUNCTUATION)
         if token not in arabic:
             errors.append(f"link, email, mention or hashtag changed: {token!r}")
     for primary, variants in row["accepted"].items():
@@ -142,7 +146,7 @@ def row_warnings(row: dict) -> list[str]:
     return warnings
 
 
-def validate(pairs_dir: Path = PAIRS_DIR) -> Report:
+def validate(pairs_dir: Path | None = None) -> Report:
     """Validate every pair file, then check ids, duplicates and test/dev leakage across files."""
     report = Report()
     located: list[tuple[str, dict]] = []
@@ -152,10 +156,10 @@ def validate(pairs_dir: Path = PAIRS_DIR) -> Report:
         except ValueError as exc:
             report.errors.append(Problem(path.name, str(exc)))
             continue
-        for n, row, json_error in read_jsonl(path):
+        for n, row, line_error in read_jsonl(path):
             where = f"{path.name}:{n}"
-            if json_error:
-                report.errors.append(Problem(where, f"invalid JSON: {json_error}"))
+            if line_error:
+                report.errors.append(Problem(where, line_error))
                 continue
             where += f" {row.get('id', '?')}"
             report.errors += [Problem(where, e) for e in row_errors(row, split, method)]

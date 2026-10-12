@@ -119,16 +119,24 @@ def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    """Delayed self-check (ADR 0011): rows written at least `--days` ago with checked_by empty."""
+    """Delayed self-check (ADR 0011) of unchecked rows.
+
+    Rows only carry a date, so "at least N days" means written before the date N days ago: with --days 1, a row
+    from yesterday waits until tomorrow, which guarantees >= 24 hours whatever time it was written.
+    """
     cutoff = date.today() - timedelta(days=args.days)
-    print(f"Self-check of rows written on or before {cutoff}. Re-read docs/SPELLING.md first.")
+    print(f"Self-check of rows written before {cutoff}. Re-read docs/SPELLING.md first.")
     print("Enter = correct, e = edit Arabic, a = edit accepted, s = skip, q = quit\n")
     checked = 0
     for path in P.pair_files():
-        rows = [row for _, row, err in P.read_jsonl(path) if not err]
+        lines = P.read_jsonl(path)
+        if any(err for _, _, err in lines):
+            print(f"Skipping {path.name}: it has broken lines. Run `pairs validate` and fix them first.")
+            continue
+        rows = [row for _, row, _ in lines]
         changed = False
         for row in rows:
-            if row.get("checked_by") or date.fromisoformat(row["date"]) > cutoff:
+            if row.get("checked_by") or date.fromisoformat(row["date"]) >= cutoff:
                 continue
             print(f"{row['id']}  {row['arabizi']}\n         {row['arabic']}  {row['accepted'] or ''}")
             answer = ask("  > ").lower()
@@ -139,13 +147,16 @@ def cmd_check(args: argparse.Namespace) -> int:
                 return 0
             if answer == "s":
                 continue
+            original = dict(row)
             if answer == "e":
                 row["arabic"] = ask("  Arabic: ") or row["arabic"]
             if answer == "a":
                 row["accepted"] = parse_accepted(ask("  Accepted (primary=variant; ...): "))
             errors = P.row_errors(row)
             if errors:
-                print("  Not marked as checked: " + "; ".join(errors))
+                print("  Not marked as checked, edit discarded: " + "; ".join(errors))
+                row.clear()
+                row.update(original)
                 continue
             row["checked_by"] = CHECKER
             changed = True
@@ -199,7 +210,8 @@ def main(argv: list[str] | None = None) -> int:
     add = sub.add_parser("add", help="type new hand-written pairs")
     add.add_argument("--split", choices=["test", "dev", "train"], help="override the automatic split")
     check = sub.add_parser("check", help="delayed self-check")
-    check.add_argument("--days", type=int, default=1, help="only rows at least this many days old (default 1)")
+    check.add_argument("--days", type=int, default=1,
+                       help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)

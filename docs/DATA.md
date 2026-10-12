@@ -53,7 +53,7 @@ Every Arabizi → Arabic pair is one JSON object on one line in `data/pairs/*.js
 ```bash
 uv sync --project eval                 # once
 uv run --project eval pairs add        # type pairs: Arabizi, then Arabic, then optional variants
-uv run --project eval pairs check      # delayed self-check of rows written at least a day ago
+uv run --project eval pairs check      # delayed self-check of rows written before yesterday (>= 24 h)
 uv run --project eval pairs stats      # counts, progress towards the P2 targets, coverage
 uv run --project eval pairs validate   # all checks above
 ```
