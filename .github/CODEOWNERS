@@ -1,14 +1,12 @@
-# Owner areas (roadmap §4). Replace the placeholder handles with real GitHub usernames
-# before enabling "require review from code owners".
+# Owner areas (Phase 1 roadmap, docs/ROADMAP.md §1).
 # Later lines take precedence over earlier ones.
 
-*                          @OMAR_GH @MOHAMAD_GH @MOUSTAFA_GH
+*                          @itani404 @Mxsrii @Mustafa-Abbara
 
-/Apps/                     @OMAR_GH
-/.github/                  @OMAR_GH
-/Packages/ArabiziLLM/      @MOHAMAD_GH
-/bench/                    @MOHAMAD_GH
-/Packages/ArabiziMemory/   @MOUSTAFA_GH
-/eval/                     @MOUSTAFA_GH
-/data/                     @MOUSTAFA_GH
-/research/                 @MOUSTAFA_GH
+/Apps/                     @itani404
+/.github/                  @itani404
+/Packages/                 @Mxsrii
+/train/                    @Mxsrii
+/eval/                     @Mustafa-Abbara
+/data/                     @Mustafa-Abbara
+/docs/                     @Mustafa-Abbara
