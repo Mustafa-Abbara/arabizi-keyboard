@@ -1,0 +1,140 @@
+"""Pair format (docs/DATA.md) and spelling rules that can be checked automatically (docs/SPELLING.md)."""
+
+import json
+
+import pytest
+from jsonschema import Draft202012Validator
+
+from arabizi_eval import pairs as P
+from arabizi_eval.pairs_cli import default_split, next_id, parse_accepted
+
+
+def make_row(**overrides) -> dict:
+    row = {"id": "hw-0001", "arabizi": "ma 3ndi meeting today", "arabic": "ما عندي meeting today",
+           "accepted": {}, "method": "hand", "writer": "moustafa", "checked_by": None,
+           "source": "hand-written", "split": "test", "date": "2026-10-14"}
+    row.update(overrides)
+    return row
+
+
+def write(directory, name, rows):
+    (directory / name).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- the real data
+
+def test_schema_is_valid_json_schema():
+    Draft202012Validator.check_schema(json.loads(P.SCHEMA_PATH.read_text(encoding="utf-8")))
+
+
+def test_repository_pairs_are_valid():
+    report = P.validate()
+    assert report.ok, "\n".join(f"{p.where}: {p.message}" for p in report.errors)
+
+
+def test_global_variants_are_arabic():
+    variants = json.loads((P.ROOT / "data" / "rules" / "accepted_variants.json").read_text(encoding="utf-8"))
+    for primary, others in variants["variants"].items():
+        assert P.ARABIC_LETTER.search(primary) and others and primary not in others
+
+
+# --------------------------------------------------------------------------- single-row rules
+
+def test_good_row_has_no_errors():
+    assert P.row_errors(make_row(), "test", None) == []
+
+
+@pytest.mark.parametrize(("overrides", "fragment"), [
+    ({"id": "tw-0001"}, "schema"),
+    ({"extra": 1}, "schema"),
+    ({"split": "dev"}, "file holds 'test'"),
+    ({"method": "ai_checked", "id": "ai-0001", "checked_by": "moustafa"}, "hand-written"),
+    ({"id": "rv-0001"}, "must start with hw-"),
+    ({"arabic": "مَا عندي meeting today"}, "diacritics"),
+    ({"arabic": "ما عنـدي meeting today"}, "tatweel"),
+    ({"arabizi": "b3at 100$", "arabic": "بعت ١٠٠$"}, "Arabic-Indic"),
+    ({"arabizi": "b3at 100$ la mohammad", "arabic": "بعت مية دولار لمحمد"}, "numbers not kept"),
+    ({"arabic": "ma 3ndi meeting today"}, "no Arabic letters"),
+    ({"arabizi": "ما 3ndi"}, "arabizi has Arabic letters"),
+    ({"arabizi": "shuf @rami", "arabic": "شوف رامي"}, "mention"),
+    ({"accepted": {"هلق": ["هلأ"]}}, "not in the arabic text"),
+])
+def test_row_errors(overrides, fragment):
+    errors = P.row_errors(make_row(**overrides), "test", None)
+    assert any(fragment in e for e in errors), errors
+
+
+@pytest.mark.parametrize(("arabizi", "numbers"), [
+    ("b3at 100$ la mohammad", ["100$"]),
+    ("nchoufak 3al 2pm", ["2pm"]),
+    ("ba3d 2 se3at", ["2"]),
+    ("3am ekol w 7elo la2", []),  # digits inside words are letters
+    ("bkon honik 3am", []),  # "3am" is the word عم, never "3 a.m."
+    ("l meeting 3al 10:30", ["10:30"]),
+])
+def test_number_detection(arabizi, numbers):
+    assert P.NUMBER.findall(arabizi) == numbers
+
+
+def test_ai_rows_must_be_checked_and_variants_need_a_parent():
+    ai = make_row(id="ai-0001", method="ai_checked", split="train", checked_by=None)
+    assert any("must be checked" in e for e in P.row_errors(ai))
+    variant = make_row(id="rv-0001", method="rule_variant", split="train")
+    assert any("parent" in e for e in P.row_errors(variant))
+
+
+def test_punctuation_warning():
+    row = make_row(arabizi="kifak?", arabic="كيفك?")
+    assert P.row_warnings(row)
+    assert not P.row_warnings(make_row(arabizi="kifak?", arabic="كيفك؟"))
+
+
+def test_normalize_arabic():
+    assert P.normalize_arabic("كَتِير  منـيح") == "كتير منيح"
+    assert P.normalize_arabic("إمتى حلوة أنا", lenient=True) == "امتي حلوه انا"
+    assert P.normalize_arabic("إمتى حلوة", lenient=False) == "إمتى حلوة"
+
+
+# --------------------------------------------------------------------------- cross-file rules
+
+def test_duplicates_and_leakage(tmp_path):
+    write(tmp_path, "test.jsonl", [make_row()])
+    write(tmp_path, "dev.jsonl", [make_row(id="hw-0002", split="dev", arabizi="Ma 3ndi meeting today!",
+                                           arabic="ما عندي meeting today")])
+    write(tmp_path, "train-hand.jsonl", [make_row(id="hw-0001", split="train", arabizi="kifak",
+                                                  arabic="كيفك")])
+    write(tmp_path, "train-rule_variant.jsonl", [make_row(id="rv-0001", method="rule_variant", split="train",
+                                                          arabizi="ma 3andi meeting today", parent="hw-0009")])
+    messages = [p.message for p in P.validate(tmp_path).errors]
+    assert any("duplicate id" in m for m in messages)
+    assert any("duplicate of held-out" in m for m in messages)
+    assert any("leaks held-out" in m for m in messages)
+    assert any("parent hw-0009" in m for m in messages)
+
+
+def test_bad_file_name(tmp_path):
+    write(tmp_path, "mydata.jsonl", [make_row()])
+    assert "unexpected pair file name" in P.validate(tmp_path).errors[0].message
+
+
+def test_invalid_json_line(tmp_path):
+    (tmp_path / "test.jsonl").write_text('{"id": \n', encoding="utf-8")
+    assert "invalid JSON" in P.validate(tmp_path).errors[0].message
+
+
+# --------------------------------------------------------------------------- CLI helpers
+
+def test_parse_accepted():
+    assert parse_accepted("هلق=هلأ; إمتى=إيمتى|إمتا") == {"هلق": ["هلأ"], "إمتى": ["إيمتى", "إمتا"]}
+    assert parse_accepted("") == {}
+
+
+def test_next_id_and_split_cycle(monkeypatch, tmp_path):
+    rows = [make_row(id="hw-0007"), make_row(id="rv-0003")]
+    assert next_id("hand", rows) == "hw-0008"
+    assert next_id("ai_checked", rows) == "ai-0001"
+    monkeypatch.setattr(P, "MANIFEST_PATH", tmp_path / "manifest.json")
+    splits = [default_split([make_row()] * n) for n in range(10)]
+    assert splits.count("dev") == 3 and splits.count("test") == 7
+    (tmp_path / "manifest.json").write_text("{}")
+    assert default_split([]) == "train"

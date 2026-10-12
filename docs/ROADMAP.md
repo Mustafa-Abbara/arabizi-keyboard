@@ -137,19 +137,19 @@ About 8–12 hours in W1, spread over the week:
    - **English words stay in Latin** (`ma 3ndi meeting today` → `ما عندي meeting today`). Brand names and people's names written in English stay Latin unless the writer clearly meant Arabic.
    - **Numbers stay as typed.** A digit inside a word is a letter (`3am` → `عم`, `7abibi` → `حبيبي`); a standalone number is kept (`100$`, `2pm`).
    - Punctuation: `?` → `؟` and `,` → `،` [Claude's recommendation; change it here if the team prefers to keep Latin punctuation].
-2. **(Moustafa) Pair format** `data/pairs/*.jsonl`, one row per pair, documented in `docs/DATA.md`:
+2. **(Moustafa) Pair format** `data/pairs/*.jsonl`, one row per pair, schema in `data/schema/pair.schema.json`, documented in [DATA.md](DATA.md):
    ```json
-   {"id": "tw-0001", "arabizi": "ma 3ndi meeting today", "arabic": "ما عندي meeting today",
-    "accepted": [], "method": "team", "writer": "moustafa", "checked_by": "moustafa-delayed",
+   {"id": "hw-0001", "arabizi": "ma 3ndi meeting today", "arabic": "ما عندي meeting today",
+    "accepted": {}, "method": "hand", "writer": "moustafa", "checked_by": "moustafa-delayed",
     "source": "hand-written", "split": "test", "date": "2026-10-14"}
    ```
-   `method` is one of `team`, `rule_variant`, `public` (with the dataset name in `source`) or `ai_checked`. Every row must say who wrote it and who checked it. A pytest in `eval/tests` validates the schema.
+   `method` is one of `hand`, `rule_variant`, `public` (with the dataset name in `source`) or `ai_checked`. Every row must say who wrote it and who checked it. `eval/tests/test_pairs.py` validates the schema and the automatic spelling rules; `uv run --project eval pairs add|check|stats` writes and checks rows.
 3. **(Moustafa) Test and dev sets (human-written only).** Target **350 sentences** by the end of W3 (gate passes at 300), about 20 a day [Claude's recommendation for a solo writer]:
    - Topics: plans, money, family, work, food, university, greetings, complaints, jokes; include English code-switching, names, numbers and prices.
    - Write the Arabizi **the way you actually type it in WhatsApp**, before writing the Arabic, and do not "clean up" your spelling.
    - **Delayed self-check** [Claude's recommendation]: at least 24 hours later, re-read each pair against `docs/SPELLING.md` and fix the Arabic side; set `checked_by` to `moustafa-delayed`.
    - Split: **test 70% / dev 30%** by sentence [Claude's recommendation]. With one writer, test and dev share a writer and a spelling habit; this is reported as a limitation, and the external check in step 8 measures how the model does on other people's typing.
-4. **(Moustafa) Freeze the test set** at the end of W3: `data/test/manifest.json` with SHA-256 per file, git tag `testset-v1.0`. A test in CI fails if a test file changes; a deliberate change needs the `testset-change` label and a written reason in the PR and in `docs/DATA.md`. Prompts, hyperparameters and checkpoints are only ever chosen on **dev**.
+4. **(Moustafa) Freeze the test set** at the end of W3: `data/pairs/manifest.json` with the SHA-256 of `test.jsonl` and `dev.jsonl`, git tag `testset-v1.0`. A test in CI fails if a test file changes; a deliberate change needs the `testset-change` label and a written reason in the PR and in `docs/DATA.md`. Prompts, hyperparameters and checkpoints are only ever chosen on **dev**.
 5. **(Moustafa) Rule-based variant generator** `data/tools/variants.py`. Given a checked pair, it produces 2–4 extra Arabizi spellings of the same sentence from a table of real alternatives (`3`/`a`/`aa` for ع, `7`/`h` for ح, `sh`/`ch` for ش, `ou`/`u`/`o`, doubled letters, dropped vowels). The table lives in `data/rules/arabizi_variants.json` and is reviewed against real examples from your own chats before use. Variants go to **train only** with `method: rule_variant`.
 6. **(Moustafa) Licensed public text** (check and record each licence in `docs/DATA.md` first):
    - **Baladi** (Lebanese, CC BY 4.0, Birzeit "Curras + Baladi" portal): Lebanese Arabic-script sentences. The team writes the Arabizi side. Credit the authors.
@@ -167,7 +167,7 @@ About 8–12 hours in W1, spread over the week:
 
 **Targets:** test + dev ≥ 300 sentences (frozen end of W3); training set ≥ 2,000 pairs by end of W4, of which ≥ 400 are hand-written or `public` rows with hand-written Arabizi.
 
-**Deliverables:** `docs/SPELLING.md`, `docs/DATA.md`, `data/pairs/`, `data/test/` + manifest + tag `testset-v1.0`, `data/tools/variants.py`, `data/rules/arabizi_variants.json`.
+**Deliverables:** `docs/SPELLING.md`, `docs/DATA.md`, `data/pairs/` + `manifest.json` + tag `testset-v1.0`, `data/tools/variants.py`, `data/rules/arabizi_variants.json`.
 
 **Gate:**
 - [ ] Test + dev ≥ 300 human-written sentences, each with a delayed self-check; the freeze check fails CI when one test line is edited on a branch.
