@@ -3,7 +3,7 @@
 Subcommands (all idempotent; add --dry-run to print actions without calling GitHub):
   settings    merge rules, Issues/Projects/Discussions, secret scanning + push protection,
               Dependabot alerts/security updates, private vulnerability reporting
-  labels      stage:S0..S12, type:*, owner:*, security, regression, ...
+  labels      stage:P0..P7, type:*, owner:*, security, regression, ...
   milestones  W1..W10 (due on each project week's Friday, ASSUMPTION A1)
   issues      one issue per numbered roadmap step + one gate checklist per stage
   protect     ruleset on the default branch (PR + 1 review, linear history, no force-push)
@@ -35,6 +35,7 @@ TEAM_FILE = Path(__file__).with_name("team.json")
 
 WEEK1_FRIDAY = date(2026, 10, 16)  # ASSUMPTION A1: Project Week 1 = Mon 12 – Sun 18 Oct 2026
 N_WEEKS = 10
+N_STAGES = 8  # Phase 1 stages P0..P7 (ADR 0010)
 OWNERS = ("omar", "mohamad", "moustafa")
 RULESET_NAME = "protect-main"
 
@@ -45,7 +46,7 @@ TRANSIENT_ERRORS = ("dial tcp", "read tcp", "wsarecv", "connectex", "tls handsha
                     "unexpected eof", "http 502", "http 503", "http 504", "secondary rate limit")
 
 LABELS: dict[str, tuple[str, str]] = {
-    **{f"stage:S{i}": ("c5def5", f"Roadmap stage S{i}") for i in range(13)},
+    **{f"stage:P{i}": ("c5def5", f"Phase 1 roadmap stage P{i}") for i in range(N_STAGES)},
     "type:task": ("1d76db", "Planned roadmap work"),
     "type:gate": ("fbca04", "Stage gate checklist: must pass before dependants merge"),
     "type:bug": ("d73a4a", "Something behaves wrongly"),
@@ -58,7 +59,7 @@ LABELS: dict[str, tuple[str, str]] = {
     **{f"owner:{o}": ("ededed", f"Accountable: {o.capitalize()}") for o in OWNERS},
 }
 
-STAGE_HEADING = re.compile(r"^### (S\d+) — (.+)$")
+STAGE_HEADING = re.compile(r"^### (P\d+) — (.+)$")
 TOP_LEVEL_STEP = re.compile(r"^\d+\. (.*)$")
 BOLD_OWNER = re.compile(r"^\*\*\(([^)]*)\)")
 NAME = re.compile(r"\b(omar|mohamad|moustafa|all)\b", re.IGNORECASE)
@@ -126,7 +127,7 @@ def clean(text: str) -> str:
 
 def short_title(text: str, limit: int = 80) -> str:
     text = clean(text)
-    colon = re.search(r":(\s|$)", text)  # a label colon, not one inside `stage:S5`
+    colon = re.search(r":(\s|$)", text)  # a label colon, not one inside `stage:P5`
     if colon and colon.start() <= 90:
         text = text[: colon.start()]
     elif ". " in text:
@@ -139,7 +140,7 @@ def stage_plan(lines: list[str]) -> dict[str, tuple[str, list[str]]]:
     plan = {}
     for line in lines:
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) == 5 and re.fullmatch(r"S\d+", cells[0]):
+        if len(cells) == 5 and re.fullmatch(r"P\d+", cells[0]):
             weeks = [int(w) for w in re.findall(r"W(\d+)", cells[2])]
             plan[cells[0]] = (f"W{max(weeks)}", owners_in(cells[3]))
     return plan
@@ -158,12 +159,12 @@ def parse_roadmap(path: Path = ROADMAP) -> list[Issue]:
     plan = stage_plan(lines)
     issues: list[Issue] = []
 
-    # Learning ramp (roadmap §2) runs in W1 alongside S0.
+    # Learning ramp (roadmap §2) runs in W1 alongside P0.
     ramp_start = next(i for i, l in enumerate(lines) if l.startswith("## 2. Learning ramp"))
     ramp, _ = section_until_end(lines, ramp_start + 1)
-    issues.append(Issue("[S0] Learning ramp: Swift, testing, IME and LLM concepts",
+    issues.append(Issue("[P0] Learning ramp: Swift, testing, IME, fine-tuning and eval concepts",
                         "\n".join(ramp).strip() + footer("§2 Learning ramp"),
-                        ["stage:S0", "type:task"], "W1", list(OWNERS)))
+                        ["stage:P0", "type:task"], "W1", list(OWNERS)))
 
     i = 0
     while i < len(lines):
@@ -332,7 +333,7 @@ def main() -> int:
     parser.add_argument("--repo", required=True, help="OWNER/NAME")
     parser.add_argument("--dry-run", action="store_true", help="print actions without calling GitHub")
     parser.add_argument("--project", help="title of a GitHub Project to add new issues to")
-    parser.add_argument("--checks", default="", help="comma-separated status checks to require (S4+)")
+    parser.add_argument("--checks", default="", help="comma-separated status checks to require (P5+)")
     args = parser.parse_args()
 
     steps = {

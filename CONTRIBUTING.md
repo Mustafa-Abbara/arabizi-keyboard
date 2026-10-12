@@ -9,15 +9,15 @@ python scripts/doctor.py          # checks your tools
 pip install pre-commit && pre-commit install
 ```
 
-macOS members also need Xcode, SwiftLint and SwiftFormat (see `docs/process/S0_SETUP.md`). Windows members can work on everything under `eval/`, `data/`, `research/`, `docs/` and `scripts/`. Swift code is built and tested by CI on macOS runners.
+macOS members also need Xcode, SwiftLint and SwiftFormat (see `docs/process/S0_SETUP.md`). Windows members can work on everything under `eval/`, `train/`, `data/`, `docs/` and `scripts/`. Swift code is built and tested by CI on macOS runners.
 
 ## Workflow
 
-1. **Every task is a GitHub Issue** with one owner, a `stage:Sx` label and a milestone (`W1`–`W10`). No issue, no branch.
+1. **Every task is a GitHub Issue** with one owner, a `stage:Px` label (Phase 1 stages P0–P7, see `docs/ROADMAP.md`) and a milestone (`W1`–`W10`). No issue, no branch.
 2. **Branch from `main`**, short-lived (≤ 2 days):
-   - `feat/S5-tokenizer`, `fix/S7-timeout-fallback`, `docs/S1-proposal`, `eval/S6-bootstrap`, `chore/S0-board`
+   - `feat/P5-protected-spans`, `fix/P5-timeout-fallback`, `docs/P2-spelling-guide`, `eval/P3-bootstrap`, `train/P4-lora`, `chore/P0-board`
 3. **Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org/):
-   `feat(core): add clitic segmentation`, `fix(llm): enforce 700 ms deadline`, `docs: add ADR 0003`, `test(eval): bootstrap CI on synthetic data`.
+   `feat(core): protect URLs and numbers`, `fix(llm): enforce conversion deadline`, `docs: add ADR 0003`, `test(eval): bootstrap CI on synthetic data`.
 4. **Open a pull request** into `main` using the template. Link the issue (`Closes #12`).
    - PRs over **400 changed lines** need a sentence explaining why they could not be split.
    - **1 approving review** is required, from someone in a *different* owner area.
@@ -36,7 +36,9 @@ AI coding tools are allowed (course policy), but:
 
 - **Never commit** model weights, `.env` files, signed consent forms, raw observation notes, or anything derived from **MADAR** (internal-research licence, no redistribution). `.gitignore` and pre-commit block most of these. Do not work around them.
 - **Never log or commit raw user text** from real people unless that person ticked "publish" on their consent form.
-- **Never generate Arabizi with an AI model or copy Yamli output** into datasets or references.
+- **Never copy Yamli output** into datasets or references, and never automate Yamli.
+- **AI-generated pairs are training data only** ([ADR 0010](docs/decisions/0010-phase1-pivot.md)): a native speaker checks every row (`checked_by`), the provider's terms must allow training on its outputs (recorded in `docs/DATA.md`), the prompt is saved in `data/prompts/`, and rows are tagged `method: ai_checked`. **Dev and test data are always human-written.**
+- **Fine-tune in the cloud, run locally.** Only team-written or licensed public data is uploaded to Kaggle/Colab. Real users' text is never uploaded.
 - Dev-only secrets (e.g. Langfuse keys) go in `.env`. Add the variable name, with no value, to `.env.example`.
 - If you commit a secret by accident, tell the team immediately and rotate it. Removing it from git history is not enough.
 
@@ -58,4 +60,4 @@ Every bug found becomes:
 
 ## Behaviour changes
 
-If a PR changes how the system behaves on failure, update `docs/FAILURE_MATRIX.md` (from S11). If it changes prompts, models or thresholds, attach a before/after eval table to the PR.
+If a PR changes how the system behaves on failure, update `docs/FAILURE_MATRIX.md` (from S11). If it changes prompts, models, training data or thresholds, attach a before/after **dev** eval table to the PR.

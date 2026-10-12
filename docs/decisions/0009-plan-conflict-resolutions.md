@@ -1,6 +1,6 @@
 # ADR 0009: Resolving conflicts between ROADMAP and QUESTIONS_BEFORE_BUILDING
 
-- **Status:** accepted (2026-10-10). The team may override any row with a new ADR that names the Dn it replaces.
+- **Status:** accepted (2026-10-10). The team may override any row with a new ADR that names the Dn it replaces. **Partly paused by [ADR 0010](0010-phase1-pivot.md) (12 Oct 2026):** this ADR was written for the v1 roadmap, now [archive/ROADMAP_v1_agentic.md](../archive/ROADMAP_v1_agentic.md). Decisions about the resolver, GBNF output, ask policy, calibration and memory apply only if Phase 2 starts; ADR 0010 lists what still applies.
 - **Deciders:** Claude's recommendation, adopted at Moustafa's request
 
 `docs/ROADMAP.md` and `docs/QUESTIONS_BEFORE_BUILDING.md` disagreed on the 25 points below (D1–D25), and the questions doc filled 4 gaps. Each one is now decided. Every decision is applied in `docs/ROADMAP.md`, at the spot it changes, tagged `[Dn — Claude's recommendation]`. Where this ADR and the questions doc disagree, this ADR wins.

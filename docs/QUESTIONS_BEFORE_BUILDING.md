@@ -1,6 +1,8 @@
 # 100 Questions to Answer Before Building "A Local, Personal Arabizi Keyboard for macOS"
 
 > Where this document conflicts with `ROADMAP.md`, [ADR 0009](decisions/0009-plan-conflict-resolutions.md) decides (D1–D25, all Claude's recommendations). Overridden answers are left unchanged below for the record.
+>
+> **Phase 1 pivot (12 Oct 2026):** this document was written for the v1 roadmap (now `archive/ROADMAP_v1_agentic.md`). [ADR 0010](decisions/0010-phase1-pivot.md) overrides it where they conflict, notably **Q57** (fine-tuning is now the core of Phase 1) and **Q70** (AI-generated pairs are allowed in training only, checked by a native speaker; dev and test stay human-written).
 
 Before you write code, about 10 questions can block you: Path A confirmation, AUB IRB approval for the user study, permission to reuse VoiceType, the "no Yamli at runtime" rule, the model bake-off, and a one-week IME spike on Enter and marked text. Apple's on-device Foundation Models cannot be your engine, because Apple Intelligence does not support Arabic.\[1\] Use Qwen2.5-1.5B or Qwen2.5-0.5B (Apache 2.0) through llama.cpp. The team can settle the other 90 questions in one or two meetings using the answers below.
 
