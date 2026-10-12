@@ -36,7 +36,7 @@ TEAM_FILE = Path(__file__).with_name("team.json")
 WEEK1_FRIDAY = date(2026, 10, 16)  # ASSUMPTION A1: Project Week 1 = Mon 12 – Sun 18 Oct 2026
 N_WEEKS = 10
 N_STAGES = 8  # Phase 1 stages P0..P7 (ADR 0010)
-OWNERS = ("omar", "mohamad", "moustafa")
+OWNERS = ("moustafa",)  # solo build (ADR 0011)
 RULESET_NAME = "protect-main"
 
 RETRY_DELAYS_S = (2, 5, 15, 30)

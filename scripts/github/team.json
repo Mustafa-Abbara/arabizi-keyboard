@@ -1,6 +1,4 @@
 {
-  "_comment": "Roadmap owner name -> GitHub username. Leave empty to label the issue (owner:<name>) without assigning it.",
-  "omar": "itani404",
-  "mohamad": "Mxsrii",
+  "_comment": "Roadmap owner name -> GitHub username. Solo build since 12 Oct 2026 (ADR 0011).",
   "moustafa": "Mustafa-Abbara"
 }

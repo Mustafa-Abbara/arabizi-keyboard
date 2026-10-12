@@ -1,12 +1,2 @@
-# Owner areas (Phase 1 roadmap, docs/ROADMAP.md §1).
-# Later lines take precedence over earlier ones.
-
-*                          @itani404 @Mxsrii @Mustafa-Abbara
-
-/Apps/                     @itani404
-/.github/                  @itani404
-/Packages/                 @Mxsrii
-/train/                    @Mxsrii
-/eval/                     @Mustafa-Abbara
-/data/                     @Mustafa-Abbara
-/docs/                     @Mustafa-Abbara
+# Solo build (ADR 0011): Moustafa owns everything.
+*                          @Mustafa-Abbara

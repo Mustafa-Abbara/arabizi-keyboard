@@ -17,6 +17,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - Never commit model weights, `.env`, signed consent forms, raw participant text, or MADAR-derived files.
 - Never automate Yamli. AI-generated Arabizi pairs are allowed **in training only**, each row checked by a native speaker, provider terms recorded (ADR 0010). Dev and test data are always human-written.
 - Inference stays local. Fine-tuning may run on Kaggle/Colab with team-written or licensed public data only.
+- **Solo build (ADR 0011):** Moustafa builds everything; PR review = self-review + `/code-review`, no human approval.
 - Main dev machine: M2 MacBook Air, **8 GB RAM** (see the "8 GB consequences" section in ASSUMPTIONS.md). Keep memory use in mind.
 
 ## Current state (update when it changes)
@@ -24,6 +25,6 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - **Phase 1 pivot (12 Oct 2026, ADR 0010):** goal is a fine-tuned local Arabizi→Arabic translator + the macOS keyboard; agents are an optional Phase 2. Stages renamed P0–P7; v1 roadmap archived.
 - **Stage P0 (was S0) in progress.** Scaffold, CONTRIBUTING, templates, pre-commit, ASSUMPTIONS, ADR 0001, ADR 0008 and ADR 0010 are written.
 - **ADR 0001 answered by the team** (Moustafa, 10 Oct 2026), not by the instructor: Path A, no VoiceType code reuse, public repo, local unsigned install, interviews and the user study deferred (no outside participants until IRB approval).
-- **GitHub (12 Oct 2026):** `protect-main` ruleset active (PR required; approvals temporarily set to 0 at Moustafa's request; restore with `bootstrap.py protect`). The 104 v1 issues are closed as not planned; 57 P0–P7 issues are open and assigned. Team: Omar `itani404`, Mohamad `Mxsrii`, Moustafa `Mustafa-Abbara`.
+- **GitHub (12 Oct 2026):** `protect-main` ruleset active (PR required; approvals temporarily set to 0 at Moustafa's request; restore with `bootstrap.py protect`). The 104 v1 issues are closed as not planned; 57 P0–P7 issues are open and assigned. Board: GitHub Project #1 "Arabizi Keyboard". Moustafa (`Mustafa-Abbara`) owns every issue.
 - **Moustafa's Mac passes the P0 tool check** (Xcode 27.0, `docker run hello-world` via Colima).
-- **Waiting on:** Omar's and Mohamad's tool checks, a test PR from each member, the push-protection test, and Kaggle/Colab GPU access for all three.
+- **Left in P0:** a test PR reviewed with the solo rule, the push-protection test, Kaggle/Colab GPU access, and the learning ramp.

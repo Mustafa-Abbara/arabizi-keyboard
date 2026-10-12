@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-10-12
-- **Deciders:** Moustafa Abbara (scope approved by Dr. Ammar Mohanna, as reported by Moustafa on 12 Oct 2026); Omar Al Itani and Mohamad Al Masri to confirm in review
+- **Deciders:** Moustafa Abbara (scope approved by Dr. Ammar Mohanna, as reported by Moustafa on 12 Oct 2026); solo build from 12 Oct 2026, see [ADR 0011](0011-solo-build.md)
 - **Stage:** P0 (was S0)
 
 ## Context
