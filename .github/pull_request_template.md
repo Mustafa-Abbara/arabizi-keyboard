@@ -4,7 +4,7 @@
 
 Closes #
 
-**Stage:** S?
+**Stage:** P?
 
 ## How it was tested
 
@@ -15,8 +15,8 @@ Closes #
 - [ ] Tests added or updated (or N/A: docs/config only)
 - [ ] Docs updated (README, ADR, API contracts, ASSUMPTIONS…) where relevant
 - [ ] No raw user text, secrets, model weights or MADAR-derived data committed or logged
-- [ ] Failure Matrix updated if failure behaviour changed (from S11)
-- [ ] Eval before/after attached if a prompt, model or threshold changed
+- [ ] Failure Matrix updated if failure behaviour changed (from P7)
+- [ ] Dev eval before/after attached if a prompt, model, training data or threshold changed
 - [ ] PR is ≤ 400 changed lines, or the reason is explained below
 
 ## AI assistance

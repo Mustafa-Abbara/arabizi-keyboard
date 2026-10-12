@@ -1,6 +1,6 @@
 # S0 runbook: setup, confirmations and project management
 
-Goal (roadmap S0): before writing product code, (1) ask for the permissions we depend on and (2) set up the "factory": repo, board, branch rules and tools. Bonus marks for process need **evidence over time**, so the board and PR history must start in Week 1.
+Phase 1 roadmap stage **P0** (the v1 stage S0, unchanged; the file name is kept). Goal: before writing product code, (1) ask for the permissions we depend on and (2) set up the "factory": repo, board, branch rules and tools. Bonus marks for process need **evidence over time**, so the board and PR history must start in Week 1.
 
 ## 1. Confirmations (Moustafa, day 1)
 
@@ -51,10 +51,10 @@ python scripts/github/bootstrap.py protect --repo USER/arabizi-keyboard
 - **Only Moustafa can change settings** on a personal repo. Collaborators can push branches, open and review PRs, and manage issues, but rulesets, security settings and Actions secrets go through Moustafa.
 - **Order matters:** push the scaffold *before* `protect`, or the first push itself will be blocked.
 - **Board columns:** in the project's *Status* field, set the options to Backlog / This sprint / In progress / In review / Done (2 minutes in the web UI). Add a *Board* view grouped by Status and a *Table* view grouped by milestone.
-- **Required status checks** (`lint`, `build-test`, `codeql`, `eval-smoke`) do not exist until S4. Re-run `protect --checks lint,build-test,...` once they have run at least once.
+- **Required status checks** (`lint`, `build-test`, `codeql`, `eval-smoke`) do not exist until P5. Re-run `protect --checks lint,build-test,...` once they have run at least once.
 - All bootstrap commands are idempotent: re-running skips labels, milestones and issues that already exist.
 
-## 4. Gate: tick these on the `[S0] Gate` issue, with evidence links
+## 4. Gate: tick these on the `[P0] Gate` issue, with evidence links
 
 - [ ] **Each member's test PR reviewed and merged.** Suggested: each person opens a PR adding their row to the README team table (or their toy package from the learning ramp).
 - [ ] **Direct push to `main` is rejected.** Run `git push origin HEAD:main` from a commit on a branch, and paste the rejection message into the gate issue.
@@ -62,8 +62,9 @@ python scripts/github/bootstrap.py protect --repo USER/arabizi-keyboard
   - Local: commit a dummy key on a scratch branch, and `pre-commit`/gitleaks must refuse the commit.
   - Remote: confirm *Settings → Code security → Push protection* is **Enabled** and screenshot it.
   - Note: GitHub ignores well-known documentation examples such as AWS's published example access key, so a "fake key" push test can pass silently. Do not treat that as proof that push protection is off. (Local gitleaks *does* flag that example key, which is a quick way to see the local guard working.)
-- [ ] **Instructor email sent.** ADR 0001 has the send date; replies are recorded.
+- [ ] **Scope recorded.** ADR 0001 (team answers) and ADR 0010 (Phase 1 pivot, approved by Dr. Mohanna) are merged.
 - [ ] **Tools work.** Every member's `python scripts/doctor.py` passes on their OS (paste the output in the gate issue). macOS members: `swift --version`, `xcodebuild -version`. Everyone: `docker run hello-world`.
+- [ ] **Cloud GPU works.** Every member can start a GPU notebook on Kaggle (phone-verified account) or Colab, for P4 fine-tuning.
 
 ## 5. Weekly rhythm (from Week 1)
 

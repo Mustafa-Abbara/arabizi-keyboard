@@ -28,13 +28,14 @@ TOOLS = [
 ]
 
 
-def first_line(cmd: list[str]) -> str:
+def first_line(cmd: list[str]) -> tuple[bool, str]:
+    """Run cmd; return (exited with 0, first line of its output)."""
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return f"error: {exc}"
+        return False, f"error: {exc}"
     text = (out.stdout or out.stderr).strip()
-    return text.splitlines()[0] if text else "(no output)"
+    return out.returncode == 0, text.splitlines()[0] if text else "(no output)"
 
 
 def main() -> int:
@@ -55,12 +56,16 @@ def main() -> int:
         if path is None:
             print(f"{'MISSING':8} {name:11} {why}")
             missing.append(name)
-        else:
-            print(f"{'OK':8} {name:11} {first_line([path, *args])}")
+            continue
+        # A tool can exist but fail, e.g. the xcodebuild stub when only Command Line Tools are installed.
+        ok, line = first_line([path, *args])
+        print(f"{'OK' if ok else 'BROKEN':8} {name:11} {line}")
+        if not ok:
+            missing.append(name)
 
     print()
     if missing:
-        print("Missing: " + ", ".join(missing) + ". See docs/process/S0_SETUP.md for install commands.")
+        print("Missing or broken: " + ", ".join(missing) + ". See docs/process/S0_SETUP.md for install commands.")
         return 1
     print("All required tools found. Remaining S0 check: `docker run hello-world` must succeed.")
     return 0
