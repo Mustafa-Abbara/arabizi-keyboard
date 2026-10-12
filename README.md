@@ -25,11 +25,7 @@ More folders arrive as the stages need them: `Apps/ArabiziIME` (P1), `data/` (P2
 
 ## Team
 
-| Member | Area |
-|---|---|
-| Omar Al Itani | IME / macOS, CI |
-| Mohamad Al Masri | Model, fine-tuning, engine |
-| Moustafa Abbara | Data, evaluation; project coordination |
+Built by **Moustafa Abbara** (all stages; see [ADR 0011](docs/decisions/0011-solo-build.md)). Omar Al Itani and Mohamad Al Masri took part in the planning and setup (S0).
 
 ## Contributing
 

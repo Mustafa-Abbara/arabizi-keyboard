@@ -9,7 +9,7 @@ python scripts/doctor.py          # checks your tools
 pip install pre-commit && pre-commit install
 ```
 
-macOS members also need Xcode, SwiftLint and SwiftFormat (see `docs/process/S0_SETUP.md`). Windows members can work on everything under `eval/`, `train/`, `data/`, `docs/` and `scripts/`. Swift code is built and tested by CI on macOS runners.
+You also need Xcode, SwiftLint and SwiftFormat (see `docs/process/S0_SETUP.md`). Swift code is built and tested locally and by CI on macOS runners. Since 12 Oct 2026 Moustafa builds the project alone ([ADR 0011](docs/decisions/0011-solo-build.md)); the rules below are written for that.
 
 ## Workflow
 
@@ -20,9 +20,9 @@ macOS members also need Xcode, SwiftLint and SwiftFormat (see `docs/process/S0_S
    `feat(core): protect URLs and numbers`, `fix(llm): enforce conversion deadline`, `docs: add ADR 0003`, `test(eval): bootstrap CI on synthetic data`.
 4. **Open a pull request** into `main` using the template. Link the issue (`Closes #12`).
    - PRs over **400 changed lines** need a sentence explaining why they could not be split.
-   - **1 approving review** is required, from someone in a *different* owner area.
+   - **Review before merge** (solo, ADR 0011): the `protect-main` ruleset requires a PR but no approval. Before merging, (a) tick the template's self-review boxes honestly, (b) run `/code-review` in Claude Code on the branch and reply to each finding in the PR (fixed / won't fix and why), and (c) wait until the next day for PRs over 200 lines and re-read the diff once. An AI review is not a human review; the report says so.
    - Merge with **squash merge** only. `main` is protected: no direct pushes, no force-pushes.
-5. The reviewer checks the template boxes are honest, runs the code if it touches behaviour, and leaves at least one substantive comment or an explicit "LGTM: ran X, checked Y".
+5. The merge comment states what was run and checked, e.g. "ran `swift test` and the P1 matrix in Slack; checked placeholders round-trip".
 
 ## AI-assisted code
 

@@ -8,7 +8,7 @@ Send the message in [ADR 0001](../decisions/0001-instructor-confirmations.md). R
 
 ## 2. Tools (everyone)
 
-| | macOS (Omar, Mohamad) | Windows (Moustafa) |
+| | macOS (main machine) | Windows (docs and GitHub admin only) |
 |---|---|---|
 | Base | Xcode from the App Store, then `xcode-select --install` | — (Swift work runs on macOS + CI) |
 | Packages | `brew install gh uv swiftlint swiftformat gitleaks cmake python@3.12` | `winget install GitHub.cli astral-sh.uv` |
@@ -46,7 +46,7 @@ python scripts/github/bootstrap.py issues --repo USER/arabizi-keyboard --project
 python scripts/github/bootstrap.py protect --repo USER/arabizi-keyboard
 ```
 
-- **Invite teammates** as collaborators (they must accept the email invite):
+- **Collaborators (not needed for the solo build, ADR 0011):** invite them as collaborators (they must accept the email invite):
   `gh api -X PUT repos/USER/arabizi-keyboard/collaborators/OMAR_USERNAME -f permission=push` (same for Mohamad). Then fill `scripts/github/team.json` and the CODEOWNERS handles in a PR.
 - **Only Moustafa can change settings** on a personal repo. Collaborators can push branches, open and review PRs, and manage issues, but rulesets, security settings and Actions secrets go through Moustafa.
 - **Order matters:** push the scaffold *before* `protect`, or the first push itself will be blocked.
@@ -56,15 +56,15 @@ python scripts/github/bootstrap.py protect --repo USER/arabizi-keyboard
 
 ## 4. Gate: tick these on the `[P0] Gate` issue, with evidence links
 
-- [ ] **Each member's test PR reviewed and merged.** Suggested: each person opens a PR adding their row to the README team table (or their toy package from the learning ramp).
+- [ ] **A test PR reviewed and merged** using the solo review rule in CONTRIBUTING (self-review + `/code-review`). Suggested: the toy package from the learning ramp.
 - [ ] **Direct push to `main` is rejected.** Run `git push origin HEAD:main` from a commit on a branch, and paste the rejection message into the gate issue.
 - [ ] **Secrets are blocked.**
   - Local: commit a dummy key on a scratch branch, and `pre-commit`/gitleaks must refuse the commit.
   - Remote: confirm *Settings → Code security → Push protection* is **Enabled** and screenshot it.
   - Note: GitHub ignores well-known documentation examples such as AWS's published example access key, so a "fake key" push test can pass silently. Do not treat that as proof that push protection is off. (Local gitleaks *does* flag that example key, which is a quick way to see the local guard working.)
 - [ ] **Scope recorded.** ADR 0001 (team answers) and ADR 0010 (Phase 1 pivot, approved by Dr. Mohanna) are merged.
-- [ ] **Tools work.** Every member's `python scripts/doctor.py` passes on their OS (paste the output in the gate issue). macOS members: `swift --version`, `xcodebuild -version`. Everyone: `docker run hello-world`.
-- [ ] **Cloud GPU works.** Every member can start a GPU notebook on Kaggle (phone-verified account) or Colab, for P4 fine-tuning.
+- [ ] **Tools work.** `python scripts/doctor.py` passes (paste the output in the gate issue), and `docker run hello-world` works.
+- [ ] **Cloud GPU works.** A GPU notebook starts on Kaggle (phone-verified account) or Colab, for P4 fine-tuning.
 
 ## 5. Weekly rhythm (from Week 1)
 
