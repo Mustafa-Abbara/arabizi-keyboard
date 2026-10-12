@@ -24,4 +24,6 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - **Phase 1 pivot (12 Oct 2026, ADR 0010):** goal is a fine-tuned local Arabizi→Arabic translator + the macOS keyboard; agents are an optional Phase 2. Stages renamed P0–P7; v1 roadmap archived.
 - **Stage P0 (was S0) in progress.** Scaffold, CONTRIBUTING, templates, pre-commit, ASSUMPTIONS, ADR 0001, ADR 0008 and ADR 0010 are written.
 - **ADR 0001 answered by the team** (Moustafa, 10 Oct 2026), not by the instructor: Path A, no VoiceType code reuse, public repo, local unsigned install, interviews and the user study deferred (no outside participants until IRB approval).
-- **Waiting on:** branch protection on `main`, teammate invites, and GitHub usernames for `scripts/github/team.json` and `.github/CODEOWNERS`, full Xcode on Moustafa's Mac, and replacing the 104 v1 GitHub issues with P0–P7 issues.
+- **GitHub (12 Oct 2026):** `protect-main` ruleset active (PR required; approvals temporarily set to 0 at Moustafa's request; restore with `bootstrap.py protect`). The 104 v1 issues are closed as not planned; 57 P0–P7 issues are open and assigned. Team: Omar `itani404`, Mohamad `Mxsrii`, Moustafa `Mustafa-Abbara`.
+- **Moustafa's Mac passes the P0 tool check** (Xcode 27.0, `docker run hello-world` via Colima).
+- **Waiting on:** Omar's and Mohamad's tool checks, a test PR from each member, the push-protection test, and Kaggle/Colab GPU access for all three.
