@@ -46,6 +46,12 @@ def test_global_and_row_variants_are_accepted():
     assert s.words_correct == 2
 
 
+def test_variants_work_in_both_directions():
+    # The reference may use the accepted spelling (إذا) while the model uses the primary one (إزا).
+    s = M.score_sentence(row("إذا بدك", "iza badak"), "إزا بدك")
+    assert s.words_correct == 2
+
+
 def test_multi_word_variant_expands_the_reference():
     s = M.score_sentence(row("عنجد حلو", "3anjad 7elo"), "عن جد حلو")
     assert (s.words_correct, s.words_total) == (3, 3)

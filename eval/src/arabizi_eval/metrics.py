@@ -64,8 +64,13 @@ def reference_texts(arabic: str, accepted: dict[str, list[str]]) -> list[str]:
 def references(arabic: str, accepted: dict[str, list[str]], lenient: bool) -> list[list[frozenset[str]]]:
     """Every acceptable reference as a list of word positions, each a set of accepted spellings."""
     variants = _variants(accepted)
-    single = {norm(p, lenient): {norm(o, lenient) for o in others if len(o.split()) == len(p.split()) == 1}
-              for p, others in variants.items()}
+    # Accepted spellings are interchangeable both ways: a reference written with إذا accepts إزا and vice versa.
+    single: dict[str, set[str]] = {}
+    for primary, others in variants.items():
+        group = {norm(w, lenient) for w in (primary, *others) if len(w.split()) == 1}
+        if len(group) > 1:
+            for word in group:
+                single.setdefault(word, set()).update(group)
     out = []
     for text in reference_texts(arabic, accepted):
         positions = []
