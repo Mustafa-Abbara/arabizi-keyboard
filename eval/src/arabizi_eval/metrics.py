@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from functools import cache
@@ -30,13 +31,25 @@ def msa_words() -> frozenset[str]:
     return frozenset(P.normalize_arabic(w, lenient=True) for w in words)
 
 
+# Both spellings are accepted (SPELLING.md v1.2, Moustafa writes both): "ع صيدا" = "عصيدا", and the "her"
+# ending ـها = ـا (أساورها = أساورا). Emoji are not converted, so they are not counted as words.
+STANDALONE_3A = re.compile(r"(?<!\S)ع\s+(?=\S)")
+HER_ENDING = re.compile(r"(?<=..)ها$")
+EMOJI_CATEGORIES = {"So", "Sk", "Cf"}
+
+
+def _without_emoji(word: str) -> str:
+    return "".join(c for c in word if unicodedata.category(c) not in EMOJI_CATEGORIES and c not in "\ufe0e\ufe0f")
+
+
 def tokens(text: str) -> list[str]:
-    """Whitespace words without surrounding punctuation; punctuation-only tokens are dropped."""
-    return [t for t in (w.strip(PUNCTUATION) for w in text.split()) if t]
+    """Words without surrounding punctuation or emoji; a standalone ع joins the next word."""
+    words = (_without_emoji(w).strip(PUNCTUATION) for w in STANDALONE_3A.sub("ع", text).split())
+    return [w for w in words if w]
 
 
 def norm(token: str, lenient: bool) -> str:
-    token = P.normalize_arabic(token, lenient=lenient)
+    token = HER_ENDING.sub("ا", P.normalize_arabic(token, lenient=lenient))
     return token.lower() if lenient else token
 
 

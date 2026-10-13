@@ -17,7 +17,7 @@ uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B # is
 
 ## Metrics
 
-Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
+Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation and emoji stripped (emoji are not converted, so they are not counted). Spellings the guide accepts both ways are treated as equal in strict and lenient scoring: accepted variants in either direction (إذا = إزا), the "her" ending ـها = ـا (أساورها = أساورا), and a standalone ع joined to the next word (ع صيدا = عصيدا). Moustafa's references deliberately mix these forms.
 
 | Metric | Definition | Why |
 |---|---|---|

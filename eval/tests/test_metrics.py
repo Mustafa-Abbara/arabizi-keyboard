@@ -109,3 +109,25 @@ def test_latency_percentiles():
     scores = [M.score_sentence(row("شو", "shu", id_=f"hw-{i:04d}"), "شو", latency_ms=float(i)) for i in range(1, 21)]
     summary = M.aggregate(scores)
     assert summary["latency_ms_p50"] == 10.5 and summary["latency_ms_p95"] == 19.0
+
+
+@pytest.mark.parametrize(("reference", "output"), [
+    ("بعت أساورها", "بعت أساورا"),  # "her" ending: both spellings accepted (SPELLING.md v1.2)
+    ("بعت أساورا", "بعت أساورها"),
+    ("ننزل عصيدا", "ننزل ع صيدا"),  # 3a + place: attached or separate
+    ("ننزل ع صيدا", "ننزل عصيدا"),
+])
+def test_both_accepted_spellings_score_as_correct(reference, output):
+    s = M.score_sentence(row(reference, "x y"), output)
+    assert s.words_correct == s.words_total == 2 and s.exact
+
+
+def test_emoji_are_not_counted_as_words():
+    s = M.score_sentence(row("وقعت وضحكت 😍", "w23t w d7kt"), "وقعت وضحكت")
+    assert (s.words_correct, s.words_total) == (2, 2) and s.exact
+    s = M.score_sentence(row("وقعت وضحكت", "w23t w d7kt 😍"), "وقعت وضحكت 😍️")
+    assert (s.words_correct, s.words_total) == (2, 2)
+
+
+def test_short_words_ending_in_ha_are_left_alone():
+    assert M.norm("لها", False) == "لها" and M.norm("ها", False) == "ها"
