@@ -2,7 +2,7 @@
 
 This guide fixes **how the Arabic side of every data pair is written**, so the test set, the training data and the model all agree. Read it before writing any pair, and re-read it during the delayed self-check (roadmap P2, [ADR 0011](decisions/0011-solo-build.md)).
 
-> **Status: v1.0, 12 Oct 2026.** Drafted by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling. Moustafa confirmed all nine choices marked **[confirm]** as written (Section 9). Changing a rule from now on means fixing every existing pair, so bump the version and say why in the PR.
+> **Status: v1.1, 13 Oct 2026.** v1.1: `eza`/`iza` is written **إذا** (Moustafa: "a special word"), إزا accepted. v1.0 (12 Oct 2026): drafted by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling; Moustafa confirmed all nine choices marked **[confirm]** (Section 9). Changing a rule means fixing every existing pair, so bump the version and say why in the PR.
 
 ---
 
@@ -59,7 +59,7 @@ Write them the way Lebanese people **say and type** them, not the MSA letter:
 |---|---|---|
 | ث pronounced t | ت | `tleteh` → تلاتة, `ktir` → كتير |
 | ذ pronounced d | د | `hayda` → هيدا, `dahab` → دهب |
-| ذ pronounced z | ز | `iza` → إزا (accepted: إذا) |
+| ذ pronounced z | ز | `zaki` → ذكي keeps ذ; but `iza`/`eza` → **إذا** (a special word, Moustafa 13 Oct 2026; إزا accepted) |
 | ظ pronounced d | ض | `dahar` → ضهر |
 
 Rule of thumb: everyday Lebanese words follow the pronunciation (تلاتة، هيدا، كتير); learned or MSA-origin words keep their letter even when said with s or z (ثورة، مثلاً، ذكي).
@@ -75,7 +75,7 @@ Lebanese pronounce most ق as a glottal stop, typed `2`. The rule:
 
 - **Short vowels are not written** and no diacritics (no ـَ ـُ ـِ ـّ): `ktir` → كتير, `3ndi` → عندي.
 - **Long vowels are written** with ا و ي: `bayt` → بيت, `rou7` → روح, `kteb` → كتاب.
-- **Initial vowel**: أ for `a`/`o` (`ana` → أنا), إ for `e`/`i` (`enta` → إنت, `eza` → إزا).
+- **Initial vowel**: أ for `a`/`o` (`ana` → أنا), إ for `e`/`i` (`enta` → إنت, `eza` → إذا).
 - **Final `-e`/`-a` on a feminine noun or adjective**: ة: `7elwe` → حلوة, `sa3a` → ساعة, `kbire` → كبيرة. **[confirm]** (ه is common too; scoring treats ة/ه as equal in the lenient metric, Section 10.)
 - **Final `-e` meaning "my"**: ي: `bade` → بدي, `beite` → بيتي.
 - **Final `-a`/`-e` in other words**: ا or ي as Lebanese write them: `hayda` → هيدا, `hayde` → هيدي, `bukra` → بكرا, `emta` → إمتى.
@@ -200,7 +200,7 @@ The most frequent words. Add a word here the first time you are unsure about it,
 | tayyeb, 6ayyeb | طيب | |
 | sa7, s7 | صح | |
 | khalas, 5alas | خلص | |
-| iza, eza | إزا | إذا |
+| iza, eza | إذا | إزا |
 | la2ennu, la2anno | لأنو | |
 | ennu, enno | إنو | |
 
