@@ -55,6 +55,11 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 | Source | Rows | File | Method | Provenance |
 |---|---|---|---|---|
 | `claude-draft-revised-2026-10` | 500 | `train-ai_checked.jsonl` (ai-0001 – ai-0500) | `ai_checked`, train only | Drafted by Claude (Anthropic) on claude.ai, then revised and checked row by row by Moustafa (Oct 2026). Generation prompt not kept. On import, diacritics/tatweel were removed from 202 rows and the English translation column was dropped; nothing else was changed. |
+| `claude-draft-revised-2026-10-batch02` | 500 | `train-ai_checked.jsonl` (ai-0501 – ai-1000) | `ai_checked`, train only | Same process as above (Claude draft, revised by Moustafa, prompt not kept). Diacritics/tatweel removed from 247 rows. |
+| `claude-draft-revised-2026-10-batch03` | 500 | `train-ai_checked.jsonl` (ai-1001 – ai-1500) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 279 rows. |
+| `claude-draft-revised-2026-10-batch04` | 500 | `train-ai_checked.jsonl` (ai-1501 – ai-2000) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 342 rows. |
+
+**Balance note:** all 2,000 training rows are `ai_checked`. ADR 0010 caps AI rows at half of the training set used in P4, so P4 needs at least as many rule-generated, hand-written or public rows (roadmap P2 steps 5–6), or the cap must be revisited in an ADR.
 
 ### Terms of service: Anthropic (Claude)
 
