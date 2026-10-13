@@ -56,9 +56,10 @@ private func type(_ text: String, into composer: inout Composer) {
 
 @Test func secureInputNeverComposes() {
     var c = composer()
-    #expect(c.handle(.text("p"), secureInput: true) == .pass)
+    let secure = Context(secureInput: true)
+    #expect(c.handle(.text("p"), context: secure) == .pass)
     type("ab", into: &c)
-    #expect(c.handle(.text("c"), secureInput: true) == .commitAndPass("ab"))
+    #expect(c.handle(.text("c"), context: secure) == .commitAndPass("ab"))
     #expect(c.buffer.isEmpty)
 }
 
@@ -68,4 +69,91 @@ private func type(_ text: String, into composer: inout Composer) {
     type("kifak", into: &c)
     #expect(c.flush() == "kifak")
     #expect(c.buffer.isEmpty)
+}
+
+// MARK: - Undo a conversion (⌘Z) and convert a selection (⌥Enter)
+
+private let cursorUnmoved = Context(cursorAtLastConversion: true)
+
+@Test func undoRightAfterConversionRestoresUnderlinedLatin() {
+    var c = composer()
+    type("shu", into: &c)
+    #expect(c.handle(.enter) == .commit("<shu>"))
+    #expect(c.handle(.undo, context: cursorUnmoved) == .restore(marked: "shu", replacingLength: 5))
+    #expect(c.buffer == "shu")
+    #expect(c.handle(.enter) == .commit("<shu>"))  // and it can be converted again
+}
+
+@Test func restoredTextCanBeEditedOrKeptInLatin() {
+    var c = composer()
+    type("shu", into: &c)
+    _ = c.handle(.enter)
+    _ = c.handle(.undo, context: cursorUnmoved)
+    #expect(c.handle(.backspace) == .update(marked: "sh"))
+    #expect(c.handle(.escape) == .commit("sh"))
+}
+
+@Test func undoIsTheAppsOwnWhenTheCursorMoved() {
+    var c = composer()
+    type("shu", into: &c)
+    _ = c.handle(.enter)
+    #expect(c.handle(.undo, context: Context(cursorAtLastConversion: false)) == .pass)
+}
+
+@Test func undoOnlyWorksForTheVeryNextKey() {
+    var c = composer()
+    type("shu", into: &c)
+    _ = c.handle(.enter)
+    #expect(c.handle(.enter) == .pass)  // the app sends the message
+    #expect(c.handle(.undo, context: cursorUnmoved) == .pass)
+}
+
+@Test func secondUndoIsTheAppsOwn() {
+    var c = composer()
+    type("shu", into: &c)
+    _ = c.handle(.enter)
+    _ = c.handle(.undo, context: cursorUnmoved)
+    _ = c.handle(.escape)
+    #expect(c.handle(.undo, context: cursorUnmoved) == .pass)
+}
+
+@Test func undoWhileComposingCommitsLatinAndPasses() {
+    var c = composer()
+    type("ab", into: &c)
+    #expect(c.handle(.undo, context: cursorUnmoved) == .commitAndPass("ab"))
+}
+
+@Test func optionEnterConvertsTheSelectionAndCanBeUndone() {
+    var c = composer()
+    let selection = Context(selectedText: "kifak shu")
+    #expect(c.handle(.convertSelection, context: selection) == .replaceSelection("<kifak shu>"))
+    #expect(c.handle(.undo, context: cursorUnmoved) == .restore(marked: "kifak shu", replacingLength: 11))
+}
+
+@Test func optionEnterWithoutLettersInTheSelectionPasses() {
+    var c = composer()
+    #expect(c.handle(.convertSelection) == .pass)
+    #expect(c.handle(.convertSelection, context: Context(selectedText: "100 $")) == .pass)
+}
+
+@Test func optionEnterWhileComposingActsLikeEnter() {
+    var c = composer()
+    type("shu", into: &c)
+    #expect(c.handle(.convertSelection, context: Context(selectedText: "ignored")) == .commit("<shu>"))
+}
+
+@Test func passwordFieldsForgetTheLastConversion() {
+    var c = composer()
+    type("shu", into: &c)
+    _ = c.handle(.enter)
+    _ = c.handle(.text("x"), context: Context(secureInput: true))
+    #expect(c.handle(.undo, context: cursorUnmoved) == .pass)
+}
+
+@Test func focusLossForgetsTheLastConversion() {
+    var c = composer()
+    type("shu", into: &c)
+    _ = c.handle(.enter)
+    _ = c.flush()
+    #expect(c.handle(.undo, context: cursorUnmoved) == .pass)
 }
