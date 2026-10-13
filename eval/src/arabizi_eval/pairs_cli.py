@@ -2,6 +2,7 @@
 
   uv run --project eval pairs add      # type new hand-written pairs
   uv run --project eval pairs import F # add a list of hand-written pairs: one 'arabizi | arabic' per line
+  uv run --project eval pairs import-batch F --method ai_checked ...  # training rows from another source
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
   uv run --project eval pairs validate # same checks as the test suite
@@ -174,6 +175,46 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 1 if rejected else 0
 
 
+def cmd_import_batch(args: argparse.Namespace) -> int:
+    """Add training rows from a JSONL file with at least "arabizi" and "arabic" keys (other keys are ignored).
+
+    The only change made to the text is removing diacritics and tatweel from the Arabic (SPELLING.md 2.3);
+    rows that still break a rule or repeat a sentence are reported and not saved.
+    """
+    rows = all_rows()
+    saved, rejected, normalized = [], [], 0
+    for n, source_row, error in P.read_jsonl(Path(args.file)):
+        if error or not isinstance(source_row.get("arabizi"), str) or not isinstance(source_row.get("arabic"), str):
+            rejected.append((n, str(source_row)[:80], [error or "needs string 'arabizi' and 'arabic' keys"]))
+            continue
+        arabic = " ".join(P.DIACRITICS.sub("", source_row["arabic"]).replace(P.TATWEEL, "").split())
+        normalized += arabic != source_row["arabic"].strip()
+        row = {"id": next_id(args.method, rows), "arabizi": source_row["arabizi"].strip(), "arabic": arabic,
+               "accepted": {}, "method": args.method, "writer": args.writer, "checked_by": args.checked_by,
+               "source": args.source, "split": "train", "date": args.date or date.today().isoformat()}
+        problems = P.row_errors(row, "train", args.method)
+        if not args.allow_warnings:
+            problems += [f"{w} (use --allow-warnings to keep it)" for w in P.row_warnings(row)]
+        duplicate = _duplicate_of(row, rows)
+        if duplicate:
+            problems.append(f"same sentence as {duplicate}")
+        if problems:
+            rejected.append((n, row["arabizi"], problems))
+            continue
+        if not args.dry_run:
+            append(path_for("train", args.method), row)
+        rows.append(row)
+        saved.append(row)
+
+    for n, line, problems in rejected:
+        print(f"REJECTED line {n}: {line}")
+        for problem in problems:
+            print(f"  - {problem}")
+    verb = "would be saved" if args.dry_run else f"saved to {path_for('train', args.method).name}"
+    print(f"{len(saved)} {verb} ({normalized} with diacritics/tatweel removed), {len(rejected)} rejected.")
+    return 1 if rejected else 0
+
+
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     keys = P._dedupe_keys(row)
     for other in rows:
@@ -282,13 +323,23 @@ def main(argv: list[str] | None = None) -> int:
     imp.add_argument("--split", choices=["test", "dev", "train"], help="override the automatic split")
     imp.add_argument("--dry-run", action="store_true", help="check the list without saving")
     imp.add_argument("--allow-warnings", action="store_true", help="save rows that only have warnings")
+    batch = sub.add_parser("import-batch", help="add training rows from another source (JSONL)")
+    batch.add_argument("file")
+    batch.add_argument("--method", required=True, choices=["ai_checked", "public"])
+    batch.add_argument("--writer", required=True, help="e.g. claude+moustafa-edited, or the dataset authors")
+    batch.add_argument("--checked-by", required=True, help="who checked every row, e.g. moustafa")
+    batch.add_argument("--source", required=True, help="batch or dataset name, recorded in docs/DATA.md")
+    batch.add_argument("--date", help="date the rows were written (default today)")
+    batch.add_argument("--dry-run", action="store_true", help="check without saving")
+    batch.add_argument("--allow-warnings", action="store_true", help="save rows that only have warnings")
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
-    commands = {"add": cmd_add, "import": cmd_import, "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}
+    commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch, "check": cmd_check,
+                "stats": cmd_stats, "validate": cmd_validate}
     return commands[args.command](args)
 
 
