@@ -191,3 +191,69 @@ def test_check_waits_at_least_24_hours(monkeypatch, tmp_path):
     main(["check"])
     rows = [json.loads(line) for line in (tmp_path / "test.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [r["checked_by"] for r in rows] == [None, "moustafa-delayed"]
+
+
+# --------------------------------------------------------------------------- pairs import
+
+def test_import_saves_valid_lines_and_reports_the_rest(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    monkeypatch.setattr(P, "MANIFEST_PATH", tmp_path / "manifest.json")
+    listing = tmp_path / "list.txt"
+    listing.write_text("\n".join([
+        "# comment line",
+        "kifak, shu 3am ta3mel? | كيفك، شو عم تعمل؟",
+        "halla2 ana bel beit | هلق أنا بالبيت | هلق=هلأ",
+        "b3at 100$ la mohammad | بعت مية لمحمد",  # number changed
+        "KIFAK shu 3am ta3mel | كيفك شو عم تعمل",  # duplicate of line 2
+        "ma 3ndi meeting today? | ما عندي meeting today?",  # Latin ? left: warning
+        "no separator here",
+        "",
+    ]), encoding="utf-8")
+    assert main(["import", str(listing)]) == 1
+    rows = [json.loads(line) for line in (tmp_path / "test.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["id"] for r in rows] == ["hw-0001", "hw-0002"]
+    assert rows[1]["accepted"] == {"هلق": ["هلأ"]} and rows[0]["checked_by"] is None
+    out = capsys.readouterr().out
+    assert out.count("REJECTED") == 4 and "2 saved, 4 rejected." in out
+
+
+def test_import_dry_run_writes_nothing(monkeypatch, tmp_path):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    listing = tmp_path / "list.txt"
+    listing.write_text("kifak | كيفك\n", encoding="utf-8")
+    assert main(["import", str(listing), "--dry-run"]) == 0
+    assert not (tmp_path / "test.jsonl").exists()
+
+
+def test_malformed_variants_are_rejected_not_dropped(monkeypatch, tmp_path, capsys):
+    with pytest.raises(ValueError):
+        parse_accepted("هلق-هلأ")
+    with pytest.raises(ValueError):
+        parse_accepted("هلق=")
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    listing = tmp_path / "list.txt"
+    listing.write_text("halla2 ana bel beit | هلق أنا بالبيت | هلق-هلأ\n", encoding="utf-8")
+    assert main(["import", str(listing)]) == 1
+    assert not (tmp_path / "test.jsonl").exists()
+    assert "cannot read variant" in capsys.readouterr().out
+
+
+def test_import_batch_strips_diacritics_and_keeps_provenance(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    (tmp_path / "incoming").mkdir()
+    batch = tmp_path / "incoming" / "batch.jsonl"  # outside the pairs folder, like ~/Downloads
+    batch.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in [
+        {"id": 1, "arabizi": "w huwwe 3am ye7dar", "arabic": "وهوّي عم يحضر", "english": "and he is watching"},
+        {"id": 2, "arabizi": "bel LAU", "arabic": "بالـ LAU"},
+        {"id": 3, "arabizi": "b3at 100$", "arabic": "بعت مية"},  # number changed: rejected
+        {"id": 4, "arabizi": "W huwwe 3am ye7dar!", "arabic": "وهوي عم يحضر"},  # duplicate of 1
+    ]) + "\n", encoding="utf-8")
+    args = ["import-batch", str(batch), "--method", "ai_checked", "--writer", "claude+moustafa-edited",
+            "--checked-by", "moustafa", "--source", "claude-draft-revised-2026-10", "--date", "2026-10-13"]
+    assert main(args) == 1
+    rows = [json.loads(line) for line in (tmp_path / "train-ai_checked.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [(r["id"], r["arabic"]) for r in rows] == [("ai-0001", "وهوي عم يحضر"), ("ai-0002", "بال LAU")]
+    assert rows[0]["split"] == "train" and rows[0]["checked_by"] == "moustafa" and "english" not in rows[0]
+    summary = "2 saved to train-ai_checked.jsonl (2 with diacritics/tatweel removed), 2 rejected."
+    assert summary in capsys.readouterr().out
+    assert P.validate(tmp_path).ok

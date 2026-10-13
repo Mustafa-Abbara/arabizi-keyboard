@@ -1,6 +1,8 @@
 """Write, check and count Arabizi pairs.
 
   uv run --project eval pairs add      # type new hand-written pairs
+  uv run --project eval pairs import F # add a list of hand-written pairs: one 'arabizi | arabic' per line
+  uv run --project eval pairs import-batch F --method ai_checked ...  # training rows from another source
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
   uv run --project eval pairs validate # same checks as the test suite
@@ -48,12 +50,17 @@ def default_split(rows: list[dict]) -> str:
 
 
 def parse_accepted(text: str) -> dict[str, list[str]]:
-    """'هلق=هلأ; إمتى=إيمتى|إمتا' -> {'هلق': ['هلأ'], 'إمتى': ['إيمتى', 'إمتا']}"""
+    """'هلق=هلأ; إمتى=إيمتى|إمتا' -> {'هلق': ['هلأ'], 'إمتى': ['إيمتى', 'إمتا']}
+
+    Raises ValueError for a part that is not 'primary=variant', so a typo is never silently dropped.
+    """
     accepted: dict[str, list[str]] = {}
     for part in filter(None, (p.strip() for p in text.split(";"))):
         primary, _, variants = part.partition("=")
-        if primary.strip() and variants.strip():
-            accepted[primary.strip()] = [v.strip() for v in variants.split("|") if v.strip()]
+        cleaned = [v.strip() for v in variants.split("|") if v.strip()]
+        if not primary.strip() or not cleaned:
+            raise ValueError(f"cannot read variant {part!r}: write primary=variant, e.g. هلق=هلأ")
+        accepted[primary.strip()] = cleaned
     return accepted
 
 
@@ -85,10 +92,12 @@ def cmd_add(args: argparse.Namespace) -> int:
         arabic = ask("Arabic:  ")
         if arabic in ("", "q"):
             break
-        accepted = parse_accepted(ask("Accepted variants (primary=variant; ... or Enter): "))
-        row = {"id": next_id("hand", rows), "arabizi": arabizi, "arabic": arabic, "accepted": accepted,
-               "method": "hand", "writer": WRITER, "checked_by": None, "source": "hand-written",
-               "split": split, "date": date.today().isoformat()}
+        try:
+            accepted = parse_accepted(ask("Accepted variants (primary=variant; ... or Enter): "))
+        except ValueError as exc:
+            print(f"  ERROR: {exc}\n  Not saved. Type the pair again.")
+            continue
+        row = new_hand_row(arabizi, arabic, accepted, split, rows)
         errors, warnings = P.row_errors(row, split, "hand"), P.row_warnings(row)
         for message in errors:
             print(f"  ERROR: {message}")
@@ -108,6 +117,102 @@ def cmd_add(args: argparse.Namespace) -> int:
         print(f"  saved {row['id']} -> {path_for(split).name}")
     print(f"\n{added} pair(s) added.")
     return 0
+
+
+def new_hand_row(arabizi: str, arabic: str, accepted: dict, split: str, rows: list[dict]) -> dict:
+    return {"id": next_id("hand", rows), "arabizi": arabizi, "arabic": arabic, "accepted": accepted,
+            "method": "hand", "writer": WRITER, "checked_by": None, "source": "hand-written",
+            "split": split, "date": date.today().isoformat()}
+
+
+def parse_list_line(line: str) -> tuple[str, str, dict] | None:
+    """'arabizi | arabic' or 'arabizi | arabic | primary=variant; ...'. None for blank and # comment lines."""
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    parts = [part.strip() for part in line.split(" | ")]
+    if len(parts) not in (2, 3) or not parts[0] or not parts[1]:
+        raise ValueError("expected 'arabizi | arabic' or 'arabizi | arabic | variants' (with spaces around |)")
+    return parts[0], parts[1], parse_accepted(parts[2]) if len(parts) == 3 else {}
+
+
+def cmd_import(args: argparse.Namespace) -> int:
+    """Add hand-written pairs from a list. Rows that break a rule are reported and not saved; nothing is changed."""
+    text = sys.stdin.read() if args.file == "-" else Path(args.file).read_text(encoding="utf-8")
+    rows = all_rows()
+    saved, rejected = [], []
+    for n, line in enumerate(text.splitlines(), 1):
+        try:
+            parsed = parse_list_line(line)
+        except ValueError as exc:
+            rejected.append((n, line.strip(), [str(exc)]))
+            continue
+        if parsed is None:
+            continue
+        split = args.split or default_split(rows)
+        row = new_hand_row(*parsed, split, rows)
+        problems = P.row_errors(row, split, "hand")
+        if not args.allow_warnings:
+            problems += [f"{w} (use --allow-warnings to keep it)" for w in P.row_warnings(row)]
+        duplicate = _duplicate_of(row, rows)
+        if duplicate:
+            problems.append(f"same sentence as {duplicate}")
+        if problems:
+            rejected.append((n, line.strip(), problems))
+            continue
+        if not args.dry_run:
+            append(path_for(split), row)
+        rows.append(row)
+        saved.append(row)
+
+    for row in saved:
+        print(f"{'would save' if args.dry_run else 'saved'} {row['id']} [{row['split']}] {row['arabizi']}")
+    for n, line, problems in rejected:
+        print(f"\nREJECTED line {n}: {line}")
+        for problem in problems:
+            print(f"  - {problem}")
+    print(f"\n{len(saved)} {'would be ' if args.dry_run else ''}saved, {len(rejected)} rejected.")
+    return 1 if rejected else 0
+
+
+def cmd_import_batch(args: argparse.Namespace) -> int:
+    """Add training rows from a JSONL file with at least "arabizi" and "arabic" keys (other keys are ignored).
+
+    The only change made to the text is removing diacritics and tatweel from the Arabic (SPELLING.md 2.3);
+    rows that still break a rule or repeat a sentence are reported and not saved.
+    """
+    rows = all_rows()
+    saved, rejected, normalized = [], [], 0
+    for n, source_row, error in P.read_jsonl(Path(args.file)):
+        if error or not isinstance(source_row.get("arabizi"), str) or not isinstance(source_row.get("arabic"), str):
+            rejected.append((n, str(source_row)[:80], [error or "needs string 'arabizi' and 'arabic' keys"]))
+            continue
+        arabic = " ".join(P.DIACRITICS.sub("", source_row["arabic"]).replace(P.TATWEEL, "").split())
+        normalized += arabic != source_row["arabic"].strip()
+        row = {"id": next_id(args.method, rows), "arabizi": source_row["arabizi"].strip(), "arabic": arabic,
+               "accepted": {}, "method": args.method, "writer": args.writer, "checked_by": args.checked_by,
+               "source": args.source, "split": "train", "date": args.date or date.today().isoformat()}
+        problems = P.row_errors(row, "train", args.method)
+        if not args.allow_warnings:
+            problems += [f"{w} (use --allow-warnings to keep it)" for w in P.row_warnings(row)]
+        duplicate = _duplicate_of(row, rows)
+        if duplicate:
+            problems.append(f"same sentence as {duplicate}")
+        if problems:
+            rejected.append((n, row["arabizi"], problems))
+            continue
+        if not args.dry_run:
+            append(path_for("train", args.method), row)
+        rows.append(row)
+        saved.append(row)
+
+    for n, line, problems in rejected:
+        print(f"REJECTED line {n}: {line}")
+        for problem in problems:
+            print(f"  - {problem}")
+    verb = "would be saved" if args.dry_run else f"saved to {path_for('train', args.method).name}"
+    print(f"{len(saved)} {verb} ({normalized} with diacritics/tatweel removed), {len(rejected)} rejected.")
+    return 1 if rejected else 0
 
 
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
@@ -151,7 +256,11 @@ def cmd_check(args: argparse.Namespace) -> int:
             if answer == "e":
                 row["arabic"] = ask("  Arabic: ") or row["arabic"]
             if answer == "a":
-                row["accepted"] = parse_accepted(ask("  Accepted (primary=variant; ...): "))
+                try:
+                    row["accepted"] = parse_accepted(ask("  Accepted (primary=variant; ...): "))
+                except ValueError as exc:
+                    print(f"  Not marked as checked, edit discarded: {exc}")
+                    continue
             errors = P.row_errors(row)
             if errors:
                 print("  Not marked as checked, edit discarded: " + "; ".join(errors))
@@ -209,13 +318,29 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     add = sub.add_parser("add", help="type new hand-written pairs")
     add.add_argument("--split", choices=["test", "dev", "train"], help="override the automatic split")
+    imp = sub.add_parser("import", help="add hand-written pairs from a list file ('-' for stdin)")
+    imp.add_argument("file")
+    imp.add_argument("--split", choices=["test", "dev", "train"], help="override the automatic split")
+    imp.add_argument("--dry-run", action="store_true", help="check the list without saving")
+    imp.add_argument("--allow-warnings", action="store_true", help="save rows that only have warnings")
+    batch = sub.add_parser("import-batch", help="add training rows from another source (JSONL)")
+    batch.add_argument("file")
+    batch.add_argument("--method", required=True, choices=["ai_checked", "public"])
+    batch.add_argument("--writer", required=True, help="e.g. claude+moustafa-edited, or the dataset authors")
+    batch.add_argument("--checked-by", required=True, help="who checked every row, e.g. moustafa")
+    batch.add_argument("--source", required=True, help="batch or dataset name, recorded in docs/DATA.md")
+    batch.add_argument("--date", help="date the rows were written (default today)")
+    batch.add_argument("--dry-run", action="store_true", help="check without saving")
+    batch.add_argument("--allow-warnings", action="store_true", help="save rows that only have warnings")
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
-    return {"add": cmd_add, "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}[args.command](args)
+    commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch, "check": cmd_check,
+                "stats": cmd_stats, "validate": cmd_validate}
+    return commands[args.command](args)
 
 
 if __name__ == "__main__":

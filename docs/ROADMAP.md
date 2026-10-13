@@ -150,18 +150,19 @@ About 8–12 hours in W1, spread over the week:
    - **Delayed self-check** [Claude's recommendation]: at least 24 hours later, re-read each pair against `docs/SPELLING.md` and fix the Arabic side; set `checked_by` to `moustafa-delayed`.
    - Split: **test 70% / dev 30%** by sentence [Claude's recommendation]. With one writer, test and dev share a writer and a spelling habit; this is reported as a limitation, and the external check in step 8 measures how the model does on other people's typing.
 4. **(Moustafa) Freeze the test set** at the end of W3: `data/pairs/manifest.json` with the SHA-256 of `test.jsonl` and `dev.jsonl`, git tag `testset-v1.0`. A test in CI fails if a test file changes; a deliberate change needs the `testset-change` label and a written reason in the PR and in `docs/DATA.md`. Prompts, hyperparameters and checkpoints are only ever chosen on **dev**.
-5. **(Moustafa) Rule-based variant generator** `data/tools/variants.py`. Given a checked pair, it produces 2–4 extra Arabizi spellings of the same sentence from a table of real alternatives (`3`/`a`/`aa` for ع, `7`/`h` for ح, `sh`/`ch` for ش, `ou`/`u`/`o`, doubled letters, dropped vowels). The table lives in `data/rules/arabizi_variants.json` and is reviewed against real examples from your own chats before use. Variants go to **train only** with `method: rule_variant`.
+5. **(Moustafa) Rule-based Arabizi generator** `data/tools/variants.py` — **the main training source** ([ADR 0012](decisions/0012-training-data-sources.md)). Given a Lebanese Arabic sentence (with or without a checked Arabizi spelling), it produces 2–4 Arabizi spellings from a table of real alternatives (`3`/`a`/`aa` for ع, `7`/`h` for ح, `sh`/`ch` for ش, `ou`/`u`/`o`, doubled letters, dropped vowels). The table lives in `data/rules/arabizi_variants.json` and is reviewed against real examples from your own chats before use. Variants go to **train only** with `method: rule_variant`.
 6. **(Moustafa) Licensed public text** (check and record each licence in `docs/DATA.md` first):
    - **Baladi** (Lebanese, CC BY 4.0, Birzeit "Curras + Baladi" portal): Lebanese Arabic-script sentences. The team writes the Arabizi side. Credit the authors.
    - **LanguageWave / LebEval** (Lebanese podcast sentences, arXiv 2505.00114): use only if the repo's licence allows it.
    - **ATAR** (25K Jordanian pairs): email the authors about the licence; if allowed, use for train only, tagged as Jordanian.
    - **MADAR** stays local for evaluation only and is never committed or trained on.
+   - **No scraping** of X, Facebook, Reddit, YouTube or similar (their terms, other people's text) [ADR 0012].
 7. **(Moustafa) AI-generated pairs, train only** [Moustafa's decision, ADR 0010]:
    - Before generating, record in `docs/DATA.md` which provider and model you use, and a quote of the part of its terms that allows training another model on its outputs. If the terms forbid it, use a different provider or skip this step.
-   - Save the exact prompt in `data/prompts/`. Generate in small batches (≤ 100 rows).
+   - Save the exact prompt in `data/prompts/`. Generate in small batches (≤ 100 rows). (The first batch, 500 Claude-drafted rows revised by Moustafa, has no saved prompt; recorded in ADR 0012.)
    - A native speaker checks **every row** and fixes or deletes it; `checked_by` is filled in. Unchecked rows are never used.
    - Run a near-duplicate check against dev and test (exact match after normalisation and ≥ 0.9 character similarity) and drop any hits.
-   - Cap AI rows at **half of the training set**, and in P4 train once with and once without them to show what they add [Claude's recommendation].
+   - Cap AI rows at **half of the training set used in P4** (the cap applies once the rule-generated rows exist), and in P4 train once with and once without them to show what they add [Claude's recommendation].
 8. **(Moustafa) External real-typing check (local only).** AladdinBench (Hugging Face `palmaoui/AladdinBench`) has 268 real Lebanese WhatsApp Arabizi segments, but its references are MSA and its licence is CC BY-NC-ND. Keep it **outside the repo**; a team member writes Lebanese Arabic-script references locally, and we report results on it as a secondary, unpublished check.
 9. **(Moustafa) Datasheet** `docs/DATA.md`: sources, licences, counts per method and split, writers, known biases (a single writer for test/dev, Beirut-centric spelling), and what may be published.
 

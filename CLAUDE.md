@@ -16,6 +16,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - Do not commit or push unless asked. Follow CONTRIBUTING.md: branches, Conventional Commits, PR template.
 - Never commit model weights, `.env`, signed consent forms, raw participant text, or MADAR-derived files.
 - Never automate Yamli. AI-generated Arabizi pairs are allowed **in training only**, each row checked by a native speaker, provider terms recorded (ADR 0010). Dev and test data are always human-written.
+- Never scrape social media for data; training data sources and the Anthropic-terms reading are in ADR 0012 and docs/DATA.md.
 - Inference stays local. Fine-tuning may run on Kaggle/Colab with team-written or licensed public data only.
 - **Solo build (ADR 0011):** Moustafa builds everything; PR review = self-review + `/code-review`, no human approval.
 - Main dev machine: M2 MacBook Air, **8 GB RAM** (see the "8 GB consequences" section in ASSUMPTIONS.md). Keep memory use in mind.
@@ -27,4 +28,5 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - **ADR 0001 answered by the team** (Moustafa, 10 Oct 2026), not by the instructor: Path A, no VoiceType code reuse, public repo, local unsigned install, interviews and the user study deferred (no outside participants until IRB approval).
 - **GitHub (12 Oct 2026):** `protect-main` ruleset active (PR required; approvals temporarily set to 0 at Moustafa's request; restore with `bootstrap.py protect`). The 104 v1 issues are closed as not planned; 57 P0–P7 issues are open and assigned. Board: GitHub Project #1 "Arabizi Keyboard". Moustafa (`Mustafa-Abbara`) owns every issue.
 - **Moustafa's Mac passes the P0 tool check** (Xcode 27.0, `docker run hello-world` via Colima).
+- **P2 data (13 Oct 2026):** SPELLING.md v1.0, pair format + `pairs` CLI, first training batch: 500 `ai_checked` rows (Claude-drafted, revised by Moustafa; ADR 0012). Test/dev: 0 of ~300 hand-written pairs.
 - **Left in P0:** a test PR reviewed with the solo rule, the push-protection test, Kaggle/Colab GPU access, and the learning ramp.
