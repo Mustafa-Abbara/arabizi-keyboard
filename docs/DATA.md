@@ -66,7 +66,7 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 
 - **Never changed:** words kept in Latin in the Arabic (English, names like LAU), numbers, links, mentions, emoji.
 - **Meaning guards:** no rule may change which word it is (no `bade`/`badda`); short words are skipped where a re-spelling is ambiguous (`min`/`meen`, `la2`/`la`, `3am`/`am`), and `7` never becomes `h` after `s k c g d t` (no `s7i7` → `shi7`). Tests: `eval/tests/test_variants.py`.
-- First run (13 Oct 2026): 3,987 variants of 2,000 rows (9 rows had too few re-spellable words). Rows: `method: rule_variant`, `writer: arabizi_eval.variants v1`, `source: rule-variants-v1-seed2026`, `parent` = the original row, `checked_by: null` (deterministic, no row check, ADR 0012).
+- First run (13 Oct 2026): 3,969 variants of 2,000 rows (27 rows had too few distinct re-spellings). Rows: `method: rule_variant`, `writer: arabizi_eval.variants v1`, `source: rule-variants-v1-seed2026`, `parent` = the original row, `checked_by: null` (deterministic, no row check, ADR 0012).
 - **They do not count as non-AI data for the ADR 0010 cap:** a variant of an AI-drafted sentence is still that sentence. They add spelling robustness; P4 trains with and without them.
 
 **Balance note:** all 2,000 training rows are `ai_checked`. ADR 0010 caps AI rows at half of the training set used in P4, so P4 needs at least as many rule-generated, hand-written or public rows (roadmap P2 steps 5–6), or the cap must be revisited in an ADR.

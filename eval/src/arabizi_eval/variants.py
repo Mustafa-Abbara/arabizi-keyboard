@@ -132,14 +132,15 @@ def generate(parents: list[dict], per_row: int, seed: int, rules: Rules | None =
     short = 0
     for parent in parents:
         rng = random.Random(f"{seed}:{parent['id']}")  # stable per parent, whatever the order
-        seen = {P.normalize_arabizi(parent["arabizi"])}
+        # A variant is new only if its (Arabizi, Arabic) pair is: dropping punctuation changes the Arabic too.
+        seen = {(P.normalize_arabizi(parent["arabizi"]), parent["arabic"])}
         made = 0
         for _ in range(max_tries):
             if made == per_row:
                 break
             arabizi, arabic = make_variant(parent, rules, rng, used)
-            key = P.normalize_arabizi(arabizi)
-            if key in seen and arabic == parent["arabic"]:
+            key = (P.normalize_arabizi(arabizi), arabic)
+            if key in seen:
                 continue
             row = {"id": f"rv-{len(rows) + 1:04d}", "arabizi": arabizi, "arabic": arabic, "accepted": {},
                    "method": "rule_variant", "writer": f"{GENERATOR} v{rules.version}", "checked_by": None,

@@ -116,3 +116,11 @@ def test_cli_writes_a_valid_variants_file(monkeypatch, tmp_path):
     written = (tmp_path / "train-rule_variant.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(written) == 10
     assert P.validate(tmp_path).ok
+
+
+def test_no_duplicate_variants_when_only_punctuation_is_dropped():
+    # Review finding: two punctuation-only variants of the same parent were both kept.
+    rules = V.Rules(1, (), {"drop_punctuation": 1.0, "lowercase": 0.0})
+    rows, _, short = V.generate([parent(arabizi="shu?", arabic="شو؟")], per_row=3, seed=1, rules=rules)
+    assert [(r["arabizi"], r["arabic"]) for r in rows] == [("shu", "شو")]
+    assert short == 1
