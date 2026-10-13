@@ -223,3 +223,16 @@ def test_import_dry_run_writes_nothing(monkeypatch, tmp_path):
     listing.write_text("kifak | كيفك\n", encoding="utf-8")
     assert main(["import", str(listing), "--dry-run"]) == 0
     assert not (tmp_path / "test.jsonl").exists()
+
+
+def test_malformed_variants_are_rejected_not_dropped(monkeypatch, tmp_path, capsys):
+    with pytest.raises(ValueError):
+        parse_accepted("هلق-هلأ")
+    with pytest.raises(ValueError):
+        parse_accepted("هلق=")
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    listing = tmp_path / "list.txt"
+    listing.write_text("halla2 ana bel beit | هلق أنا بالبيت | هلق-هلأ\n", encoding="utf-8")
+    assert main(["import", str(listing)]) == 1
+    assert not (tmp_path / "test.jsonl").exists()
+    assert "cannot read variant" in capsys.readouterr().out

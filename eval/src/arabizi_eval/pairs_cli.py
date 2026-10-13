@@ -49,12 +49,17 @@ def default_split(rows: list[dict]) -> str:
 
 
 def parse_accepted(text: str) -> dict[str, list[str]]:
-    """'هلق=هلأ; إمتى=إيمتى|إمتا' -> {'هلق': ['هلأ'], 'إمتى': ['إيمتى', 'إمتا']}"""
+    """'هلق=هلأ; إمتى=إيمتى|إمتا' -> {'هلق': ['هلأ'], 'إمتى': ['إيمتى', 'إمتا']}
+
+    Raises ValueError for a part that is not 'primary=variant', so a typo is never silently dropped.
+    """
     accepted: dict[str, list[str]] = {}
     for part in filter(None, (p.strip() for p in text.split(";"))):
         primary, _, variants = part.partition("=")
-        if primary.strip() and variants.strip():
-            accepted[primary.strip()] = [v.strip() for v in variants.split("|") if v.strip()]
+        cleaned = [v.strip() for v in variants.split("|") if v.strip()]
+        if not primary.strip() or not cleaned:
+            raise ValueError(f"cannot read variant {part!r}: write primary=variant, e.g. هلق=هلأ")
+        accepted[primary.strip()] = cleaned
     return accepted
 
 
@@ -86,7 +91,11 @@ def cmd_add(args: argparse.Namespace) -> int:
         arabic = ask("Arabic:  ")
         if arabic in ("", "q"):
             break
-        accepted = parse_accepted(ask("Accepted variants (primary=variant; ... or Enter): "))
+        try:
+            accepted = parse_accepted(ask("Accepted variants (primary=variant; ... or Enter): "))
+        except ValueError as exc:
+            print(f"  ERROR: {exc}\n  Not saved. Type the pair again.")
+            continue
         row = new_hand_row(arabizi, arabic, accepted, split, rows)
         errors, warnings = P.row_errors(row, split, "hand"), P.row_warnings(row)
         for message in errors:
@@ -206,7 +215,11 @@ def cmd_check(args: argparse.Namespace) -> int:
             if answer == "e":
                 row["arabic"] = ask("  Arabic: ") or row["arabic"]
             if answer == "a":
-                row["accepted"] = parse_accepted(ask("  Accepted (primary=variant; ...): "))
+                try:
+                    row["accepted"] = parse_accepted(ask("  Accepted (primary=variant; ...): "))
+                except ValueError as exc:
+                    print(f"  Not marked as checked, edit discarded: {exc}")
+                    continue
             errors = P.row_errors(row)
             if errors:
                 print("  Not marked as checked, edit discarded: " + "; ".join(errors))
