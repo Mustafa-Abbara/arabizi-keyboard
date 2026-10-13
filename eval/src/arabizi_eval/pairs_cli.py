@@ -3,6 +3,7 @@
   uv run --project eval pairs add      # type new hand-written pairs
   uv run --project eval pairs import F # add a list of hand-written pairs: one 'arabizi | arabic' per line
   uv run --project eval pairs import-batch F --method ai_checked ...  # training rows from another source
+  uv run --project eval pairs variants # regenerate rule-made spelling variants of the training rows
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
   uv run --project eval pairs validate # same checks as the test suite
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import sys
 from collections import Counter
@@ -215,6 +217,25 @@ def cmd_import_batch(args: argparse.Namespace) -> int:
     return 1 if rejected else 0
 
 
+def cmd_variants(args: argparse.Namespace) -> int:
+    """Regenerate data/pairs/train-rule_variant.jsonl from the other training rows (deterministic for a seed)."""
+    from arabizi_eval import variants
+
+    parents = [r for r in all_rows() if r.get("split") == "train" and r.get("method") != "rule_variant"]
+    rows, used, short = variants.generate(parents, args.per_row, args.seed)
+    target = path_for("train", "rule_variant")
+    if not args.dry_run:
+        rewrite(target, rows)
+    verb = "would write" if args.dry_run else "wrote"
+    print(f"{verb} {len(rows)} variants of {len(parents)} training rows to {target.name} "
+          f"(seed {args.seed}, {args.per_row} per row; {short} rows had fewer possible spellings)")
+    print("Rules fired: " + ", ".join(f"{name} {n}" for name, n in used.most_common()))
+    by_id = {r["id"]: r for r in parents}
+    for row in random.Random(args.seed).sample(rows, min(args.show, len(rows))):
+        print(f"\n  {by_id[row['parent']]['arabizi']}\n  {row['arabizi']}")
+    return 0
+
+
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     keys = P._dedupe_keys(row)
     for other in rows:
@@ -282,7 +303,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
     by_method = Counter((r["split"], r["method"]) for r in rows)
     held_out = [r for r in rows if r["split"] in ("test", "dev")]
     train = [r for r in rows if r["split"] == "train"]
-    unchecked = sum(not r["checked_by"] for r in rows)
+    unchecked = sum(not r["checked_by"] for r in rows if r["method"] != "rule_variant")  # variants: no check
     today = sum(r["date"] == date.today().isoformat() for r in rows)
 
     print(f"Rows: {len(rows)}  (test {by_split['test']}, dev {by_split['dev']}, train {by_split['train']})")
@@ -332,14 +353,19 @@ def main(argv: list[str] | None = None) -> int:
     batch.add_argument("--date", help="date the rows were written (default today)")
     batch.add_argument("--dry-run", action="store_true", help="check without saving")
     batch.add_argument("--allow-warnings", action="store_true", help="save rows that only have warnings")
+    var = sub.add_parser("variants", help="regenerate rule-made spelling variants of the training rows")
+    var.add_argument("--per-row", type=int, default=2, help="variants per training row (default 2)")
+    var.add_argument("--seed", type=int, default=2026, help="random seed; the same seed gives the same file")
+    var.add_argument("--show", type=int, default=8, help="print this many random examples")
+    var.add_argument("--dry-run", action="store_true", help="generate and report without writing")
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
-    commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch, "check": cmd_check,
-                "stats": cmd_stats, "validate": cmd_validate}
+    commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch, "variants": cmd_variants,
+                "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}
     return commands[args.command](args)
 
 
