@@ -8,10 +8,30 @@ import InputMethodKit
 @objc(ArabiziInputController)
 final class ArabiziInputController: IMKInputController {
     private var composer = Composer(convert: ToyTransliterator.convert)
+    /// Where the cursor was right after the last conversion, so ⌘Z can tell whether it moved since.
+    private var conversionEnd: Int?
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
-        let effect = composer.handle(Key(event), secureInput: IsSecureEventInputEnabled())
+        let key = Key(event)
+        var context = Context(secureInput: IsSecureEventInputEnabled())
+        var selection: NSRange?
+        switch key {
+        case .undo:
+            let cursor = client.selectedRange()
+            context.cursorAtLastConversion = cursor.length == 0 && cursor.location != NSNotFound
+                && cursor.location == conversionEnd
+        case .convertSelection where composer.buffer.isEmpty:
+            selection = Self.usable(client.selectedRange())
+            if let range = selection {
+                context.selectedText = client.string(from: range, actualRange: nil)
+            }
+        default:
+            break
+        }
+
+        let effect = composer.handle(key, context: context)
+        defer { if composer.lastConversion == nil { conversionEnd = nil } }
         switch effect {
         case .pass:
             return false
@@ -20,10 +40,24 @@ final class ArabiziInputController: IMKInputController {
             return true
         case .commit(let text):
             insert(text, into: client)
+            rememberConversionEnd(in: client)
             return true
         case .commitAndPass(let text):
             insert(text, into: client)
             return false
+        case .replaceSelection(let text):
+            guard let selection else { return false }
+            insert(text, into: client, replacing: selection)
+            rememberConversionEnd(in: client)
+            return true
+        case .restore(let marked, let replacingLength):
+            guard let end = conversionEnd, end >= replacingLength else {
+                _ = composer.flush()  // the app moved the text under us: stop composing, let ⌘Z be the app's
+                return false
+            }
+            setMarked(marked, in: client, replacing: NSRange(location: end - replacingLength, length: replacingLength))
+            log.debug("restored \(marked.count) Latin characters")
+            return true
         }
     }
 
@@ -33,13 +67,26 @@ final class ArabiziInputController: IMKInputController {
         insert(text, into: client)
     }
 
-    private func setMarked(_ text: String, in client: IMKTextInput) {
-        let caret = NSRange(location: (text as NSString).length, length: 0)
-        client.setMarkedText(text, selectionRange: caret, replacementRange: NSRange(location: NSNotFound, length: 0))
+    private static let notFound = NSRange(location: NSNotFound, length: 0)
+
+    /// A real, non-empty selection; apps that cannot report one return NSNotFound.
+    private static func usable(_ range: NSRange) -> NSRange? {
+        range.location == NSNotFound || range.length == 0 || range.length == NSNotFound ? nil : range
     }
 
-    private func insert(_ text: String, into client: IMKTextInput) {
-        client.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+    /// Some apps (often browsers and Electron) cannot report the cursor; then ⌘Z simply stays the app's undo.
+    private func rememberConversionEnd(in client: IMKTextInput) {
+        let cursor = client.selectedRange()
+        conversionEnd = cursor.location == NSNotFound ? nil : cursor.location
+    }
+
+    private func setMarked(_ text: String, in client: IMKTextInput, replacing range: NSRange = notFound) {
+        let caret = NSRange(location: (text as NSString).length, length: 0)
+        client.setMarkedText(text, selectionRange: caret, replacementRange: range)
+    }
+
+    private func insert(_ text: String, into client: IMKTextInput, replacing range: NSRange = notFound) {
+        client.insertText(text, replacementRange: range)
         log.debug("committed \(text.count) characters")
     }
 }
@@ -47,8 +94,17 @@ final class ArabiziInputController: IMKInputController {
 extension Key {
     /// macOS virtual key codes: 36 Return, 76 keypad Enter, 51 Delete (backspace), 53 Escape.
     init(_ event: NSEvent) {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if !flags.isDisjoint(with: [.command, .control, .option]) {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        let isReturn = event.keyCode == 36 || event.keyCode == 76
+        if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "z" {
+            self = .undo  // ⌘⇧Z (redo) has Shift too, so it stays .other
+            return
+        }
+        if modifiers == .option, isReturn {
+            self = .convertSelection
+            return
+        }
+        if !modifiers.isDisjoint(with: [.command, .control, .option]) {
             self = .other
             return
         }

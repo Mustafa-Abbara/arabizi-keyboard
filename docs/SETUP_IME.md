@@ -12,9 +12,13 @@ The keyboard is a macOS **input method**: a background app that macOS loads when
 | **Esc** | The Latin text is kept as typed |
 | Backspace | Edits the underlined text |
 | Click elsewhere, arrows, Tab, ⌘ shortcuts | The Latin text is kept as typed, then the key works normally |
+| **⌘Z right after a conversion** (cursor not moved) | The Arabic turns back into your underlined Latin: edit it and press Enter again, or Esc to keep it Latin. Any other time, ⌘Z is the app's own undo |
+| Select Latin text, then **⌥Enter** | The selection is converted in place (⌘Z right after brings it back). Useful for text that lost its underline after a click |
 | Password field | Nothing is underlined; keys go straight to the field |
 
 The toy converter is not smart: it converts English words too and ignores context. Judge the **behaviour**, not the Arabic.
+
+Some apps (often browsers and Electron apps) cannot tell the keyboard where the cursor or selection is. There, ⌘Z stays the app's normal undo and ⌥Enter does nothing; the matrix records which apps.
 
 ## 1. Use a second macOS user account (recommended)
 
