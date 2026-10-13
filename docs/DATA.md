@@ -53,6 +53,7 @@ Every Arabizi → Arabic pair is one JSON object on one line in `data/pairs/*.js
 ```bash
 uv sync --project eval                 # once
 uv run --project eval pairs add        # type pairs: Arabizi, then Arabic, then optional variants
+uv run --project eval pairs import list.txt   # add a list: one 'arabizi | arabic' per line
 uv run --project eval pairs check      # delayed self-check of rows written before yesterday (>= 24 h)
 uv run --project eval pairs stats      # counts, progress towards the P2 targets, coverage
 uv run --project eval pairs validate   # all checks above
@@ -60,5 +61,6 @@ uv run --project eval pairs validate   # all checks above
 
 - `add` fills in `id`, `writer`, `date` and `split`. Until the test set is frozen, rows go to **test and dev in a fixed 7:3 cycle**; after the freeze (`data/pairs/manifest.json` exists) they go to `train-hand.jsonl`. `--split` overrides this.
 - It refuses a row that breaks a rule above or repeats an existing sentence, and warns (asks before saving) when `?` `,` `;` were left in Latin.
+- `import` reads one pair per line: `arabizi | arabic`, optionally `| primary=variant; ...` (spaces around `|`; blank lines and `#` comments are skipped). Valid lines are saved in order with the same automatic ids and splits as `add`; lines that break a rule, repeat a sentence or leave `?` `,` `;` in Latin are **rejected and listed, never changed**. `--dry-run` checks without saving. Both sides must be written by a person: test and dev data are human-written (ADR 0010).
 - Variants are typed as `primary=variant` separated by `;`, with `|` between several variants: `هلق=هلأ; إمتى=إيمتى`.
 - Typing Arabic: add the **Arabic** input source in System Settings → Keyboard → Input Sources and switch with Ctrl+Space. The terminal may show Arabic right-to-left oddly; the saved text is still correct (check with `pairs check`).

@@ -1,6 +1,7 @@
 """Write, check and count Arabizi pairs.
 
   uv run --project eval pairs add      # type new hand-written pairs
+  uv run --project eval pairs import F # add a list of hand-written pairs: one 'arabizi | arabic' per line
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
   uv run --project eval pairs validate # same checks as the test suite
@@ -86,9 +87,7 @@ def cmd_add(args: argparse.Namespace) -> int:
         if arabic in ("", "q"):
             break
         accepted = parse_accepted(ask("Accepted variants (primary=variant; ... or Enter): "))
-        row = {"id": next_id("hand", rows), "arabizi": arabizi, "arabic": arabic, "accepted": accepted,
-               "method": "hand", "writer": WRITER, "checked_by": None, "source": "hand-written",
-               "split": split, "date": date.today().isoformat()}
+        row = new_hand_row(arabizi, arabic, accepted, split, rows)
         errors, warnings = P.row_errors(row, split, "hand"), P.row_warnings(row)
         for message in errors:
             print(f"  ERROR: {message}")
@@ -108,6 +107,62 @@ def cmd_add(args: argparse.Namespace) -> int:
         print(f"  saved {row['id']} -> {path_for(split).name}")
     print(f"\n{added} pair(s) added.")
     return 0
+
+
+def new_hand_row(arabizi: str, arabic: str, accepted: dict, split: str, rows: list[dict]) -> dict:
+    return {"id": next_id("hand", rows), "arabizi": arabizi, "arabic": arabic, "accepted": accepted,
+            "method": "hand", "writer": WRITER, "checked_by": None, "source": "hand-written",
+            "split": split, "date": date.today().isoformat()}
+
+
+def parse_list_line(line: str) -> tuple[str, str, dict] | None:
+    """'arabizi | arabic' or 'arabizi | arabic | primary=variant; ...'. None for blank and # comment lines."""
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    parts = [part.strip() for part in line.split(" | ")]
+    if len(parts) not in (2, 3) or not parts[0] or not parts[1]:
+        raise ValueError("expected 'arabizi | arabic' or 'arabizi | arabic | variants' (with spaces around |)")
+    return parts[0], parts[1], parse_accepted(parts[2]) if len(parts) == 3 else {}
+
+
+def cmd_import(args: argparse.Namespace) -> int:
+    """Add hand-written pairs from a list. Rows that break a rule are reported and not saved; nothing is changed."""
+    text = sys.stdin.read() if args.file == "-" else Path(args.file).read_text(encoding="utf-8")
+    rows = all_rows()
+    saved, rejected = [], []
+    for n, line in enumerate(text.splitlines(), 1):
+        try:
+            parsed = parse_list_line(line)
+        except ValueError as exc:
+            rejected.append((n, line.strip(), [str(exc)]))
+            continue
+        if parsed is None:
+            continue
+        split = args.split or default_split(rows)
+        row = new_hand_row(*parsed, split, rows)
+        problems = P.row_errors(row, split, "hand")
+        if not args.allow_warnings:
+            problems += [f"{w} (use --allow-warnings to keep it)" for w in P.row_warnings(row)]
+        duplicate = _duplicate_of(row, rows)
+        if duplicate:
+            problems.append(f"same sentence as {duplicate}")
+        if problems:
+            rejected.append((n, line.strip(), problems))
+            continue
+        if not args.dry_run:
+            append(path_for(split), row)
+        rows.append(row)
+        saved.append(row)
+
+    for row in saved:
+        print(f"{'would save' if args.dry_run else 'saved'} {row['id']} [{row['split']}] {row['arabizi']}")
+    for n, line, problems in rejected:
+        print(f"\nREJECTED line {n}: {line}")
+        for problem in problems:
+            print(f"  - {problem}")
+    print(f"\n{len(saved)} {'would be ' if args.dry_run else ''}saved, {len(rejected)} rejected.")
+    return 1 if rejected else 0
 
 
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
@@ -209,13 +264,19 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     add = sub.add_parser("add", help="type new hand-written pairs")
     add.add_argument("--split", choices=["test", "dev", "train"], help="override the automatic split")
+    imp = sub.add_parser("import", help="add hand-written pairs from a list file ('-' for stdin)")
+    imp.add_argument("file")
+    imp.add_argument("--split", choices=["test", "dev", "train"], help="override the automatic split")
+    imp.add_argument("--dry-run", action="store_true", help="check the list without saving")
+    imp.add_argument("--allow-warnings", action="store_true", help="save rows that only have warnings")
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
-    return {"add": cmd_add, "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}[args.command](args)
+    commands = {"add": cmd_add, "import": cmd_import, "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}
+    return commands[args.command](args)
 
 
 if __name__ == "__main__":

@@ -191,3 +191,35 @@ def test_check_waits_at_least_24_hours(monkeypatch, tmp_path):
     main(["check"])
     rows = [json.loads(line) for line in (tmp_path / "test.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [r["checked_by"] for r in rows] == [None, "moustafa-delayed"]
+
+
+# --------------------------------------------------------------------------- pairs import
+
+def test_import_saves_valid_lines_and_reports_the_rest(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    monkeypatch.setattr(P, "MANIFEST_PATH", tmp_path / "manifest.json")
+    listing = tmp_path / "list.txt"
+    listing.write_text("\n".join([
+        "# comment line",
+        "kifak, shu 3am ta3mel? | كيفك، شو عم تعمل؟",
+        "halla2 ana bel beit | هلق أنا بالبيت | هلق=هلأ",
+        "b3at 100$ la mohammad | بعت مية لمحمد",  # number changed
+        "KIFAK shu 3am ta3mel | كيفك شو عم تعمل",  # duplicate of line 2
+        "ma 3ndi meeting today? | ما عندي meeting today?",  # Latin ? left: warning
+        "no separator here",
+        "",
+    ]), encoding="utf-8")
+    assert main(["import", str(listing)]) == 1
+    rows = [json.loads(line) for line in (tmp_path / "test.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["id"] for r in rows] == ["hw-0001", "hw-0002"]
+    assert rows[1]["accepted"] == {"هلق": ["هلأ"]} and rows[0]["checked_by"] is None
+    out = capsys.readouterr().out
+    assert out.count("REJECTED") == 4 and "2 saved, 4 rejected." in out
+
+
+def test_import_dry_run_writes_nothing(monkeypatch, tmp_path):
+    monkeypatch.setattr(P, "PAIRS_DIR", tmp_path)
+    listing = tmp_path / "list.txt"
+    listing.write_text("kifak | كيفك\n", encoding="utf-8")
+    assert main(["import", str(listing), "--dry-run"]) == 0
+    assert not (tmp_path / "test.jsonl").exists()
