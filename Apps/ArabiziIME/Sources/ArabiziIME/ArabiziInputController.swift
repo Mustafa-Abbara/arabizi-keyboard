@@ -61,8 +61,10 @@ final class ArabiziInputController: IMKInputController {
             insert(text, into: client)
             return false
         case .replaceSelection(let text):
-            guard let selection else { return false }
-            insert(text, into: client, replacing: selection)
+            guard selection != nil else { return false }
+            // Insert like typing: it replaces the current selection in every app. Passing the selection as an
+            // explicit replacementRange only worked in TextEdit; other apps ignored it (manual test, 13 Oct 2026).
+            insert(text, into: client)
             rememberConversionEnd(in: client)
             return true
         case .restore(let marked, let replacingLength):
