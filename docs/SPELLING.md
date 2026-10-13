@@ -2,7 +2,7 @@
 
 This guide fixes **how the Arabic side of every data pair is written**, so the test set, the training data and the model all agree. Read it before writing any pair, and re-read it during the delayed self-check (roadmap P2, [ADR 0011](decisions/0011-solo-build.md)).
 
-> **Status: v1.1, 13 Oct 2026.** v1.1: `eza`/`iza` is written **إذا** (Moustafa: "a special word"), إزا accepted. v1.0 (12 Oct 2026): drafted by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling; Moustafa confirmed all nine choices marked **[confirm]** (Section 9). Changing a rule means fixing every existing pair, so bump the version and say why in the PR.
+> **Status: v1.2, 13 Oct 2026.** v1.2: the "her" ending (ـا / ـها) and `3a` before a word (ع جونيه / عجونيه) are correct both ways; Moustafa writes both on purpose for variety, and the scorer accepts both (EVAL.md). v1.1: `eza`/`iza` is written **إذا** (Moustafa: "a special word"), إزا accepted. v1.0 (12 Oct 2026): drafted by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling; Moustafa confirmed all nine choices marked **[confirm]** (Section 9). Changing a rule means fixing every existing pair, so bump the version and say why in the PR.
 
 ---
 
@@ -96,7 +96,7 @@ These decide most of the hard cases (the "la mohammad" problem).
 | `la` (no) | لا **separate** | `la la` → لا لا (rare in Lebanese; the usual "no" is `la2` → لأ) |
 | `la2ennu` / `la2anno` (because) | لأنو | |
 | `3al` (on/to the) | عالـ **attached** | `3al beit` → عالبيت |
-| `3a` (on/to) + word without "the" | ع **separate** [confirm] | `3a Jounieh` → ع جونيه |
+| `3a` (on/to) + word without "the" | ع separate **or** attached, both correct (v1.2) | `3a Jounieh` → ع جونيه / عجونيه |
 | `ma` (not) | ما **separate** | `ma ba3ref` → ما بعرف |
 | `ma3` (with) | مع **separate** | `ma3ak` → معك |
 | `mish` / `mesh` / `msh` | مش **separate** | `mesh 3aref` → مش عارف |
@@ -113,7 +113,7 @@ These decide most of the hard cases (the "la mohammad" problem).
 | `-ak` (your, m.) | ـك | `kifak` → كيفك |
 | `-ik` (your, f.) | ـك | `kifik` → كيفك |
 | `-o` / `-u` (his) | ـو | `beto` → بيتو, `2eltello` → قلتلو |
-| `-a` (her) | ـا [confirm] | `beta` → بيتا (accepted: بيتها) |
+| `-a` (her) | ـا **or** ـها, both correct (v1.2) | `beta` → بيتا / بيتها |
 | `-kon` / `-kun` (your, pl.) | ـكن | `kifkon` → كيفكن |
 | `-on` / `-un` (their) | ـن | `bayton` → بيتن |
 | `-na` (our) | ـنا | `baytna` → بيتنا |
@@ -213,12 +213,12 @@ The most frequent words. Add a word here the first time you are unsure about it,
 | 1 | ث/ذ/ظ in everyday words (2.1) | Pronunciation (تلاتة، هيدا، ضهر) | Always the MSA letter (ثلاثة، هذا) |
 | 2 | Glottal-stop ق (2.2) | ق (قلب، قهوة), أ accepted for listed words | أ (ألب، أهوة) |
 | 3 | Feminine ending (2.3) | ة (حلوة) | ه (حلوه) |
-| 4 | "her" ending (3) | ـا (بيتا), ـها accepted | ـها (بيتها) |
+| 4 | "her" ending (3) | **v1.2: both ـا and ـها are correct** (Moustafa mixes them on purpose) | — |
 | 5 | `ta` + verb (3) | attached (تشوفك) | separate (تا شوفك) |
 | 6 | English word with Arabic prefix (4) | prefix in Arabic + space (عم ب check) | whole token Latin (bcheck) |
 | 7 | Laughter (5) | ههههه | keep Latin (hahaha) |
 | 8 | Punctuation (7) | Arabic ؟ ، ؛ | keep Latin ? , ; |
-| 9 | `3a` before a word without "the" (3) | separate (ع جونيه) | attached (عجونيه) |
+| 9 | `3a` before a word without "the" (3) | **v1.2: separate or attached, both correct** | — |
 
 All nine defaults were **Claude's recommendation** and were **confirmed by Moustafa on 12 Oct 2026** ("all defaults"). The "Alternative" column is kept for the record.
 
