@@ -33,3 +33,7 @@ Apps: Messages, Mail, a web browser, VS Code, Terminal, the Claude desktop app, 
 - ⚠️ Clicking elsewhere or pressing an arrow key while composing commits the text **in Latin** (underline disappears). This is the designed behaviour (no surprise conversion), but it felt like losing the sentence. Response: ⌥Enter on a selection (case 10) converts such text afterwards.
 - ⚠️ ⌘Z after a conversion deleted the whole sentence (the app undid the one insertion). Response: ⌘Z right after a conversion now restores the underlined Latin (case 9).
 - ⚠️ The toy converter is letter by letter and converts English words. Expected for the spike; the dictionary-based converter (B0) is the next change.
+
+### Second round: 13 Oct 2026 (after PR #168)
+
+- ❌ ⌥Enter on a selection deleted the sentence (app not recorded). Likely cause: the app did not report the selection, so the keyboard passed ⌥Enter on and the app typed a new line over the selection. Fix: ⌥Enter is never passed on (beep instead), a second way of reading the selection is tried, and ⌥Enter/⌘Z/Enter/Esc outcomes are logged without text.

@@ -33,6 +33,9 @@ public struct Context: Equatable, Sendable {
 public enum Effect: Equatable, Sendable {
     /// Let the app handle the key (e.g. Enter on an empty buffer sends the message).
     case pass
+    /// Swallow the key and change nothing. Used for ⌥Enter when there is nothing to convert: passing it on
+    /// would let the app type a new line over the selection and delete it.
+    case consume
     /// Show this text as underlined marked text; the key is consumed.
     case update(marked: String)
     /// Insert this text into the app and clear the marked text; the key is consumed.
@@ -83,7 +86,7 @@ public struct Composer {
             if !buffer.isEmpty {
                 return .commit(convertAndRemember(take()))
             }
-            guard let selected = context.selectedText, selected.contains(where: \.isLetter) else { return .pass }
+            guard let selected = context.selectedText, selected.contains(where: \.isLetter) else { return .consume }
             return .replaceSelection(convertAndRemember(selected))
         case .undo:
             if !buffer.isEmpty {

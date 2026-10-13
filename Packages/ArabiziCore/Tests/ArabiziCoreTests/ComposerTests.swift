@@ -130,10 +130,11 @@ private let cursorUnmoved = Context(cursorAtLastConversion: true)
     #expect(c.handle(.undo, context: cursorUnmoved) == .restore(marked: "kifak shu", replacingLength: 11))
 }
 
-@Test func optionEnterWithoutLettersInTheSelectionPasses() {
+@Test func optionEnterWithNothingToConvertIsSwallowedNotPassed() {
+    // Passing it on would let the app replace the selection with a new line (found in manual testing).
     var c = composer()
-    #expect(c.handle(.convertSelection) == .pass)
-    #expect(c.handle(.convertSelection, context: Context(selectedText: "100 $")) == .pass)
+    #expect(c.handle(.convertSelection) == .consume)
+    #expect(c.handle(.convertSelection, context: Context(selectedText: "100 $")) == .consume)
 }
 
 @Test func optionEnterWhileComposingActsLikeEnter() {
