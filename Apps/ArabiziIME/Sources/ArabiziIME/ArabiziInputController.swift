@@ -25,7 +25,10 @@ final class ArabiziInputController: IMKInputController {
             selection = Self.usable(client.selectedRange())
             if let range = selection {
                 // Two ways to read the selection; apps support one, the other or neither.
-                context.selectedText = client.string(from: range, actualRange: nil)
+                // actualRange must be a real pointer: InputMethodKit writes to it without a nil check and
+                // crashed the keyboard (EXC_BAD_ACCESS, 13 Oct 2026), which let the app type a new line instead.
+                var actualRange = NSRange(location: NSNotFound, length: 0)
+                context.selectedText = client.string(from: range, actualRange: &actualRange)
                     ?? client.attributedSubstring(from: range)?.string
             }
             log.notice("""

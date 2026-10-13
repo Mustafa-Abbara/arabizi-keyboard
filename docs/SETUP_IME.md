@@ -47,13 +47,13 @@ Run `scripts/install_ime.sh` again. It stops the running copy; macOS starts the 
 The keyboard never logs what you type, only key types, actions and lengths. Enter, Esc, ⌘Z and ⌥Enter are logged at a level macOS keeps, so they can be read afterwards:
 
 ```bash
-log show --predicate 'subsystem == "lb.aub.arabizi"' --last 10m
+/usr/bin/log show --predicate 'subsystem == "lb.aub.arabizi"' --last 10m
 ```
 
 Live, including debug lines:
 
 ```bash
-log stream --predicate 'subsystem == "lb.aub.arabizi"' --level debug
+/usr/bin/log stream --predicate 'subsystem == "lb.aub.arabizi"' --level debug
 ```
 
 ## 6. Remove it
@@ -69,5 +69,6 @@ Then remove it from Input Sources (**−**) if it is still listed.
 | Problem | Try |
 |---|---|
 | Not in the Input Sources list | Log out and back in; check `swift Apps/ArabiziIME/Tools/register.swift "$HOME/Library/Input Methods/ArabiziIME.app"` |
-| Selected, but typing shows nothing underlined | `log stream …` above: look for "Could not start the IMK server" |
+| Selected, but typing shows nothing underlined | `/usr/bin/log stream …` above: look for "Could not start the IMK server" |
+| A key does something odd (e.g. a new line appears) | Check for a crash: `ls -t ~/Library/Logs/DiagnosticReports/ \| grep ArabiziIME`. When the keyboard crashes mid-key, macOS gives the key to the app |
 | Typing is stuck | Ctrl+Space to switch input source, or pick another source in the menu bar |

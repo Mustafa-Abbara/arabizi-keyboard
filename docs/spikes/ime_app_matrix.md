@@ -36,4 +36,6 @@ Apps: Messages, Mail, a web browser, VS Code, Terminal, the Claude desktop app, 
 
 ### Second round: 13 Oct 2026 (after PR #168)
 
-- ❌ ⌥Enter on a selection deleted the sentence (app not recorded). Likely cause: the app did not report the selection, so the keyboard passed ⌥Enter on and the app typed a new line over the selection. Fix: ⌥Enter is never passed on (beep instead), a second way of reading the selection is tried, and ⌥Enter/⌘Z/Enter/Esc outcomes are logged without text.
+- ❌ ⌥Enter on a selection deleted the sentence. **Root cause (from crash reports and logs):** the keyboard crashed. `string(from:actualRange:)` was called with `actualRange: nil`; InputMethodKit writes to that pointer without a nil check (`EXC_BAD_ACCESS` in `-[_IPMDServerClientWrapperLegacy stringFromRange:actualRange:]`, 3 crash reports). When the input method crashes mid-key, macOS gives the key to the app, which typed a new line over the selection. Two earlier guesses (selection not reported; Option not detected) were wrong: the logs showed Option detected and the selection readable.
+- Fix: pass a real `actualRange` variable. Also kept from the investigation: ⌥Enter with nothing to convert beeps instead of reaching the app; Enter/Esc/⌘Z/⌥Enter outcomes are logged (kinds only, never text). Read logs with `/usr/bin/log` (a shell `log` function can hide it).
+- ✅ After the fix, TextEdit: select Latin text → ⌥Enter converts it in place (log: selection reported, text readable, replaceSelection); no new crash reports. ⌘Z right after: not tried yet.
