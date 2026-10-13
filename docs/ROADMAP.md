@@ -185,7 +185,7 @@ About 8–12 hours in W1, spread over the week:
 **What this stage does (simple):** Before fine-tuning, measure where we start. B0 is a simple rule-based transliterator (also the engine's fallback later). B1 is each base model with no fine-tuning, given a short prompt and a few examples. Fine-tuning in P4 must beat both.
 
 **Steps:**
-1. **(Moustafa) Eval harness** `eval/` (Python, uv, ruff, pytest):
+1. **(Moustafa) Eval harness** `eval/` (Python, uv, ruff, pytest). Built as `evalrun` (`eval/src/arabizi_eval/run.py`, `metrics.py`, `bootstrap.py`); definitions and choices in [EVAL.md](EVAL.md), plus a punctuation-match metric for SPELLING.md §7:
    - `eval/run.py` runs a system on a split and writes `results/<run_id>/predictions.jsonl` + `metrics.json` (with git SHA, model, quantization, prompt version).
    - `eval/metrics.py`:
      - **Word accuracy** against the reference and its accepted variants, after normalising tatweel and diacritics.
