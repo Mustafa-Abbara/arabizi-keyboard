@@ -1,0 +1,237 @@
+{
+  "_comment": "Alternative Arabizi spellings that real Lebanese typists use, applied by `pairs variants` (eval/src/arabizi_eval/variants.py) to make training rows with the same Arabic. Each word rule is a regex on one lowercase word; `p` is the chance it fires at each match. A rule must never change the meaning (so no final-vowel swaps like bade/badda). Review against your own chats before changing p. Version bumps when rules change. `min_len` skips short words, where a re-spelling can change the meaning (min -> meen, la2 -> la).",
+  "version": 1,
+  "word_rules": [
+    {
+      "name": "sh_to_ch",
+      "pattern": "sh",
+      "replace": [
+        "ch"
+      ],
+      "p": 0.35,
+      "example": "shu -> chu, shi -> chi"
+    },
+    {
+      "name": "ch_to_sh",
+      "pattern": "ch",
+      "replace": [
+        "sh"
+      ],
+      "p": 0.5,
+      "example": "chou -> shou"
+    },
+    {
+      "name": "7_to_h",
+      "pattern": "(?<![skcgdt])7",
+      "replace": [
+        "h"
+      ],
+      "p": 0.3,
+      "example": "7abibi -> habibi (never s7 -> sh, which would mean ش)"
+    },
+    {
+      "name": "kh_to_5",
+      "pattern": "kh",
+      "replace": [
+        "5"
+      ],
+      "p": 0.3,
+      "example": "khalas -> 5alas"
+    },
+    {
+      "name": "5_to_kh",
+      "pattern": "5",
+      "replace": [
+        "kh"
+      ],
+      "p": 0.5,
+      "example": "5alas -> khalas"
+    },
+    {
+      "name": "gh_to_3apos",
+      "pattern": "gh",
+      "replace": [
+        "3'"
+      ],
+      "p": 0.2,
+      "example": "ghayr -> 3'ayr"
+    },
+    {
+      "name": "3_initial_before_vowel_dropped",
+      "pattern": "^3(?=[aeiou])",
+      "replace": [
+        ""
+      ],
+      "p": 0.2,
+      "example": "3ala -> ala (not 3am -> am)",
+      "min_len": 4
+    },
+    {
+      "name": "2_final_dropped",
+      "pattern": "(?<=[a-z])2$",
+      "replace": [
+        "",
+        "'"
+      ],
+      "p": 0.35,
+      "example": "halla2 -> halla / halla' (not la2 -> la)",
+      "min_len": 4
+    },
+    {
+      "name": "2_initial_dropped",
+      "pattern": "^2(?=[aeiou])",
+      "replace": [
+        ""
+      ],
+      "p": 0.3,
+      "example": "2alleh -> alleh",
+      "min_len": 4
+    },
+    {
+      "name": "ou_to_u_o",
+      "pattern": "ou",
+      "replace": [
+        "u",
+        "o"
+      ],
+      "p": 0.3,
+      "example": "shou -> shu / sho"
+    },
+    {
+      "name": "u_final_to_ou_o",
+      "pattern": "(?<=[bcdfghjklmnpqrstvwxyz])u$",
+      "replace": [
+        "ou",
+        "o"
+      ],
+      "p": 0.25,
+      "example": "shu -> shou / sho"
+    },
+    {
+      "name": "ee_to_i",
+      "pattern": "ee",
+      "replace": [
+        "i"
+      ],
+      "p": 0.4,
+      "example": "kteer -> ktir (not meen -> min)",
+      "min_len": 5
+    },
+    {
+      "name": "i_to_ee",
+      "pattern": "(?<=[bcdfghjklmnpqrstvwxyz])i(?=[bcdfghjklmnpqrstvwxyz])",
+      "replace": [
+        "ee"
+      ],
+      "p": 0.12,
+      "example": "ktir -> kteer (not min -> meen)",
+      "min_len": 4
+    },
+    {
+      "name": "ei_ay_e",
+      "pattern": "ei|ay(?=[bcdfghjklmnpqrstvwxz])",
+      "replace": [
+        "ay",
+        "ei",
+        "e"
+      ],
+      "p": 0.3,
+      "example": "beit -> bayt / bet"
+    },
+    {
+      "name": "aa_to_a",
+      "pattern": "aa",
+      "replace": [
+        "a"
+      ],
+      "p": 0.5,
+      "example": "maa -> ma"
+    },
+    {
+      "name": "double_consonant_single",
+      "pattern": "([bcdfghjklmnpqrstvwxyz])\\1",
+      "replace": [
+        "\\1"
+      ],
+      "p": 0.35,
+      "example": "ma7all -> ma7al, sakkar -> sakar"
+    },
+    {
+      "name": "article_el",
+      "pattern": "^el$",
+      "replace": [
+        "il",
+        "l"
+      ],
+      "p": 0.3,
+      "example": "el -> il / l"
+    },
+    {
+      "name": "article_il_l",
+      "pattern": "^(il|l)$",
+      "replace": [
+        "el"
+      ],
+      "p": 0.3,
+      "example": "il -> el"
+    },
+    {
+      "name": "bel_bil",
+      "pattern": "^bel$",
+      "replace": [
+        "bil",
+        "bl"
+      ],
+      "p": 0.3,
+      "example": "bel -> bil / bl"
+    },
+    {
+      "name": "3am_to_3m",
+      "pattern": "^3am$",
+      "replace": [
+        "3m"
+      ],
+      "p": 0.4,
+      "example": "3am -> 3m"
+    },
+    {
+      "name": "3m_to_3am",
+      "pattern": "^3m$",
+      "replace": [
+        "3am"
+      ],
+      "p": 0.4,
+      "example": "3m -> 3am"
+    },
+    {
+      "name": "bas_to_bs",
+      "pattern": "^bas$",
+      "replace": [
+        "bs"
+      ],
+      "p": 0.3,
+      "example": "bas -> bs"
+    },
+    {
+      "name": "w_wu",
+      "pattern": "^wu$",
+      "replace": [
+        "w"
+      ],
+      "p": 0.4,
+      "example": "wu -> w"
+    }
+  ],
+  "sentence_rules": [
+    {
+      "name": "lowercase",
+      "p": 0.7,
+      "example": "Tsharrafna, esme Karim -> tsharrafna, esme karim (Latin words kept in the Arabic are never changed)"
+    },
+    {
+      "name": "drop_punctuation",
+      "p": 0.4,
+      "example": "kifak, shu? -> kifak shu (and the Arabic loses the matching ، ؟)"
+    }
+  ]
+}

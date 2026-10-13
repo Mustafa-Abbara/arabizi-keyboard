@@ -36,3 +36,11 @@ Constraints: test and dev data must show how real people type (ADR 0010); the co
 - P4 already trains with and without the `ai_checked` rows, so the reported results never depend on them; if the terms reading is challenged, they can be dropped and the model retrained.
 - The rule-based generator becomes the main training source, so it needs careful review against real typing; its spelling table is checked against Moustafa's own chats before use.
 - The training set may be cleaner than real typing. The hand-written test set and the AladdinBench check are what show whether this hurts.
+
+## Amendment (13 Oct 2026): how the rule generator works
+
+| # | Change | Source |
+|---|---|---|
+| 8 | The generator **re-spells existing Arabizi** (pair → variants with the same Arabic) instead of building Arabizi from Arabic alone (decision 2). Arabic script does not write short vowels, so Arabic-only generation produces unrealistic forms (`b3rf` for `ba3ref`). Arabic-only sources (e.g. Baladi) will need their Arabizi written by hand or a separate, reviewed generator. | **Claude's recommendation**, accepted by Moustafa ("start the generator") |
+| 9 | Rule variants of AI-drafted rows **do not count as non-AI data** for the ADR 0010 cap (they are the same sentences). The cap still needs hand-written or public rows, or a new ADR. | **Claude's recommendation** (correcting Claude's earlier claim that the generator would balance the AI share) |
+| 10 | The variants file is **generated, not committed**: deterministic for a seed, rebuilt with `pairs variants`. | **Claude's recommendation** |

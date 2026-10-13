@@ -35,7 +35,8 @@ Every Arabizi → Arabic pair is one JSON object on one line in `data/pairs/*.js
 | `data/pairs/test.jsonl` | Held-out test rows. Hand-written only. Frozen at the end of W3 (P2 step 4). |
 | `data/pairs/dev.jsonl` | Held-out dev rows for tuning. Hand-written only. |
 | `data/pairs/train-hand.jsonl` | Hand-written training rows (after the freeze). |
-| `data/pairs/train-rule_variant.jsonl`, `train-public.jsonl`, `train-ai_checked.jsonl` | Training rows from the other methods. |
+| `data/pairs/train-ai_checked.jsonl`, `train-public.jsonl` | Training rows from AI-drafted batches and licensed datasets. |
+| `data/pairs/train-rule_variant.jsonl` | **Generated, not committed** (`.gitignore`): rule-made spelling variants of the training rows. Rebuild with `pairs variants`; the same seed gives the same file. |
 
 ### Rules checked automatically
 
@@ -58,6 +59,15 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 | `claude-draft-revised-2026-10-batch02` | 500 | `train-ai_checked.jsonl` (ai-0501 – ai-1000) | `ai_checked`, train only | Same process as above (Claude draft, revised by Moustafa, prompt not kept). Diacritics/tatweel removed from 247 rows. |
 | `claude-draft-revised-2026-10-batch03` | 500 | `train-ai_checked.jsonl` (ai-1001 – ai-1500) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 279 rows. |
 | `claude-draft-revised-2026-10-batch04` | 500 | `train-ai_checked.jsonl` (ai-1501 – ai-2000) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 342 rows. |
+
+### Rule-made spelling variants
+
+`uv run --project eval pairs variants` (default: 2 per training row, seed 2026) re-spells the **Arabizi** of every non-variant training row with alternatives real typists use, from [`data/rules/arabizi_variants.json`](../data/rules/arabizi_variants.json): `sh`↔`ch`, `7`→`h`, `kh`↔`5`, `gh`→`3'`, dropped `2`/`3`, vowel spellings (`ou`/`u`/`o`, `ee`/`i`, `ei`/`ay`/`e`), single for double consonants, `el`/`il`/`l`, `3am`↔`3m`, `bas`→`bs`, lowercase, and no punctuation (the Arabic then loses the matching ، ؟ too). The Arabic stays the same otherwise.
+
+- **Never changed:** words kept in Latin in the Arabic (English, names like LAU), numbers, links, mentions, emoji.
+- **Meaning guards:** no rule may change which word it is (no `bade`/`badda`); short words are skipped where a re-spelling is ambiguous (`min`/`meen`, `la2`/`la`, `3am`/`am`), and `7` never becomes `h` after `s k c g d t` (no `s7i7` → `shi7`). Tests: `eval/tests/test_variants.py`.
+- First run (13 Oct 2026): 3,969 variants of 2,000 rows (27 rows had too few distinct re-spellings). Rows: `method: rule_variant`, `writer: arabizi_eval.variants v1`, `source: rule-variants-v1-seed2026`, `parent` = the original row, `checked_by: null` (deterministic, no row check, ADR 0012).
+- **They do not count as non-AI data for the ADR 0010 cap:** a variant of an AI-drafted sentence is still that sentence. They add spelling robustness; P4 trains with and without them.
 
 **Balance note:** all 2,000 training rows are `ai_checked`. ADR 0010 caps AI rows at half of the training set used in P4, so P4 needs at least as many rule-generated, hand-written or public rows (roadmap P2 steps 5–6), or the cap must be revisited in an ADR.
 

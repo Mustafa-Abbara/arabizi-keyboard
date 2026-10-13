@@ -34,6 +34,9 @@ models/
 *.arpa
 *.klm
 
+# --- Derived data: regenerate with `uv run --project eval pairs variants` (deterministic per seed) ---
+data/pairs/train-rule_variant.jsonl
+
 # --- Restricted or private data: never committed (see docs/DATA.md once written) ---
 data/private/
 data/**/*[Mm][Aa][Dd][Aa][Rr]*
