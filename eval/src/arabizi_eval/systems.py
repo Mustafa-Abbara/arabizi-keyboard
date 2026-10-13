@@ -34,7 +34,26 @@ class Reference(System):
         return row["arabic"]
 
 
+class B0(System):
+    """Rule baseline: clitics, keep-Latin list, dictionary from the training split, letter rules (b0.py)."""
+
+    def __init__(self) -> None:
+        from arabizi_eval import b0
+
+        self.converter = b0.RuleConverter()
+        lexicon = b0.load_lexicon()
+        super().__init__("b0", {
+            "kind": "rules", "rules_version": self.converter.rules["version"],
+            "lexicon_words": len(lexicon["words"]), "lexicon_keep_latin": len(lexicon["keep_latin"]),
+            "lexicon_built_from": lexicon.get("built_from", {}),
+        })
+
+    def convert(self, row: dict) -> str:
+        return self.converter.convert(row["arabizi"])
+
+
 REGISTRY: dict[str, Callable[[], System]] = {
+    "b0": B0,
     "identity": lambda: Identity("identity", {"kind": "sanity", "note": "input returned unchanged"}),
     "reference": lambda: Reference("reference", {"kind": "sanity", "note": "oracle: returns the reference"}),
 }

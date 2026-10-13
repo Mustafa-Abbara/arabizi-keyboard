@@ -4,6 +4,7 @@
   uv run --project eval pairs import F # add a list of hand-written pairs: one 'arabizi | arabic' per line
   uv run --project eval pairs import-batch F --method ai_checked ...  # training rows from another source
   uv run --project eval pairs variants # regenerate rule-made spelling variants of the training rows
+  uv run --project eval pairs lexicon  # rebuild the B0 word dictionary from the train split
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
   uv run --project eval pairs validate # same checks as the test suite
@@ -236,6 +237,21 @@ def cmd_variants(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_lexicon(args: argparse.Namespace) -> int:
+    """Rebuild data/rules/arabizi_lexicon.json (B0 dictionary) from the train split only."""
+    from arabizi_eval import b0
+
+    train = [r for r in all_rows() if r.get("split") == "train"]
+    if not any(r["method"] == "rule_variant" for r in train):
+        print("Note: no rule variants found; run `pairs variants` first for a fuller dictionary.")
+    lexicon = b0.build_lexicon(train)
+    b0.LEXICON_PATH.write_text(json.dumps(lexicon, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    built = lexicon["built_from"]
+    print(f"wrote {b0.LEXICON_PATH.name}: {len(lexicon['words'])} words, {len(lexicon['keep_latin'])} kept in Latin, "
+          f"from {built['aligned_rows']} of {built['rows']} training rows that line up word for word")
+    return 0
+
+
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     keys = P._dedupe_keys(row)
     for other in rows:
@@ -358,13 +374,15 @@ def main(argv: list[str] | None = None) -> int:
     var.add_argument("--seed", type=int, default=2026, help="random seed; the same seed gives the same file")
     var.add_argument("--show", type=int, default=8, help="print this many random examples")
     var.add_argument("--dry-run", action="store_true", help="generate and report without writing")
+    sub.add_parser("lexicon", help="rebuild the B0 word dictionary from the train split")
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
-    commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch, "variants": cmd_variants,
+    commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
+                "variants": cmd_variants, "lexicon": cmd_lexicon,
                 "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}
     return commands[args.command](args)
 

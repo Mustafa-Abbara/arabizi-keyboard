@@ -15,6 +15,21 @@ uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B # is
 - External predictions (`score`): JSONL with `id`, `prediction`, optional `latency_ms`; every row of the split needs a prediction.
 - Sanity systems: `reference` returns the answer and must score 1.0 everywhere; `identity` returns the input and scores near 0 (first check, 200 training rows: word accuracy 0.05, from Latin words that should stay Latin).
 
+## Systems
+
+| System | What it is | Files |
+|---|---|---|
+| `reference`, `identity` | Sanity checks (1.0 and near 0) | `systems.py` |
+| **`b0`** | Rule baseline (P3): clitics joined to the next word (`w el bet` → والبيت, never a double article), words kept in Latin when the training Arabic keeps them, the word dictionary, then letter rules; numbers, links and emoji untouched. Also the logic the Swift fallback will copy in P5. | `b0.py`, `data/rules/arabizi_to_arabic.json` (hand-written), `data/rules/arabizi_lexicon.json` (generated) |
+
+**Rebuilding the B0 dictionary** (train split only; the variants file is generated, so build it first):
+
+```bash
+uv run --project eval pairs variants && uv run --project eval pairs lexicon
+```
+
+Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a long vowel (`8ali` → غلي, not غالي) and final `-e` can be ي or ة (`2alle` → قلة, not قلي). Words in the dictionary avoid both.
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
