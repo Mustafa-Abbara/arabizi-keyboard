@@ -197,7 +197,7 @@ About 8–12 hours in W1, spread over the week:
      - Latency p50/p95 and peak RSS, for model runs.
    - `eval/bootstrap.py`: paired bootstrap over sentences (10,000 resamples, 95% CI of the difference between two systems).
    - Tests with hand-computed toy examples (accuracy 3/4 = 0.75, a perfect system scores CER 0).
-2. **(Moustafa) B0 rule transliterator** in Python, driven by `data/rules/arabizi_to_arabic.json` (letter map + a small dictionary of the most common words: `shu` → `شو`, `kifak` → `كيفك` …). The same JSON table is later read by the Swift fallback in P5, so both stay identical.
+2. **(Moustafa) B0 rule transliterator** in Python (`eval/src/arabizi_eval/b0.py`, system `b0`), driven by `data/rules/arabizi_to_arabic.json` (hand-written: letter rules, clitics, punctuation) and `data/rules/arabizi_lexicon.json` (dictionary generated from the train split by `pairs lexicon`: `shu` → `شو`, `kifak` → `كيفك` …). The same JSON table is later read by the Swift fallback in P5, so both stay identical.
 3. **(Moustafa) Runtime:** llama.cpp (`llama-cli` / `llama-server`) with GGUF Q4_K_M models, run one at a time on the 8 GB Air. This keeps the v1 runtime choice (ADR 0003, to be written here) because the same XCFramework works from Swift.
 4. **(Moustafa) B1 base models, no fine-tuning**, zero-shot and with 5 fixed examples from dev:
    - Qwen2.5-0.5B-Instruct and Qwen2.5-1.5B-Instruct (Apache-2.0)
