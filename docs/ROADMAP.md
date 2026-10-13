@@ -104,7 +104,7 @@ About 8–12 hours in W1, spread over the week:
 **What this stage does (simple):** Prove that a macOS input method can show temporary text and replace it on Enter in real apps (WhatsApp, Slack, browsers) before building anything on top. The conversion here is a toy letter map; the real engine arrives in P5.
 
 **Steps:**
-1. **(Moustafa)** Build the spike exactly as in v1 S2, steps 1–6 ([archive](archive/ROADMAP_v1_agentic.md), "S2 — IME spike"): Xcode AppKit app `ArabiziIME`, bundle id containing `inputmethod`, Info.plist keys, `IMKServer`, a thin `IMKInputController`, `scripts/install_ime.sh`, and testing on a **second macOS user account**.
+1. **(Moustafa)** Build the spike exactly as in v1 S2, steps 1–6 ([archive](archive/ROADMAP_v1_agentic.md), "S2 — IME spike"): an AppKit app `ArabiziIME` (built from a Swift package by `scripts/build_ime.sh` instead of an Xcode project, [ADR 0013](decisions/0013-ime-build-with-swiftpm.md)), bundle id containing `inputmethod`, Info.plist keys, `IMKServer`, a thin `IMKInputController`, `scripts/install_ime.sh`, and testing on a **second macOS user account**.
 2. **(Moustafa)** Implement the **Phase 1 key behaviour** in the spike:
    - Letters, digits and punctuation go into a buffer shown as **marked text in Latin** (what the user typed).
    - **Enter with a non-empty buffer:** replace the buffer with the converted text and commit it. The message is **not** sent.
