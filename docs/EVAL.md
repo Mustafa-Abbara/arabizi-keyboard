@@ -30,6 +30,12 @@ uv run --project eval pairs variants && uv run --project eval pairs lexicon
 
 Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a long vowel (`8ali` → غلي, not غالي) and final `-e` can be ي or ة (`2alle` → قلة, not قلي). Words in the dictionary avoid both.
 
+## Results so far (dev, 15 sentences; small, so the intervals are wide)
+
+| System | Word acc. | 95% CI | Lenient | CER | Punct. | Keep-Latin F1 | Numbers | Run |
+|---|---|---|---|---|---|---|---|---|
+| B0 rules v1 | 0.549 | [0.47, 0.62] | 0.556 | 0.159 | 1.00 | 0.50 | 1.00 | `20261013-155728-b0-dev` |
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
