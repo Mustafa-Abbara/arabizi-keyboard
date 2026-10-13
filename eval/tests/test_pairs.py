@@ -88,6 +88,10 @@ def test_punctuation_warning():
     row = make_row(arabizi="kifak?", arabic="كيفك?")
     assert P.row_warnings(row)
     assert not P.row_warnings(make_row(arabizi="kifak?", arabic="كيفك؟"))
+    # Punctuation inside numbers and links stays as typed: no warning (batch 02, row 949).
+    assert not P.row_warnings(make_row(arabizi="ya3te 89,500 lira", arabic="يعطي 89,500 ليرة"))
+    assert not P.row_warnings(make_row(arabizi="shuf www.x.com/?a=1", arabic="شوف www.x.com/?a=1"))
+    assert P.row_warnings(make_row(arabizi="89,500 lira, ok", arabic="89,500 ليرة, ok"))
 
 
 def test_normalize_arabic():

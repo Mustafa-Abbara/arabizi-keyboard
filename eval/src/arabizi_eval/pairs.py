@@ -140,8 +140,13 @@ def row_errors(row: dict, split: str | None = None, method: str | None = None) -
 def row_warnings(row: dict) -> list[str]:
     """Likely slips that are allowed (shown by the CLI, not failed by tests)."""
     warnings = []
+    # Numbers ("89,500") and links keep their punctuation as typed (SPELLING.md 6), so ignore them here.
+    def outside_numbers_and_links(text: str) -> str:
+        return NUMBER.sub(" ", UNTOUCHED.sub(" ", text))
+
+    arabizi, arabic_text = outside_numbers_and_links(row["arabizi"]), outside_numbers_and_links(row["arabic"])
     for latin, arabic in (("?", "؟"), (",", "،"), (";", "؛")):
-        if latin in row["arabizi"] and arabic not in row["arabic"] and latin in row["arabic"]:
+        if latin in arabizi and arabic not in arabic_text and latin in arabic_text:
             warnings.append(f"{latin!r} usually becomes {arabic!r} (SPELLING.md 7)")
     return warnings
 
