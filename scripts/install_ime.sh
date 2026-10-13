@@ -10,6 +10,3 @@ mkdir -p "$DEST"
 rm -rf "$DEST/ArabiziIME.app"
 cp -R "$ROOT/build/ArabiziIME.app" "$DEST/"
 swift "$ROOT/Apps/ArabiziIME/Tools/register.swift" "$DEST/ArabiziIME.app"
-echo
-echo "Next: System Settings → Keyboard → Input Sources → Edit… → + → Arabic → \"Arabizi Keyboard\"."
-echo "First install: if it is not listed, log out and back in once."

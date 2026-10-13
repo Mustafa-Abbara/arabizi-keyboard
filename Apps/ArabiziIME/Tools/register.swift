@@ -22,5 +22,11 @@ for source in sources {
     }
     let id = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
         .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String } ?? "?"
-    print("Found \(id): enabled=\(flag(kTISPropertyInputSourceIsEnabled)), selectable=\(flag(kTISPropertyInputSourceIsSelectCapable))")
+    let enabled = flag(kTISPropertyInputSourceIsEnabled)
+    print("Found \(id): enabled=\(enabled), selectable=\(flag(kTISPropertyInputSourceIsSelectCapable))")
+    if enabled {
+        print("Already enabled: switch to another input source and back (Ctrl+Space) to load the new version.")
+    } else {
+        print("Next: System Settings → Keyboard → Input Sources → Edit… → + → Arabic → \"Arabizi Keyboard\".")
+    }
 }

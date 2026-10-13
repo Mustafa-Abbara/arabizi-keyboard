@@ -18,7 +18,7 @@ The keyboard is a macOS **input method**: a background app that macOS loads when
 
 The toy converter is not smart: it converts English words too and ignores context. Judge the **behaviour**, not the Arabic.
 
-Some apps (often browsers and Electron apps) cannot tell the keyboard where the cursor or selection is. There, ⌘Z stays the app's normal undo and ⌥Enter does nothing; the matrix records which apps.
+Some apps (often browsers and Electron apps) cannot tell the keyboard where the cursor or selection is. There, ⌘Z stays the app's normal undo and ⌥Enter **beeps and changes nothing** (it is never passed to the app, which would type a new line over the selection); the matrix records which apps.
 
 ## 1. Use a second macOS user account (recommended)
 
@@ -44,10 +44,16 @@ Run `scripts/install_ime.sh` again. It stops the running copy; macOS starts the 
 
 ## 5. Logs
 
-The keyboard never logs what you type, only lengths and events.
+The keyboard never logs what you type, only key types, actions and lengths. Enter, Esc, ⌘Z and ⌥Enter are logged at a level macOS keeps, so they can be read afterwards:
 
 ```bash
-log stream --predicate 'subsystem == "lb.aub.arabizi"' --level debug
+/usr/bin/log show --predicate 'subsystem == "lb.aub.arabizi"' --last 10m
+```
+
+Live, including debug lines:
+
+```bash
+/usr/bin/log stream --predicate 'subsystem == "lb.aub.arabizi"' --level debug
 ```
 
 ## 6. Remove it
@@ -63,5 +69,6 @@ Then remove it from Input Sources (**−**) if it is still listed.
 | Problem | Try |
 |---|---|
 | Not in the Input Sources list | Log out and back in; check `swift Apps/ArabiziIME/Tools/register.swift "$HOME/Library/Input Methods/ArabiziIME.app"` |
-| Selected, but typing shows nothing underlined | `log stream …` above: look for "Could not start the IMK server" |
+| Selected, but typing shows nothing underlined | `/usr/bin/log stream …` above: look for "Could not start the IMK server" |
+| A key does something odd (e.g. a new line appears) | Check for a crash: `ls -t ~/Library/Logs/DiagnosticReports/ \| grep ArabiziIME`. When the keyboard crashes mid-key, macOS gives the key to the app |
 | Typing is stuck | Ctrl+Space to switch input source, or pick another source in the menu bar |

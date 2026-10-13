@@ -33,3 +33,12 @@ Apps: Messages, Mail, a web browser, VS Code, Terminal, the Claude desktop app, 
 - ⚠️ Clicking elsewhere or pressing an arrow key while composing commits the text **in Latin** (underline disappears). This is the designed behaviour (no surprise conversion), but it felt like losing the sentence. Response: ⌥Enter on a selection (case 10) converts such text afterwards.
 - ⚠️ ⌘Z after a conversion deleted the whole sentence (the app undid the one insertion). Response: ⌘Z right after a conversion now restores the underlined Latin (case 9).
 - ⚠️ The toy converter is letter by letter and converts English words. Expected for the spike; the dictionary-based converter (B0) is the next change.
+
+### Second round: 13 Oct 2026 (after PR #168)
+
+- ❌ ⌥Enter on a selection deleted the sentence. **Root cause (from crash reports and logs):** the keyboard crashed. `string(from:actualRange:)` was called with `actualRange: nil`; InputMethodKit writes to that pointer without a nil check (`EXC_BAD_ACCESS` in `-[_IPMDServerClientWrapperLegacy stringFromRange:actualRange:]`, 3 crash reports). When the input method crashes mid-key, macOS gives the key to the app, which typed a new line over the selection. Two earlier guesses (selection not reported; Option not detected) were wrong: the logs showed Option detected and the selection readable.
+- Fix: pass a real `actualRange` variable. Also kept from the investigation: ⌥Enter with nothing to convert beeps instead of reaching the app; Enter/Esc/⌘Z/⌥Enter outcomes are logged (kinds only, never text). Read logs with `/usr/bin/log` (a shell `log` function can hide it).
+- ✅ After the fix, TextEdit: select Latin text → ⌥Enter converts it in place (log: selection reported, text readable, replaceSelection); no new crash reports.
+- ⚠️ Other apps (not recorded which) read the selection but **ignored the explicit replacement range**, so ⌥Enter did nothing visible. Fix: insert the converted text like typing, which replaces the current selection. ✅ Retested: ⌥Enter works in those apps too.
+- ✅ ⌘Z right after Enter restores the underlined Latin (log: `undo -> restore`).
+- ⚠️ ⌘Z right after ⌥Enter falls back to the app's own undo (log: `undo -> pass`): the keyboard could not confirm the cursor was still at the end of the converted text, so it does not risk replacing the wrong text. Accepted for P1; revisit in P6.
