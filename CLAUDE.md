@@ -21,11 +21,29 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - **Team (ADR 0011 + amendment):** Moustafa is the main contributor and owns every stage, issue, official measurement and download decision. Mohamad Al Masri (Windows) contributes code **by PR**, on tasks agreed with Moustafa first; his machine gives smoke runs only. PR review = self-review + `/code-review`, plus Moustafa's review of Mohamad's PRs when possible.
 - Main dev machine: M2 MacBook Air, **8 GB RAM** (see the "8 GB consequences" section in ASSUMPTIONS.md). Keep memory use in mind.
 
-## Current state (update when it changes)
+## Current state (update when it changes; last update 14 Oct 2026, end of day)
 
-- **Phase 1 (ADR 0010), solo build (ADR 0011).** Stages P0–P7; v1 roadmap archived. Board: GitHub Project #1; Moustafa (`Mustafa-Abbara`) owns every issue. `protect-main` ruleset: PR required, approvals set to 0 (restore with `bootstrap.py protect`).
-- **P0** mostly done: Kaggle account `MustafaAbbara2003` (phone-verified, 14 Oct 2026); left: push-protection test, learning ramp. **CI** (`.github/workflows/ci.yml`: python, swift, hygiene) runs on every PR. **P1** keyboard spike works (Enter converts, ⌘Z restores, ⌥Enter converts a selection, password fields safe; per-app matrix not filled app by app).
-- **P2 data:** SPELLING.md v1.2; `pairs` CLI (add, import, import-batch, import-chats, variants, lexicon, check, stats, validate). Training: 2,000 Claude-drafted rows revised by Moustafa (ADR 0012) + 1,687 private own-chat rows (ADR 0014) + generated variants (not committed). Held-out: **349 hand-written** (50 public from the sheet, 300 private from own chats).
-- **Private data (ADR 0014):** `data/private/` and `eval/results/private/` are never committed; the public B0 dictionary is built from public rows only; quote only aggregate numbers from private runs.
-- **P3 done except the gate review:** scoring harness (`evalrun`, docs/EVAL.md); B0 rules = 0.547 on 105 dev rows; B1 base models (all six pinned models downloaded and verified) best 0.169 (Llama 3.2 1B 5-shot). **ADR 0004:** fine-tune Llama 3.2 1B and Qwen3-1.7B in P4 (fallback Qwen3-0.6B); final pick after P4 (ADR 0005). Downloads: Moustafa runs `scripts/fetch_models.py` in his own terminal (Claude's sandbox cannot reach Hugging Face). Next: **P4 fine-tuning on Kaggle** (private dataset for the own-chat rows).
-- **P4 tooling (ADR 0015, docs/TRAINING.md):** `pairs export-train` → private Kaggle dataset → `train/finetune_lora.ipynb` (LoRA, then GGUF via `train/export_gguf.sh`) → GGUF back to `models/`, `run.json` to `train/runs/`. Order: Moustafa's `pairs check`, `pairs freeze`, then Kaggle.
+**Project:** Phase 1 (ADR 0010). Moustafa is the main contributor and owns every stage and issue; Mohamad contributes by PR on tasks agreed first (ADR 0011 + amendment). Board: GitHub Project #1. `protect-main` ruleset: PR required, approvals 0 (restore with `bootstrap.py protect`). CI on every PR: python, swift, hygiene, testset guard.
+
+| Stage | Status |
+|---|---|
+| P0 | Done except the push-protection test and the learning ramp. Kaggle account `MustafaAbbara2003` (phone-verified). |
+| P1 | Keyboard spike works (Enter converts, ⌘Z restores, ⌥Enter converts a selection, password fields safe). Gate open: `docs/spikes/ime_app_matrix.md` not filled app by app. |
+| P2 | SPELLING.md v1.2. Held-out: **350 hand-written** (public 35 test + 15 dev; private 210 test + 90 dev from Moustafa's chats, ADR 0014). Training: 2,000 Claude-drafted rows revised by Moustafa (ADR 0012) + 1,687 private chat rows + generated variants. **Not frozen yet.** |
+| P3 | Harness `evalrun` (docs/EVAL.md). B0 rules **0.547** on 105 dev rows; B1 best **0.169** (Llama 3.2 1B, 5-shot). ADR 0004: fine-tune Llama 3.2 1B + Qwen3-1.7B (fallback Qwen3-0.6B). Gate open: re-run one baseline from a fresh clone. |
+| P4 | Pipeline merged (ADR 0015, docs/TRAINING.md): `pairs export-train` → private Kaggle dataset → `train/finetune_lora.ipynb` → GGUF back to `models/`. **Training not run yet.** |
+| P5–P7 | Not started. |
+
+**Next steps, in order:**
+1. **Moustafa, 15 Oct:** `uv run --project eval pairs check` (delayed self-check; the 50 sheet pairs become eligible on 15 Oct, the 300 private ones on 16 Oct).
+2. **Moustafa:** `uv run --project eval pairs freeze` (or `--allow-unchecked`; the count is recorded). Then Claude commits `data/pairs/manifest.json` in a PR with the **testset-change** label; after merge, tag `testset-v1.0`.
+3. **Optional before the freeze:** Kaggle smoke run with `pairs export-train --public-only` and `--limit 200 --epochs 1` (TRAINING.md), to catch setup problems.
+4. **Moustafa, after the freeze:** `pairs variants`, `pairs export-train` (with private rows), upload `build/train-export/` as a **private** Kaggle dataset, run the notebook (GPU T4, Internet on), download the two `.gguf` (→ `models/`) and `run.json` (→ `train/runs/`).
+5. **Claude, then:** verify hashes, add the fine-tuned models to `config/models.json`, score on dev against B0/B1 (paired bootstrap), write ADR 0005 (final model).
+6. **Claude, can start any time (no fine-tuned model needed):** P5 engine: Swift port of B0 (reads `data/rules/arabizi_to_arabic.json` + `arabizi_lexicon.json`, with a parity test against Python), protected spans for numbers/links/emoji, and check how to call llama.cpp from Swift in 2026 (its release packaging changed; ADR 0003).
+
+**Practical notes:**
+- Claude's sandbox cannot reach Hugging Face or Kaggle: Moustafa runs downloads (`scripts/fetch_models.py`) and Kaggle himself. Models are in `models/` (all six B1 models downloaded and verified).
+- Private data (ADR 0014): `data/private/` and `eval/results/private/` are never committed; the public B0 dictionary is built from public rows only; quote only aggregate numbers from private runs; never print private message text.
+- `pairs` CLI: add, import, import-batch, import-chats, variants, lexicon, export-train, check, stats, freeze, validate. Variants (`pairs variants`) are generated, not committed.
+- Before adding commits to a PR branch, check the PR is still open: Moustafa merges quickly.
