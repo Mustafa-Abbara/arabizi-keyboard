@@ -124,7 +124,7 @@ def make_variant(row: dict, rules: Rules, rng: random.Random, used: Counter) -> 
 
 
 def generate(parents: list[dict], per_row: int, seed: int, rules: Rules | None = None,
-             max_tries: int = 12) -> tuple[list[dict], Counter, int]:
+             max_tries: int = 12, first_id: int = 1) -> tuple[list[dict], Counter, int]:
     """Variants for every parent. Returns (rows, rule usage counts, parents that got fewer than per_row)."""
     rules = rules or load_rules()
     used: Counter = Counter()
@@ -142,7 +142,7 @@ def generate(parents: list[dict], per_row: int, seed: int, rules: Rules | None =
             key = (P.normalize_arabizi(arabizi), arabic)
             if key in seen:
                 continue
-            row = {"id": f"rv-{len(rows) + 1:04d}", "arabizi": arabizi, "arabic": arabic, "accepted": {},
+            row = {"id": f"rv-{first_id + len(rows):04d}", "arabizi": arabizi, "arabic": arabic, "accepted": {},
                    "method": "rule_variant", "writer": f"{GENERATOR} v{rules.version}", "checked_by": None,
                    "source": f"rule-variants-v{rules.version}-seed{seed}", "split": "train",
                    "date": parent["date"], "parent": parent["id"]}

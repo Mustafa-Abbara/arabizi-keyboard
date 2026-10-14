@@ -14,6 +14,8 @@ from jsonschema import Draft202012Validator
 
 ROOT = Path(os.environ.get("ARABIZI_ROOT", Path(__file__).resolve().parents[3]))
 PAIRS_DIR = ROOT / "data" / "pairs"
+# Private pairs (Moustafa's own chat messages, ADR 0014): same file names and rules, never committed (.gitignore).
+PRIVATE_DIR = ROOT / "data" / "private" / "pairs"
 SCHEMA_PATH = ROOT / "data" / "schema" / "pair.schema.json"
 MANIFEST_PATH = PAIRS_DIR / "manifest.json"  # written when the test set is frozen (P2 step 4)
 
@@ -76,8 +78,16 @@ def expected_split(path: Path) -> tuple[str, str | None]:
     raise ValueError(f"unexpected pair file name {path.name}: use test.jsonl, dev.jsonl or train-<method>.jsonl")
 
 
-def pair_files(pairs_dir: Path | None = None) -> list[Path]:
-    return sorted((pairs_dir or PAIRS_DIR).glob("*.jsonl"))
+def pair_files(pairs_dir: Path | None = None, include_private: bool = True) -> list[Path]:
+    """Pair files in `pairs_dir`, or the public folder plus (if present and wanted) the private one."""
+    if pairs_dir is not None:
+        return sorted(pairs_dir.glob("*.jsonl"))
+    folders = [PAIRS_DIR] + ([PRIVATE_DIR] if include_private and PRIVATE_DIR.exists() else [])
+    return [path for folder in folders for path in sorted(folder.glob("*.jsonl"))]
+
+
+def is_private(path: Path) -> bool:
+    return PRIVATE_DIR in path.parents
 
 
 def read_jsonl(path: Path) -> list[tuple[int, dict | None, str | None]]:
@@ -162,7 +172,7 @@ def validate(pairs_dir: Path | None = None) -> Report:
             report.errors.append(Problem(path.name, str(exc)))
             continue
         for n, row, line_error in read_jsonl(path):
-            where = f"{path.name}:{n}"
+            where = f"{'private/' if is_private(path) else ''}{path.name}:{n}"
             if line_error:
                 report.errors.append(Problem(where, line_error))
                 continue
