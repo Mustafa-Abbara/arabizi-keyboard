@@ -8,6 +8,7 @@
   uv run --project eval pairs lexicon  # rebuild the B0 word dictionary from the train split
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
+  uv run --project eval pairs export-train  # training files for Kaggle (P4, ADR 0015)
   uv run --project eval pairs validate # same checks as the test suite
 """
 
@@ -359,6 +360,25 @@ def cmd_import_chats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_train(args: argparse.Namespace) -> int:
+    """Write build/train-export/ for a PRIVATE Kaggle dataset: training rows only, as chat examples."""
+    from arabizi_eval import export
+
+    if not any(r.get("method") == "rule_variant" for r in all_rows()):
+        print("Note: no spelling variants found; run `pairs variants` first.")
+    summary = export.export(ai_variants=args.ai_variants, val_share=args.val_share, seed=args.seed,
+                            include_private=not args.public_only)
+    print(f"wrote {export.EXPORT_DIR.relative_to(P.ROOT)}/: {summary['rows_total']} training examples, "
+          f"AI-derived share {summary['ai_share']:.0%} (ADR 0010 cap: 50%)")
+    for name, info in summary["files"].items():
+        print(f"  {name:22} {info['rows']:>6} rows")
+    if summary["ai_share"] > 0.5:
+        print("WARNING: AI-derived rows are above half of the training set (ADR 0010); lower --ai-variants.")
+        return 1
+    print("Upload the whole folder as a PRIVATE Kaggle dataset (docs/TRAINING.md).")
+    return 0
+
+
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     keys = P._dedupe_keys(row)
     for other in rows:
@@ -490,6 +510,11 @@ def main(argv: list[str] | None = None) -> int:
     chats.add_argument("--seed", type=int, default=2026)
     chats.add_argument("--dry-run", action="store_true", help="check and report without writing")
     sub.add_parser("lexicon", help="rebuild the B0 word dictionary from the public train split")
+    exp = sub.add_parser("export-train", help="training files for Kaggle fine-tuning (P4)")
+    exp.add_argument("--ai-variants", type=int, default=1, help="spelling variants kept per AI-drafted row")
+    exp.add_argument("--val-share", type=float, default=0.05, help="share of sentence groups for validation loss")
+    exp.add_argument("--seed", type=int, default=2026)
+    exp.add_argument("--public-only", action="store_true", help="leave out the private rows")
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
@@ -498,7 +523,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
                 "import-chats": cmd_import_chats, "variants": cmd_variants, "lexicon": cmd_lexicon,
-                "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}
+                "check": cmd_check, "stats": cmd_stats, "export-train": cmd_export_train,
+                "validate": cmd_validate}
     return commands[args.command](args)
 
 
