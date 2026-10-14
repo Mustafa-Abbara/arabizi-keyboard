@@ -87,6 +87,24 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 - **Our reading** (Moustafa, 13 Oct 2026): the prohibition covers training models for products or services that compete with Anthropic's. This project is a small, offline Arabizi → Arabic transliteration keyboard for macOS and does not compete with Claude, so training on these rows is allowed. Claude flagged the clause and is not a legal authority; this is the project's own reading.
 - **Safeguard:** P4 trains with and without the `ai_checked` rows, so reported results never depend on them, and they can be removed if this reading is challenged.
 
+## The test-set freeze (roadmap P2 step 4)
+
+Before any fine-tuning, the held-out data is frozen so no later change can make results look better.
+
+```bash
+uv run --project eval pairs check     # delayed self-check of the held-out rows first (ADR 0011)
+uv run --project eval pairs freeze    # writes data/pairs/manifest.json (testset-v1.0)
+```
+
+- `manifest.json` records the SHA-256 and row count of `test.jsonl` and `dev.jsonl`, public and private. **Private files appear only as a hash and a count**, never text.
+- After the freeze, `pairs validate` (and so the tests and CI) fails if a frozen file changes. Private files are checked where they exist (Moustafa's Mac); on CI and fresh clones they are skipped.
+- After the freeze, `pairs add` and `pairs import` send new hand-written rows to training, and `pairs import-chats` refuses to hold rows out (`--held-out 0`).
+- `pairs freeze` refuses while held-out rows are unchecked, unless `--allow-unchecked` (the count is recorded in the manifest).
+- **A deliberate change** (e.g. a typo found in a test row) needs `pairs freeze --version testset-v1.1 --reason "..."` in a PR with the **`testset-change` label**; CI's `testset guard` fails a PR that changes the manifest without that label. Results before and after a change are not comparable; say so in EVAL.md.
+- After the freeze PR is merged, tag the merge commit: `git tag testset-v1.0 && git push origin testset-v1.0`.
+
+Design: **Claude's recommendation** (14 Oct 2026), from roadmap P2 step 4.
+
 ## Writing pairs: the `pairs` tool
 
 ```bash
