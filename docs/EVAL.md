@@ -40,24 +40,38 @@ Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a
 
 ### B1: base models without fine-tuning (dev, 105 rows: 15 public + 90 private; 14 Oct 2026)
 
-llama.cpp 0.6.0 (`llama-server`, Metal on the M2 GPU), Q4_K_M, temperature 0, prompt v1; "5-shot" = 5 fixed public training pairs as chat turns (never dev/test rows). Peak memory is the server's RSS; latency is per sentence after a warm-up request.
+`b1-<model>-zero` / `b1-<model>-5shot` (`eval/src/arabizi_eval/b1.py`, combined from Mohamad's and Claude's versions). llama.cpp 0.6.0 build b11429 (`llama-server`, Metal on the M2 GPU), Q4_K_M, greedy decoding (temperature 0, seed 0), Qwen3 thinking off, the **P4 instruction** (so base and fine-tuned models get the same input), prompt v1. **5-shot** = 5 fixed public training pairs chosen to show English kept in Latin, numbers and %, ؟ and ، and joined clitics (`ai-0004`, `ai-0022`, `ai-0056`, `ai-0116`, `ai-0050`); never dev or test rows [Claude's recommendation; the roadmap said "from dev"]. Peak memory = the server's RSS; latency per sentence after an untimed warm-up.
 
 | System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. | Peak RSS | p50 / p95 ms |
 |---|---|---|---|---|---|---|---|---|
 | **B0 rules** | **0.547** | [0.51, 0.59] | 0.187 | 0.18 | 1.00 | 0.00 | — | < 1 |
-| Qwen3-1.7B, 5-shot | 0.169 | [0.14, 0.19] | 0.492 | 0.15 | 0.86 | 0.29 | 1,393 MB | 723 / 1,410 |
-| Qwen2.5-1.5B, 5-shot | 0.152 | [0.13, 0.18] | 0.671 | 0.33 | 0.64 | 0.14 | 1,236 MB | 695 / 1,628 |
-| Qwen2.5-1.5B, 0-shot | 0.105 | [0.08, 0.13] | 0.728 | 0.17 | 0.64 | 0.11 | 1,201 MB | 598 / 1,429 |
-| Qwen3-0.6B, 5-shot | 0.082 | [0.06, 0.10] | 0.700 | 0.22 | 0.79 | 0.19 | 683 MB | 412 / 984 |
-| Qwen2.5-0.5B, 5-shot | 0.079 | [0.06, 0.10] | 0.715 | 0.08 | 0.93 | 0.19 | 603 MB | 426 / 948 |
-| Qwen3-1.7B, 0-shot | 0.075 | [0.05, 0.10] | 0.846 | 0.10 | 1.00 | 0.08 | 1,334 MB | 642 / 1,371 |
-| Qwen3-0.6B, 0-shot | 0.072 | [0.05, 0.09] | 0.860 | 0.10 | 1.00 | 0.05 | 626 MB | 321 / 634 |
-| Qwen2.5-0.5B, 0-shot | 0.063 | [0.04, 0.08] | 0.792 | 0.11 | 0.86 | 0.33 | 599 MB | 385 / 890 |
+| Qwen3-1.7B, 5-shot | 0.144 | [0.12, 0.17] | 0.578 | 0.16 | 0.71 | 0.32 | 1,438 MB | 300 / 591 |
+| Qwen2.5-1.5B, 5-shot | 0.125 | [0.09, 0.16] | 0.890 | 0.21 | 1.00 | 0.12 | 1,275 MB | 308 / 625 |
+| Qwen3-1.7B, zero | 0.088 | [0.06, 0.11] | 0.758 | 0.12 | 1.00 | 0.06 | 1,424 MB | 295 / 739 |
+| Qwen3-0.6B, 5-shot | 0.070 | [0.05, 0.09] | 0.764 | 0.18 | 0.50 | 0.26 | 751 MB | 167 / 301 |
+| Qwen3-0.6B, zero | 0.068 | [0.05, 0.09] | 0.979 | 0.14 | 0.86 | 0.25 | 745 MB | 173 / 759 |
+| Qwen2.5-0.5B, 5-shot | 0.052 | [0.03, 0.08] | 1.038 | 0.11 | 0.57 | 0.14 | 641 MB | 161 / 304 |
+| Qwen2.5-0.5B, zero | 0.029 | [0.02, 0.04] | 1.440 | 0.04 | 0.86 | 0.69 | 637 MB | 169 / 1,257 |
+| Qwen2.5-1.5B, zero | 0.022 | [0.01, 0.03] | 2.511 | 0.02 | 0.43 | 0.48 | 1,265 MB | 460 / 1,695 |
 
-- **No base model comes close to B0.** They do not know Lebanese Arabizi: digits stay unconverted (`س33ك`), words are invented, and the 0.5B models often copy the input. This is the gap fine-tuning (P4) must close.
-- Bigger models and few-shot examples help; Qwen3-1.7B and Qwen2.5-1.5B with 5 examples are the best.
-- All fit the 1.5 GB memory budget (the 1.7B at 1.39 GB is tight). Latency is over budget for the 1.5–1.7B models, but these runs include long wrong outputs and a 5-example prompt; a fine-tuned model writes one short line from a short prompt, so latency is re-measured after P4.
-- Gemma 3 1B and Llama 3.2 1B: pending download.
+- **No base model comes close to B0** (best 0.144 vs 0.547). They do not know Lebanese Arabizi: digits stay unconverted, words are invented, and without examples they often explain or answer instead of converting (CER above 1 means outputs much longer than the reference). This is the gap fine-tuning (P4) must close.
+- The 1.5–1.7B models with 5 examples are the best; examples help most for the larger models.
+- **Memory:** all fit the 1.5 GB budget, but Qwen3-1.7B (1,438 MB) leaves almost no margin. **Latency:** with the prompt cache, the 5-shot runs are within budget (p95 ≤ 625 ms); runs without examples have long run-away outputs and higher p95.
+- An earlier run on the same day with Claude's longer instruction and different examples scored higher (best 0.169) but is superseded: base and fine-tuned models must get the same instruction to be compared.
+- Gemma 3 1B and Llama 3.2 1B: licences accepted, files not downloaded yet.
+
+**Running B1.** Default (official runs, the 8 GB Air on AC power, other apps closed): the system checks the pinned file, starts its own `llama-server`, and records load time and peak memory.
+
+```bash
+uv run --project eval evalrun run --system b1-qwen2.5-0.5b-zero --split dev
+```
+
+Smoke runs on another machine (e.g. Windows) can use a server started by hand; memory is then not measured:
+
+```bash
+llama-server -m models/qwen2.5-0.5b-instruct-q4_k_m.gguf -c 2048 -np 1 --jinja --port 8081
+ARABIZI_LLAMA_URL=http://127.0.0.1:8081 uv run --project eval evalrun run --system b1-qwen2.5-0.5b-zero --split dev --limit 5
+```
 
 Real typing (private chats) uses far more English than the sheet and AI rows: B0 keeps only 10% of the Latin words that should stay Latin.
 

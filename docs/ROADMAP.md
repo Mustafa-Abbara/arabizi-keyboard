@@ -199,7 +199,7 @@ About 8–12 hours in W1, spread over the week:
    - Tests with hand-computed toy examples (accuracy 3/4 = 0.75, a perfect system scores CER 0).
 2. **(Moustafa) B0 rule transliterator** in Python (`eval/src/arabizi_eval/b0.py`, system `b0`), driven by `data/rules/arabizi_to_arabic.json` (hand-written: letter rules, clitics, punctuation) and `data/rules/arabizi_lexicon.json` (dictionary generated from the train split by `pairs lexicon`: `shu` → `شو`, `kifak` → `كيفك` …). The same JSON table is later read by the Swift fallback in P5, so both stay identical.
 3. **(Moustafa) Runtime:** llama.cpp (`llama-cli` / `llama-server`) with GGUF Q4_K_M models, run one at a time on the 8 GB Air. This keeps the v1 runtime choice (ADR 0003, to be written here) because the same XCFramework works from Swift.
-4. **(Moustafa) B1 base models, no fine-tuning**, zero-shot and with 5 fixed examples from dev:
+4. **(Moustafa; code with Mohamad) B1 base models, no fine-tuning**, zero-shot and with 5 fixed examples from the public training split [Claude's recommendation: this said "from dev", which would score dev rows whose answers are in the prompt; see EVAL.md, "B1"]. Built as `b1-<model>-zero` / `b1-<model>-5shot` (`eval/src/arabizi_eval/b1.py`):
    - Qwen2.5-0.5B-Instruct and Qwen2.5-1.5B-Instruct (Apache-2.0)
    - Gemma 3 1B (Gemma terms)
    - Llama 3.2 1B Instruct (Llama community licence)

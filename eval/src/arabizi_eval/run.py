@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name, help=helptext)
         if name == "run":
             p.add_argument("--system", required=True,
-                           help=f"one of: {', '.join(sorted(systems.REGISTRY))}, or b1:<model id>:<shots>")
+                           help=f"one of: {', '.join(sorted(systems.REGISTRY))}")
         else:
             p.add_argument("predictions")
             p.add_argument("--name", required=True, help="name for the run, e.g. qwen0.5b-lora-v1")

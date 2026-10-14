@@ -18,7 +18,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - Never automate Yamli. AI-generated Arabizi pairs are allowed **in training only**, each row checked by a native speaker, provider terms recorded (ADR 0010). Dev and test data are always human-written.
 - Never scrape social media for data; training data sources and the Anthropic-terms reading are in ADR 0012 and docs/DATA.md.
 - Inference stays local. Fine-tuning may run on Kaggle/Colab with team-written or licensed public data only.
-- **Solo build (ADR 0011):** Moustafa builds everything; PR review = self-review + `/code-review`, no human approval.
+- **Team (ADR 0011 + amendment):** Moustafa is the main contributor and owns every stage, issue, official measurement and download decision. Mohamad Al Masri (Windows) contributes code **by PR**, on tasks agreed with Moustafa first; his machine gives smoke runs only. PR review = self-review + `/code-review`, plus Moustafa's review of Mohamad's PRs when possible.
 - Main dev machine: M2 MacBook Air, **8 GB RAM** (see the "8 GB consequences" section in ASSUMPTIONS.md). Keep memory use in mind.
 
 ## Current state (update when it changes)
