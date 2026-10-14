@@ -58,25 +58,50 @@ def plan(entries: list[dict], only: list[str], accepted: set[str]) -> tuple[list
     return chosen, skipped
 
 
-def fetch(entry: dict, models_dir: Path = MODELS_DIR) -> str:
+class FetchError(RuntimeError):
+    pass
+
+
+def _download(entry: dict, part: Path) -> None:
+    """Download into `part`, resuming from its current size (HTTP Range) if it already has bytes."""
+    have = part.stat().st_size if part.exists() else 0
+    request = urllib.request.Request(url_for(entry), headers={"Range": f"bytes={have}-"} if have else {})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        if have and response.status != 206:  # server ignored the range: start over
+            have = 0
+        with part.open("ab" if have else "wb") as out:
+            done = have
+            while block := response.read(CHUNK):
+                out.write(block)
+                done += len(block)
+                print(f"\r  {entry['id']}: {done / 1e6:,.0f} / {entry['size'] / 1e6:,.0f} MB", end="", flush=True)
+    print()
+
+
+def fetch(entry: dict, models_dir: Path = MODELS_DIR, attempts: int = 3) -> str:
     target = models_dir / entry["file"]
     if target.exists() and sha256_of(target) == entry["sha256"]:
         return "already present"
     models_dir.mkdir(parents=True, exist_ok=True)
     part = target.with_suffix(target.suffix + ".part")
-    with urllib.request.urlopen(url_for(entry)) as response, part.open("wb") as out:
-        done = 0
-        while block := response.read(CHUNK):
-            out.write(block)
-            done += len(block)
-            print(f"\r  {entry['id']}: {done / 1e6:,.0f} / {entry['size'] / 1e6:,.0f} MB", end="", flush=True)
-    print()
-    actual = sha256_of(part)
-    if actual != entry["sha256"]:
+    for attempt in range(1, attempts + 1):
+        try:
+            _download(entry, part)
+        except OSError as exc:  # network errors: keep the partial file and resume
+            print(f"\n  {entry['id']}: attempt {attempt} interrupted ({exc}); resuming")
+            continue
+        size = part.stat().st_size
+        if size < entry["size"]:
+            print(f"  {entry['id']}: attempt {attempt} stopped early ({size:,} of {entry['size']:,} bytes); resuming")
+            continue
+        actual = sha256_of(part)
+        if size == entry["size"] and actual == entry["sha256"]:
+            part.rename(target)
+            return "downloaded and verified" + ("" if attempt == 1 else f" (attempt {attempt})")
+        print(f"  {entry['id']}: attempt {attempt}: {size:,} bytes, SHA-256 {actual[:16]}… does not match; "
+              "starting over")
         part.unlink()
-        raise SystemExit(f"{entry['id']}: SHA-256 mismatch ({actual}); the partial file was deleted")
-    part.rename(target)
-    return "downloaded and verified"
+    raise FetchError(f"{entry['id']}: could not get a verified copy in {attempts} attempts")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,9 +121,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  skipped {reason}")
     if args.list:
         return 0
+    failed = []
     for entry in chosen:
-        print(f"{entry['id']}: {fetch(entry)}")
-    return 0
+        try:
+            print(f"{entry['id']}: {fetch(entry)}")
+        except FetchError as exc:
+            print(f"FAILED {exc}")
+            failed.append(entry["id"])
+    if failed:
+        print(f"{len(failed)} file(s) not verified: {', '.join(failed)}. Run the script again to retry.")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
