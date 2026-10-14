@@ -31,6 +31,30 @@ uv run --project eval pairs variants && uv run --project eval pairs lexicon
 
 Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a long vowel (`8ali` → غلي, not غالي) and final `-e` can be ي or ة (`2alle` → قلة, not قلي). Words in the dictionary avoid both.
 
+### B1: base models, no fine-tuning
+
+| System | What it is | Files |
+|---|---|---|
+| **`b1-<model>-zero`**, **`b1-<model>-5shot`** | Each model pinned in `config/models.json` through llama.cpp's `llama-server`, with the P4 system prompt (so base and fine-tuned models get the same instruction), alone (`zero`) or followed by 5 fixed example pairs (`5shot`). Greedy decoding (temperature 0), Qwen3 thinking turned off, `<think>` blocks removed. The system checks that the server holds the pinned file before running, and sends one untimed warm-up sentence. | `b1.py`, `config/models.json` |
+
+- **Few-shot examples come from public training rows, not dev** [Claude's recommendation]: roadmap P3 step 4 said "5 fixed examples from dev", but those rows would then carry their own answers in the prompt of the split being scored. The five ids are in `b1.SHOT_IDS` (`ai-0004`, `ai-0022`, `ai-0056`, `ai-0116`, `ai-0050`: English kept in Latin, numbers and %, ؟ and ،, joined clitics); `metrics.json` records them and a hash of their text.
+- **Official numbers come from the 8 GB Air** (A4): latency and peak memory are only meaningful there. Runs on other machines (e.g. Windows) are smoke runs; even at temperature 0, llama.cpp's CPU and Metal code can round differently and change a few outputs.
+
+**Running B1** (one model at a time; on the Air: on AC power, other apps closed):
+
+```bash
+/usr/bin/time -l llama-server -m models/qwen2.5-0.5b-instruct-q4_k_m.gguf -c 2048 -np 1 --jinja --port 8080 &
+uv run --project eval evalrun run --system b1-qwen2.5-0.5b-zero  --split dev --limit 5      # smoke run
+uv run --project eval evalrun run --system b1-qwen2.5-0.5b-zero  --split dev
+uv run --project eval evalrun run --system b1-qwen2.5-0.5b-5shot --split dev
+uv run --project eval evalrun run --system b1-qwen2.5-0.5b-zero  --split dev --subset public  # publishable
+kill %1   # /usr/bin/time prints "maximum resident set size" (bytes): the model's peak memory for the table
+```
+
+- `-np 1` gives the one sentence at a time its whole context; `--jinja` is needed for `enable_thinking: false` (Qwen3).
+- Another port: start `llama-server --port 8081` and set `ARABIZI_LLAMA_URL=http://127.0.0.1:8081` (on one Windows machine Apache already listens on 8080).
+- Peak memory is measured outside the harness (above) and added to the results table by hand; `metrics.json` says so.
+
 ## Results so far (dev)
 
 | System | Dev rows | Word acc. | Lenient | CER | Punct. | Keep-Latin F1 (P / R) | Numbers | Run |

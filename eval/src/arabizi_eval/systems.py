@@ -7,8 +7,15 @@ through arabizi-cli. Two sanity systems prove the scoring itself: `identity` mus
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
+from pathlib import Path
+
+from arabizi_eval import pairs as P
+
+MODELS_MANIFEST = P.ROOT / "config" / "models.json"
 
 
 @dataclass
@@ -52,10 +59,23 @@ class B0(System):
         return self.converter.convert(row["arabizi"])
 
 
+def _b1(model_id: str, shots: str) -> System:
+    from arabizi_eval import b1  # imported on use: b1 subclasses System, and needs llama-server only when run
+
+    return b1.B1(model_id, shots)
+
+
+def b1_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], System]]:
+    """B1 (b1.py): b1-<model id>-zero and b1-<model id>-5shot for every model pinned in config/models.json."""
+    models = json.loads(manifest.read_text(encoding="utf-8"))["models"]
+    return {f"b1-{m['id']}-{shots}": partial(_b1, m["id"], shots) for m in models for shots in ("zero", "5shot")}
+
+
 REGISTRY: dict[str, Callable[[], System]] = {
     "b0": B0,
     "identity": lambda: Identity("identity", {"kind": "sanity", "note": "input returned unchanged"}),
     "reference": lambda: Reference("reference", {"kind": "sanity", "note": "oracle: returns the reference"}),
+    **b1_systems(),
 }
 
 
