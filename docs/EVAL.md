@@ -38,6 +38,27 @@ Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a
 | B0 rules v1 | 15 public | 0.549 [0.47, 0.62] | 0.556 | 0.159 | 1.00 | 0.50 (1.00 / 0.33) | 1.00 | `eval/results/20261013-155728-b0-dev` |
 | B0 rules v1 | 105 (15 public + 90 private) | 0.547 | 0.556 | 0.187 | 0.94 | 0.18 (1.00 / 0.10) | 1.00 | private run, 14 Oct 2026 |
 
+### B1: base models without fine-tuning (dev, 105 rows: 15 public + 90 private; 14 Oct 2026)
+
+llama.cpp 0.6.0 (`llama-server`, Metal on the M2 GPU), Q4_K_M, temperature 0, prompt v1; "5-shot" = 5 fixed public training pairs as chat turns (never dev/test rows). Peak memory is the server's RSS; latency is per sentence after a warm-up request.
+
+| System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. | Peak RSS | p50 / p95 ms |
+|---|---|---|---|---|---|---|---|---|
+| **B0 rules** | **0.547** | [0.51, 0.59] | 0.187 | 0.18 | 1.00 | 0.00 | — | < 1 |
+| Qwen3-1.7B, 5-shot | 0.169 | [0.14, 0.19] | 0.492 | 0.15 | 0.86 | 0.29 | 1,393 MB | 723 / 1,410 |
+| Qwen2.5-1.5B, 5-shot | 0.152 | [0.13, 0.18] | 0.671 | 0.33 | 0.64 | 0.14 | 1,236 MB | 695 / 1,628 |
+| Qwen2.5-1.5B, 0-shot | 0.105 | [0.08, 0.13] | 0.728 | 0.17 | 0.64 | 0.11 | 1,201 MB | 598 / 1,429 |
+| Qwen3-0.6B, 5-shot | 0.082 | [0.06, 0.10] | 0.700 | 0.22 | 0.79 | 0.19 | 683 MB | 412 / 984 |
+| Qwen2.5-0.5B, 5-shot | 0.079 | [0.06, 0.10] | 0.715 | 0.08 | 0.93 | 0.19 | 603 MB | 426 / 948 |
+| Qwen3-1.7B, 0-shot | 0.075 | [0.05, 0.10] | 0.846 | 0.10 | 1.00 | 0.08 | 1,334 MB | 642 / 1,371 |
+| Qwen3-0.6B, 0-shot | 0.072 | [0.05, 0.09] | 0.860 | 0.10 | 1.00 | 0.05 | 626 MB | 321 / 634 |
+| Qwen2.5-0.5B, 0-shot | 0.063 | [0.04, 0.08] | 0.792 | 0.11 | 0.86 | 0.33 | 599 MB | 385 / 890 |
+
+- **No base model comes close to B0.** They do not know Lebanese Arabizi: digits stay unconverted (`س33ك`), words are invented, and the 0.5B models often copy the input. This is the gap fine-tuning (P4) must close.
+- Bigger models and few-shot examples help; Qwen3-1.7B and Qwen2.5-1.5B with 5 examples are the best.
+- All fit the 1.5 GB memory budget (the 1.7B at 1.39 GB is tight). Latency is over budget for the 1.5–1.7B models, but these runs include long wrong outputs and a 5-example prompt; a fine-tuned model writes one short line from a short prompt, so latency is re-measured after P4.
+- Gemma 3 1B and Llama 3.2 1B: pending download.
+
 Real typing (private chats) uses far more English than the sheet and AI rows: B0 keeps only 10% of the Latin words that should stay Latin.
 
 ## Metrics
