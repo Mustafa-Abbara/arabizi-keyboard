@@ -1,0 +1,6 @@
+# Kaggle fine-tuning (train/finetune_lora.py). Minimum versions; the versions actually used are saved in each run.json.
+transformers>=4.56
+peft>=0.17
+trl>=0.21
+datasets>=3.0
+accelerate>=1.0

@@ -224,7 +224,7 @@ About 8–12 hours in W1, spread over the week:
 **What this stage does (simple):** Teach the chosen base model to convert Lebanese Arabizi using our training pairs. Training runs on a free cloud GPU because the 8 GB Air is too small to train comfortably. The result is turned into one GGUF file that runs locally, and is compared with the baselines on the frozen test set exactly once per candidate.
 
 **Steps:**
-1. **(Moustafa) Training notebook** `train/finetune_lora.ipynb` (plus a script version `train/finetune_lora.py` so it can be reviewed in PRs):
+1. **(Moustafa) Training notebook** `train/finetune_lora.ipynb` (plus a script version `train/finetune_lora.py` so it can be reviewed in PRs). Built: data from `pairs export-train`, guide in [TRAINING.md](TRAINING.md), decisions in [ADR 0015](decisions/0015-fine-tuning-setup.md):
    - Hugging Face `transformers` + `peft` (LoRA) + `trl` `SFTTrainer`, on Kaggle or Colab.
    - Input format: the base model's chat template, a one-line system prompt ("Convert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are."), the Arabizi as the user turn, the Arabic as the assistant turn. Loss on the assistant turn only.
    - Starting hyperparameters [Claude's recommendation; tune on dev only]: LoRA rank 16, alpha 32, dropout 0.05 on all attention and MLP projections; learning rate 2e-4; 3 epochs; effective batch 32; max length 256 tokens.
