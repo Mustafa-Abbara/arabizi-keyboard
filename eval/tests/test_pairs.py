@@ -28,6 +28,7 @@ def test_schema_is_valid_json_schema():
     Draft202012Validator.check_schema(json.loads(P.SCHEMA_PATH.read_text(encoding="utf-8")))
 
 
+@pytest.mark.real_data
 def test_repository_pairs_are_valid():
     report = P.validate()
     assert report.ok, "\n".join(f"{p.where}: {p.message}" for p in report.errors)
