@@ -23,13 +23,16 @@ from arabizi_eval import bootstrap, metrics, systems
 from arabizi_eval import pairs as P
 
 RESULTS_DIR = P.ROOT / "eval" / "results"
+PRIVATE_RESULTS_DIR = RESULTS_DIR / "private"  # .gitignore: runs that include private rows (ADR 0014)
 
 
-def split_rows(split: str, limit: int | None = None) -> tuple[list[dict], str]:
-    """Rows of a split and the SHA-256 of the files they came from (ties a run to a data version)."""
+def split_rows(split: str, limit: int | None = None, subset: str = "all") -> tuple[list[dict], str]:
+    """Rows of a split (public, private or all) and the SHA-256 of the files they came from."""
     digest = hashlib.sha256()
     rows: list[dict] = []
     for path in P.pair_files():
+        if (subset == "public" and P.is_private(path)) or (subset == "private" and not P.is_private(path)):
+            continue
         lines = [row for _, row, err in P.read_jsonl(path) if not err and row.get("split") == split]
         if lines:
             digest.update(path.read_bytes())
@@ -67,15 +70,20 @@ def score_outputs(rows: list[dict], outputs: dict[str, dict]) -> tuple[list[dict
 
 
 def write_run(name: str, split: str, rows: list[dict], data_sha: str, records: list[dict], summary: dict,
-              describe: dict, results_dir: Path | None = None) -> Path:
+              describe: dict, results_dir: Path | None = None, subset: str = "all") -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     sha = git_sha()
-    run_dir = (results_dir or RESULTS_DIR) / f"{stamp}-{name}-{split}"
+    private_ids = {r["id"] for path in P.pair_files() if P.is_private(path) for _, r, e in P.read_jsonl(path) if not e}
+    has_private = any(r["id"] in private_ids for r in rows)
+    default_dir = PRIVATE_RESULTS_DIR if has_private else RESULTS_DIR
+    suffix = "" if subset == "all" else f"-{subset}"
+    run_dir = (results_dir or default_dir) / f"{stamp}-{name}-{split}{suffix}"
     run_dir.mkdir(parents=True, exist_ok=False)
     with (run_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
         for record in records:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    meta = {"run_id": run_dir.name, "system": name, "describe": describe, "split": split, "sentences": len(rows),
+    meta = {"run_id": run_dir.name, "system": name, "describe": describe, "split": split, "subset": subset,
+            "private_sentences": sum(r["id"] in private_ids for r in rows), "sentences": len(rows),
             "data_sha256": data_sha, "git_sha": sha, "created": datetime.now().isoformat(timespec="seconds"),
             "metrics": summary}
     (run_dir / "metrics.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -98,7 +106,7 @@ def guard_split(split: str, final: bool) -> None:
 
 def cmd_run(args: argparse.Namespace) -> int:
     guard_split(args.split, args.final)
-    rows, data_sha = split_rows(args.split, args.limit)
+    rows, data_sha = split_rows(args.split, args.limit, args.subset)
     if not rows:
         print(f"No rows in the {args.split} split yet (write them with `pairs add`).")
         return 1
@@ -109,7 +117,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         prediction = system.convert(row)
         outputs[row["id"]] = {"prediction": prediction, "latency_ms": (time.perf_counter() - start) * 1000}
     records, summary = score_outputs(rows, outputs)
-    run_dir = write_run(system.name, args.split, rows, data_sha, records, summary, system.describe, args.results)
+    run_dir = write_run(system.name, args.split, rows, data_sha, records, summary, system.describe, args.results,
+                        args.subset)
     print_summary(run_dir, summary)
     return 0
 
@@ -117,11 +126,11 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_score(args: argparse.Namespace) -> int:
     """Score predictions made elsewhere (e.g. a Kaggle notebook): JSONL with id, prediction, latency_ms?."""
     guard_split(args.split, args.final)
-    rows, data_sha = split_rows(args.split, args.limit)
+    rows, data_sha = split_rows(args.split, args.limit, args.subset)
     outputs = {r["id"]: r for _, r, err in P.read_jsonl(Path(args.predictions)) if not err}
     records, summary = score_outputs(rows, outputs)
     describe = {"kind": "external", "predictions_file": Path(args.predictions).name}
-    run_dir = write_run(args.name, args.split, rows, data_sha, records, summary, describe, args.results)
+    run_dir = write_run(args.name, args.split, rows, data_sha, records, summary, describe, args.results, args.subset)
     print_summary(run_dir, summary)
     return 0
 
@@ -165,6 +174,9 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--split", choices=["dev", "test", "train"], default="dev")
         p.add_argument("--final", action="store_true", help="allow the test split (final results only)")
         p.add_argument("--limit", type=int, help="only the first N rows (smoke runs)")
+        p.add_argument("--subset", choices=["all", "public", "private"], default="all",
+                       help="public rows only give results that can be published; runs with private rows are "
+                            "saved under eval/results/private (never committed)")
         p.add_argument("--results", type=Path, help="results folder (default eval/results)")
     compare = sub.add_parser("compare", help="paired bootstrap on word accuracy between two runs")
     compare.add_argument("run_a", type=Path)

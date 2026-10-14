@@ -60,6 +60,16 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 | `claude-draft-revised-2026-10-batch03` | 500 | `train-ai_checked.jsonl` (ai-1001 – ai-1500) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 279 rows. |
 | `claude-draft-revised-2026-10-batch04` | 500 | `train-ai_checked.jsonl` (ai-1501 – ai-2000) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 342 rows. |
 
+### Private rows: Moustafa's own chats ([ADR 0014](decisions/0014-private-own-chat-data.md))
+
+| Source | Rows | Where | Split |
+|---|---|---|---|
+| `own-chats` (1 group chat, 2 private chats, 2024–2026) | 1,987 | `data/private/pairs/` (**never committed**) | 210 test, 90 dev, 1,687 train (held-out drawn in proportion from each chat) |
+
+- Only messages Moustafa wrote himself, with his own Arabic; imported with `pairs import-chats FILE --held-out 300` (diacritics/tatweel removed, nothing else changed; no message text is printed).
+- Variants of these rows are written to `data/private/pairs/train-rule_variant.jsonl`; the public B0 dictionary ignores private rows.
+- Limitation: held-out and training messages come from the same chats, so they share people, topics and habits.
+
 ### Rule-made spelling variants
 
 `uv run --project eval pairs variants` (default: 2 per training row, seed 2026) re-spells the **Arabizi** of every non-variant training row with alternatives real typists use, from [`data/rules/arabizi_variants.json`](../data/rules/arabizi_variants.json): `sh`↔`ch`, `7`→`h`, `kh`↔`5`, `gh`→`3'`, dropped `2`/`3`, vowel spellings (`ou`/`u`/`o`, `ee`/`i`, `ei`/`ay`/`e`), single for double consonants, `el`/`il`/`l`, `3am`↔`3m`, `bas`→`bs`, lowercase, and no punctuation (the Arabic then loses the matching ، ؟ too). The Arabic stays the same otherwise.

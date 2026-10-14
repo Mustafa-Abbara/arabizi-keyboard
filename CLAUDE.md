@@ -23,10 +23,8 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 
 ## Current state (update when it changes)
 
-- **Phase 1 pivot (12 Oct 2026, ADR 0010):** goal is a fine-tuned local Arabizi→Arabic translator + the macOS keyboard; agents are an optional Phase 2. Stages renamed P0–P7; v1 roadmap archived.
-- **Stage P0 (was S0) in progress.** Scaffold, CONTRIBUTING, templates, pre-commit, ASSUMPTIONS, ADR 0001, ADR 0008 and ADR 0010 are written.
-- **ADR 0001 answered by the team** (Moustafa, 10 Oct 2026), not by the instructor: Path A, no VoiceType code reuse, public repo, local unsigned install, interviews and the user study deferred (no outside participants until IRB approval).
-- **GitHub (12 Oct 2026):** `protect-main` ruleset active (PR required; approvals temporarily set to 0 at Moustafa's request; restore with `bootstrap.py protect`). The 104 v1 issues are closed as not planned; 57 P0–P7 issues are open and assigned. Board: GitHub Project #1 "Arabizi Keyboard". Moustafa (`Mustafa-Abbara`) owns every issue.
-- **Moustafa's Mac passes the P0 tool check** (Xcode 27.0, `docker run hello-world` via Colima).
-- **P2 data (13 Oct 2026):** SPELLING.md v1.0, pair format + `pairs` CLI, first training batch: 500 `ai_checked` rows (Claude-drafted, revised by Moustafa; ADR 0012). Test/dev: 0 of ~300 hand-written pairs.
-- **Left in P0:** a test PR reviewed with the solo rule, the push-protection test, Kaggle/Colab GPU access, and the learning ramp.
+- **Phase 1 (ADR 0010), solo build (ADR 0011).** Stages P0–P7; v1 roadmap archived. Board: GitHub Project #1; Moustafa (`Mustafa-Abbara`) owns every issue. `protect-main` ruleset: PR required, approvals set to 0 (restore with `bootstrap.py protect`).
+- **P0** mostly done (left: push-protection test, Kaggle GPU access, learning ramp). **P1** keyboard spike works (Enter converts, ⌘Z restores, ⌥Enter converts a selection, password fields safe; per-app matrix not filled app by app).
+- **P2 data:** SPELLING.md v1.2; `pairs` CLI (add, import, import-batch, import-chats, variants, lexicon, check, stats, validate). Training: 2,000 Claude-drafted rows revised by Moustafa (ADR 0012) + 1,687 private own-chat rows (ADR 0014) + generated variants (not committed). Held-out: **349 hand-written** (50 public from the sheet, 300 private from own chats).
+- **Private data (ADR 0014):** `data/private/` and `eval/results/private/` are never committed; the public B0 dictionary is built from public rows only; quote only aggregate numbers from private runs.
+- **P3:** scoring harness (`evalrun`, docs/EVAL.md); **B0 = 0.547 word accuracy on 105 dev rows**. Next: B1 (base models through llama.cpp; downloads need Moustafa's OK), then P4 fine-tuning on Kaggle (private dataset for the own-chat rows).

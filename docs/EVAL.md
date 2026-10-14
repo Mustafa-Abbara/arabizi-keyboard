@@ -12,6 +12,7 @@ uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B # is
 
 - **Dev for everything, test once.** `--split test` refuses to run without `--final`. Prompts, hyperparameters and checkpoints are chosen on dev only; the test set is run once per final candidate (roadmap §4).
 - Each run writes `eval/results/<date-time>-<system>-<split>/`: `predictions.jsonl` (per sentence: input, reference, output, every score) and `metrics.json` (corpus metrics, git SHA, SHA-256 of the data files, system description such as model and quantisation). Runs on dev/test are committed as evidence.
+- **Private rows** ([ADR 0014](decisions/0014-private-own-chat-data.md)): runs that include them are saved under `eval/results/private/` (not committed); `--subset public` scores only public rows (publishable), `--subset private` only private ones. Docs quote only aggregate numbers from private runs.
 - External predictions (`score`): JSONL with `id`, `prediction`, optional `latency_ms`; every row of the split needs a prediction.
 - Sanity systems: `reference` returns the answer and must score 1.0 everywhere; `identity` returns the input and scores near 0 (first check, 200 training rows: word accuracy 0.05, from Latin words that should stay Latin).
 
@@ -30,11 +31,14 @@ uv run --project eval pairs variants && uv run --project eval pairs lexicon
 
 Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a long vowel (`8ali` → غلي, not غالي) and final `-e` can be ي or ة (`2alle` → قلة, not قلي). Words in the dictionary avoid both.
 
-## Results so far (dev, 15 sentences; small, so the intervals are wide)
+## Results so far (dev)
 
-| System | Word acc. | 95% CI | Lenient | CER | Punct. | Keep-Latin F1 | Numbers | Run |
+| System | Dev rows | Word acc. | Lenient | CER | Punct. | Keep-Latin F1 (P / R) | Numbers | Run |
 |---|---|---|---|---|---|---|---|---|
-| B0 rules v1 | 0.549 | [0.47, 0.62] | 0.556 | 0.159 | 1.00 | 0.50 | 1.00 | `20261013-155728-b0-dev` |
+| B0 rules v1 | 15 public | 0.549 [0.47, 0.62] | 0.556 | 0.159 | 1.00 | 0.50 (1.00 / 0.33) | 1.00 | `eval/results/20261013-155728-b0-dev` |
+| B0 rules v1 | 105 (15 public + 90 private) | 0.547 | 0.556 | 0.187 | 0.94 | 0.18 (1.00 / 0.10) | 1.00 | private run, 14 Oct 2026 |
+
+Real typing (private chats) uses far more English than the sheet and AI rows: B0 keeps only 10% of the Latin words that should stay Latin.
 
 ## Metrics
 

@@ -3,6 +3,7 @@
   uv run --project eval pairs add      # type new hand-written pairs
   uv run --project eval pairs import F # add a list of hand-written pairs: one 'arabizi | arabic' per line
   uv run --project eval pairs import-batch F --method ai_checked ...  # training rows from another source
+  uv run --project eval pairs import-chats F.xlsx --held-out 300  # own chat messages, PRIVATE (ADR 0014)
   uv run --project eval pairs variants # regenerate rule-made spelling variants of the training rows
   uv run --project eval pairs lexicon  # rebuild the B0 word dictionary from the train split
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
@@ -30,12 +31,18 @@ TARGETS = {"held_out": 300, "held_out_goal": 350, "train": 2000, "train_hand_or_
 SMALL_WORDS = re.compile(r"(?<![a-z0-9])(la|ma|3a|3al|w|b|bi|bel|bil)(?![a-z0-9])", re.IGNORECASE)
 
 
-def path_for(split: str, method: str = "hand") -> Path:
-    return P.PAIRS_DIR / (f"{split}.jsonl" if split in ("test", "dev") else f"train-{method}.jsonl")
+def path_for(split: str, method: str = "hand", private: bool = False) -> Path:
+    folder = P.PRIVATE_DIR if private else P.PAIRS_DIR
+    return folder / (f"{split}.jsonl" if split in ("test", "dev") else f"train-{method}.jsonl")
 
 
-def all_rows() -> list[dict]:
-    return [row for path in P.pair_files() for _, row, err in P.read_jsonl(path) if not err]
+def all_rows(include_private: bool = True) -> list[dict]:
+    return [row for path in P.pair_files(include_private=include_private)
+            for _, row, err in P.read_jsonl(path) if not err]
+
+
+def private_rows() -> list[dict]:
+    return [row for path in P.pair_files() if P.is_private(path) for _, row, err in P.read_jsonl(path) if not err]
 
 
 def next_id(method: str, rows: list[dict]) -> str:
@@ -219,29 +226,50 @@ def cmd_import_batch(args: argparse.Namespace) -> int:
 
 
 def cmd_variants(args: argparse.Namespace) -> int:
-    """Regenerate data/pairs/train-rule_variant.jsonl from the other training rows (deterministic for a seed)."""
+    """Regenerate the train-rule_variant.jsonl files (public and private) from the other training rows.
+
+    Variants of private rows go to the private folder, so private text never lands in a public file.
+    Deterministic for a seed. Examples are only printed from public rows.
+    """
     from arabizi_eval import variants
 
+    private_ids = {r["id"] for r in private_rows()}
     parents = [r for r in all_rows() if r.get("split") == "train" and r.get("method") != "rule_variant"]
-    rows, used, short = variants.generate(parents, args.per_row, args.seed)
-    target = path_for("train", "rule_variant")
-    if not args.dry_run:
-        rewrite(target, rows)
-    verb = "would write" if args.dry_run else "wrote"
-    print(f"{verb} {len(rows)} variants of {len(parents)} training rows to {target.name} "
-          f"(seed {args.seed}, {args.per_row} per row; {short} rows had fewer possible spellings)")
-    print("Rules fired: " + ", ".join(f"{name} {n}" for name, n in used.most_common()))
+    used_total: Counter = Counter()
+    next_number = 1
+    public_rows: list[dict] = []
+    for private in (False, True):
+        group = [r for r in parents if (r["id"] in private_ids) == private]
+        if private and not group:
+            continue
+        rows, used, short = variants.generate(group, args.per_row, args.seed, first_id=next_number)
+        next_number += len(rows)
+        used_total.update(used)
+        target = path_for("train", "rule_variant", private=private)
+        if not args.dry_run:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            rewrite(target, rows)
+        if not private:
+            public_rows = rows
+        verb = "would write" if args.dry_run else "wrote"
+        print(f"{verb} {len(rows)} variants of {len(group)} {'private' if private else 'public'} training rows to "
+              f"{'private/' if private else ''}{target.name} (seed {args.seed}, {args.per_row} per row; "
+              f"{short} rows had fewer possible spellings)")
+    print("Rules fired: " + ", ".join(f"{name} {n}" for name, n in used_total.most_common()))
     by_id = {r["id"]: r for r in parents}
-    for row in random.Random(args.seed).sample(rows, min(args.show, len(rows))):
+    for row in random.Random(args.seed).sample(public_rows, min(args.show, len(public_rows))):
         print(f"\n  {by_id[row['parent']]['arabizi']}\n  {row['arabizi']}")
     return 0
 
 
 def cmd_lexicon(args: argparse.Namespace) -> int:
-    """Rebuild data/rules/arabizi_lexicon.json (B0 dictionary) from the train split only."""
+    """Rebuild data/rules/arabizi_lexicon.json (B0 dictionary) from the PUBLIC train split only.
+
+    The dictionary is committed, so it must not contain words learned from private chats (ADR 0014).
+    """
     from arabizi_eval import b0
 
-    train = [r for r in all_rows() if r.get("split") == "train"]
+    train = [r for r in all_rows(include_private=False) if r.get("split") == "train"]
     if not any(r["method"] == "rule_variant" for r in train):
         print("Note: no rule variants found; run `pairs variants` first for a fuller dictionary.")
     lexicon = b0.build_lexicon(train)
@@ -249,6 +277,82 @@ def cmd_lexicon(args: argparse.Namespace) -> int:
     built = lexicon["built_from"]
     print(f"wrote {b0.LEXICON_PATH.name}: {len(lexicon['words'])} words, {len(lexicon['keep_latin'])} kept in Latin, "
           f"from {built['aligned_rows']} of {built['rows']} training rows that line up word for word")
+    return 0
+
+
+def read_sheet(path: Path) -> list[dict]:
+    """Rows of an .xlsx (first sheet, header row) or .jsonl file, as dicts keyed by column name."""
+    if path.suffix == ".jsonl":
+        return [row for _, row, err in P.read_jsonl(path) if not err]
+    import openpyxl
+
+    sheet = openpyxl.load_workbook(path, read_only=True, data_only=True).worksheets[0]
+    values = [r for r in sheet.iter_rows(values_only=True) if any(c not in (None, "") for c in r)]
+    header = [str(c).strip().lower() if c is not None else "" for c in values[0]]
+    return [{h: c for h, c in zip(header, r, strict=False) if h} for r in values[1:]]
+
+
+def held_out_quota(sizes: dict[str, int], total: int) -> dict[str, int]:
+    """Share `total` held-out rows between groups in proportion to their size (largest remainders)."""
+    count = sum(sizes.values())
+    exact = {g: total * n / count for g, n in sizes.items()}
+    quota = {g: int(x) for g, x in exact.items()}
+    for g in sorted(exact, key=lambda g: exact[g] - quota[g], reverse=True)[: total - sum(quota.values())]:
+        quota[g] += 1
+    return quota
+
+
+def cmd_import_chats(args: argparse.Namespace) -> int:
+    """Import Moustafa's own chat messages into the PRIVATE folder (ADR 0014).
+
+    `--held-out` rows, drawn in proportion from each chat (column `source`), become test/dev in the usual 7:3
+    cycle; the rest become training rows. Diacritics and tatweel are removed from the Arabic; rows that break a
+    rule or repeat a sentence are skipped. Nothing printed contains message text.
+    """
+    if any(str(r.get("source", "")).startswith("own-chats") for r in all_rows()):
+        print("Own chats are already imported; remove the private rows first to import again.")
+        return 1
+    existing = all_rows()
+    accepted: list[tuple[dict, dict]] = []  # (sheet row, new row)
+    reasons: Counter = Counter()
+    for item in read_sheet(Path(args.file)):
+        arabizi, arabic = str(item.get("arabizi") or "").strip(), str(item.get("arabic") or "")
+        arabic = " ".join(P.DIACRITICS.sub("", arabic).replace(P.TATWEEL, "").split())
+        group = str(item.get("source") or "unknown").strip()
+        row = new_hand_row(arabizi, arabic, {}, "train", existing + [r for _, r in accepted])
+        row["source"] = f"own-chats ({group}, {item.get('year') or 'year unknown'})"
+        problems = [e.split(":")[0] for e in P.row_errors(row, "train", "hand")]
+        if _duplicate_of(row, existing + [r for _, r in accepted]):
+            problems.append("repeats a sentence already in the data")
+        if problems:
+            reasons.update(set(problems))
+            continue
+        accepted.append(({"group": group}, row))
+
+    sizes = Counter(meta["group"] for meta, _ in accepted)
+    quota = held_out_quota(dict(sizes), min(args.held_out, len(accepted)))
+    rng = random.Random(args.seed)
+    chosen: set[str] = set()
+    for group in sorted(quota):
+        members = [row["id"] for meta, row in accepted if meta["group"] == group]
+        chosen.update(rng.sample(members, quota[group]))
+    held = 0
+    counts: Counter = Counter()
+    for _, row in accepted:  # keep the sheet order; held-out rows follow the 7:3 test/dev cycle
+        if row["id"] in chosen:
+            row["split"] = "dev" if held % 10 in DEV_SLOTS else "test"
+            held += 1
+        counts[row["split"]] += 1
+        if not args.dry_run:
+            target = path_for(row["split"], "hand", private=True)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            append(target, row)
+    verb = "would import" if args.dry_run else "imported"
+    print(f"{verb} {len(accepted)} rows into data/private/pairs (never committed): "
+          f"test {counts['test']}, dev {counts['dev']}, train {counts['train']}")
+    print("held out per chat: " + ", ".join(f"{g} {quota[g]}/{sizes[g]}" for g in sorted(quota)))
+    if reasons:
+        print(f"skipped {sum(reasons.values())} problems: " + "; ".join(f"{r} ({n})" for r, n in reasons.most_common()))
     return 0
 
 
@@ -322,7 +426,10 @@ def cmd_stats(args: argparse.Namespace) -> int:
     unchecked = sum(not r["checked_by"] for r in rows if r["method"] != "rule_variant")  # variants: no check
     today = sum(r["date"] == date.today().isoformat() for r in rows)
 
+    private = Counter(r["split"] for r in private_rows())
     print(f"Rows: {len(rows)}  (test {by_split['test']}, dev {by_split['dev']}, train {by_split['train']})")
+    if private:
+        print(f"  of which private: test {private['test']}, dev {private['dev']}, train {private['train']}")
     for (split, method), n in sorted(by_method.items()):
         print(f"  {split:5} {method:12} {n}")
     print(f"Unchecked: {unchecked}   Written today: {today}")
@@ -374,7 +481,12 @@ def main(argv: list[str] | None = None) -> int:
     var.add_argument("--seed", type=int, default=2026, help="random seed; the same seed gives the same file")
     var.add_argument("--show", type=int, default=8, help="print this many random examples")
     var.add_argument("--dry-run", action="store_true", help="generate and report without writing")
-    sub.add_parser("lexicon", help="rebuild the B0 word dictionary from the train split")
+    chats = sub.add_parser("import-chats", help="import your own chat messages into the PRIVATE folder")
+    chats.add_argument("file", help=".xlsx or .jsonl with columns arabizi, arabic, source (and optionally year)")
+    chats.add_argument("--held-out", type=int, default=300, help="rows for test+dev, drawn evenly from each chat")
+    chats.add_argument("--seed", type=int, default=2026)
+    chats.add_argument("--dry-run", action="store_true", help="check and report without writing")
+    sub.add_parser("lexicon", help="rebuild the B0 word dictionary from the public train split")
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
@@ -382,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
-                "variants": cmd_variants, "lexicon": cmd_lexicon,
+                "import-chats": cmd_import_chats, "variants": cmd_variants, "lexicon": cmd_lexicon,
                 "check": cmd_check, "stats": cmd_stats, "validate": cmd_validate}
     return commands[args.command](args)
 
