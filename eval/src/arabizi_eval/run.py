@@ -112,10 +112,16 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
     system = systems.get(args.system)
     outputs = {}
-    for row in rows:
-        start = time.perf_counter()
-        prediction = system.convert(row)
-        outputs[row["id"]] = {"prediction": prediction, "latency_ms": (time.perf_counter() - start) * 1000}
+    system.start()
+    try:
+        for n, row in enumerate(rows, 1):
+            start = time.perf_counter()
+            prediction = system.convert(row)
+            outputs[row["id"]] = {"prediction": prediction, "latency_ms": (time.perf_counter() - start) * 1000}
+            if n % 25 == 0:
+                print(f"  {n}/{len(rows)} sentences", flush=True)
+    finally:
+        system.close()
     records, summary = score_outputs(rows, outputs)
     run_dir = write_run(system.name, args.split, rows, data_sha, records, summary, system.describe, args.results,
                         args.subset)
@@ -167,7 +173,8 @@ def main(argv: list[str] | None = None) -> int:
                            ("score", "score a predictions file made elsewhere")):
         p = sub.add_parser(name, help=helptext)
         if name == "run":
-            p.add_argument("--system", required=True, help=f"one of: {', '.join(sorted(systems.REGISTRY))}")
+            p.add_argument("--system", required=True,
+                           help=f"one of: {', '.join(sorted(systems.REGISTRY))}")
         else:
             p.add_argument("predictions")
             p.add_argument("--name", required=True, help="name for the run, e.g. qwen0.5b-lora-v1")

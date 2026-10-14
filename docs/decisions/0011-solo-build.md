@@ -37,3 +37,12 @@ The Phase 1 roadmap ([ADR 0010](0010-phase1-pivot.md)) split the work between th
 - **Data risk:** one writer means one spelling habit in test and dev. Accuracy on the test set may overstate accuracy on other people's typing; the AladdinBench check and the error analysis must be reported next to it.
 - **Time risk:** about 10 weeks for one person. The weekly retro checks the roadmap dates, and the first cut in Section 5 is applied as soon as a stage is a week late.
 - `bootstrap.py` now has a single owner (`OWNERS = ("moustafa",)`); `owner:omar` and `owner:mohamad` labels are no longer created.
+
+## Amendment (14 Oct 2026): Mohamad contributes code
+
+| # | Decision | Source |
+|---|---|---|
+| 8 | Mohamad Al Masri is part of the project again and contributes code through pull requests, starting with the B1 base-model systems (`eval/src/arabizi_eval/b1.py`). **Moustafa remains the main contributor**: he owns every stage and issue, runs the official measurements on the 8 GB Air, and gives the go for downloads. | **Moustafa** ("he is part of the project, but i am still the main contributor", 14 Oct 2026); first proposed in Mohamad's branch |
+| 9 | Mohamad works on Windows, so runs on that machine are smoke runs only: latency, memory and private-data results come from Moustafa's Air (EVAL.md, "B1"). | **Claude's recommendation** (from Mohamad's branch) |
+| 10 | Mohamad's work arrives as a **pull request** (not only a pushed branch), and a task is **agreed with Moustafa before it starts**: on 14 Oct both built B1 at the same time; the two versions were combined (PR "B1 combined"). | **Claude's recommendation** |
+| 11 | Moustafa reviews Mohamad's PRs when possible, in addition to the self-review and `/code-review`: a review between people counts for the process bonus. | **Claude's recommendation** (proposal, from Mohamad's branch) |

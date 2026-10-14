@@ -38,5 +38,5 @@ Not part of this step: the llama.cpp Swift library for the keyboard engine (P5) 
 
 | Licence | Accepted by | Date |
 |---|---|---|
-| Gemma Terms of Use | — | — |
-| Llama 3.2 Community License | — | — |
+| Gemma Terms of Use | Moustafa Abbara ("i accept the licenses of gamma and llama models") | 2026-10-14 |
+| Llama 3.2 Community License | Moustafa Abbara (same message) | 2026-10-14 |
