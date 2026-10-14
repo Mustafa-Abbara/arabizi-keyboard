@@ -329,6 +329,9 @@ def cmd_import_chats(args: argparse.Namespace) -> int:
             continue
         accepted.append(({"group": group}, row))
 
+    if not accepted:
+        print("Nothing to import: every row was skipped. " + "; ".join(f"{r} ({n})" for r, n in reasons.most_common()))
+        return 1
     sizes = Counter(meta["group"] for meta, _ in accepted)
     quota = held_out_quota(dict(sizes), min(args.held_out, len(accepted)))
     rng = random.Random(args.seed)

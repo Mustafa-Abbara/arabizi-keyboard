@@ -81,3 +81,12 @@ def test_runs_with_private_rows_go_to_the_private_results_folder(folders):
     (found,) = (tmp / "results" / "private").iterdir()
     meta = json.loads((found / "metrics.json").read_text(encoding="utf-8"))
     assert meta["private_sentences"] == 3 and not (tmp / "results" / found.name).exists()
+
+
+def test_import_chats_with_nothing_importable_reports_instead_of_crashing(folders, capsys):
+    tmp, public, private, chats = folders
+    empty = tmp / "empty.jsonl"
+    empty.write_text(json.dumps({"arabizi": "shu 3am ta3mel ya 7abibi", "arabic": "شو عم تعمل يا حبيبي"}) + "\n",
+                     encoding="utf-8")  # repeats the public training row
+    assert main(["import-chats", str(empty)]) == 1
+    assert "every row was skipped" in capsys.readouterr().out
