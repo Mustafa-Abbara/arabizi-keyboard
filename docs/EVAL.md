@@ -45,6 +45,7 @@ Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a
 | System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. | Peak RSS | p50 / p95 ms |
 |---|---|---|---|---|---|---|---|---|
 | **B0 rules** | **0.547** | [0.51, 0.59] | 0.187 | 0.18 | 1.00 | 0.00 | — | < 1 |
+| Llama 3.2 1B, 5-shot | 0.169 | [0.15, 0.19] | 0.531 | 0.18 | 0.71 | 0.47 | 1,002 MB | 530 / 1,091 |
 | Qwen3-1.7B, 5-shot | 0.144 | [0.12, 0.17] | 0.578 | 0.16 | 0.71 | 0.32 | 1,438 MB | 300 / 591 |
 | Qwen2.5-1.5B, 5-shot | 0.125 | [0.09, 0.16] | 0.890 | 0.21 | 1.00 | 0.12 | 1,275 MB | 308 / 625 |
 | Qwen3-1.7B, zero | 0.088 | [0.06, 0.11] | 0.758 | 0.12 | 1.00 | 0.06 | 1,424 MB | 295 / 739 |
@@ -52,13 +53,17 @@ Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a
 | Qwen3-0.6B, zero | 0.068 | [0.05, 0.09] | 0.979 | 0.14 | 0.86 | 0.25 | 745 MB | 173 / 759 |
 | Qwen2.5-0.5B, 5-shot | 0.052 | [0.03, 0.08] | 1.038 | 0.11 | 0.57 | 0.14 | 641 MB | 161 / 304 |
 | Qwen2.5-0.5B, zero | 0.029 | [0.02, 0.04] | 1.440 | 0.04 | 0.86 | 0.69 | 637 MB | 169 / 1,257 |
+| Gemma 3 1B, 5-shot | 0.072 | [0.05, 0.10] | 1.004 | 0.08 | 0.36 | 0.19 | 990 MB | 633 / 1,964 |
+| Llama 3.2 1B, zero | 0.034 | [0.02, 0.05] | 1.243 | 0.05 | 0.50 | 0.64 | 990 MB | 986 / 3,486 |
 | Qwen2.5-1.5B, zero | 0.022 | [0.01, 0.03] | 2.511 | 0.02 | 0.43 | 0.48 | 1,265 MB | 460 / 1,695 |
+| Gemma 3 1B, zero | 0.016 | [0.01, 0.02] | 2.568 | 0.02 | 0.36 | 0.78 | 946 MB | 2,706 / 4,630 |
 
-- **No base model comes close to B0** (best 0.144 vs 0.547). They do not know Lebanese Arabizi: digits stay unconverted, words are invented, and without examples they often explain or answer instead of converting (CER above 1 means outputs much longer than the reference). This is the gap fine-tuning (P4) must close.
-- The 1.5–1.7B models with 5 examples are the best; examples help most for the larger models.
+- **No base model comes close to B0** (best 0.169, Llama 3.2 1B with 5 examples, vs 0.547). They do not know Lebanese Arabizi: digits stay unconverted, words are invented, and without examples they often explain or answer instead of converting (CER above 1 means outputs much longer than the reference). This is the gap fine-tuning (P4) must close.
+- With 5 examples, Llama 3.2 1B (0.169), Qwen3-1.7B (0.144) and Qwen2.5-1.5B (0.125) are the best; their intervals overlap. Llama invents text most often (47% of sentences flagged). Examples help every model; without them Gemma and Llama mostly answer or explain instead of converting.
 - **Memory:** all fit the 1.5 GB budget, but Qwen3-1.7B (1,438 MB) leaves almost no margin. **Latency:** with the prompt cache, the 5-shot runs are within budget (p95 ≤ 625 ms); runs without examples have long run-away outputs and higher p95.
 - An earlier run on the same day with Claude's longer instruction and different examples scored higher (best 0.169) but is superseded: base and fine-tuned models must get the same instruction to be compared.
-- Gemma 3 1B and Llama 3.2 1B: licences accepted, files not downloaded yet.
+- Gemma 3 1B and Llama 3.2 1B were run after Moustafa accepted their licences (14 Oct 2026).
+- The choice of base models for fine-tuning is in [ADR 0004](decisions/0004-base-model-choice.md).
 
 **Running B1.** Default (official runs, the 8 GB Air on AC power, other apps closed): the system checks the pinned file, starts its own `llama-server`, and records load time and peak memory.
 

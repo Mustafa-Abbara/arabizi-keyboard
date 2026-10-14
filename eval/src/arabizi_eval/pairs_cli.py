@@ -8,6 +8,7 @@
   uv run --project eval pairs lexicon  # rebuild the B0 word dictionary from the train split
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
+  uv run --project eval pairs freeze   # freeze the test and dev sets (roadmap P2 step 4)
   uv run --project eval pairs export-train  # training files for Kaggle (P4, ADR 0015)
   uv run --project eval pairs validate # same checks as the test suite
 """
@@ -310,6 +311,9 @@ def cmd_import_chats(args: argparse.Namespace) -> int:
     cycle; the rest become training rows. Diacritics and tatweel are removed from the Arabic; rows that break a
     rule or repeat a sentence are skipped. Nothing printed contains message text.
     """
+    if args.held_out and P.MANIFEST_PATH.exists():
+        print("The test set is frozen: import with --held-out 0 (everything goes to training).")
+        return 1
     if any(str(r.get("source", "")).startswith("own-chats") for r in all_rows()):
         print("Own chats are already imported; remove the private rows first to import again.")
         return 1
@@ -376,6 +380,48 @@ def cmd_export_train(args: argparse.Namespace) -> int:
         print("WARNING: AI-derived rows are above half of the training set (ADR 0010); lower --ai-variants.")
         return 1
     print("Upload the whole folder as a PRIVATE Kaggle dataset (docs/TRAINING.md).")
+
+
+def cmd_freeze(args: argparse.Namespace) -> int:
+    """Record the SHA-256 of the public and private test/dev files in data/pairs/manifest.json.
+
+    After the freeze, `pairs validate` (and CI) fail if a frozen file changes; new hand-written rows go to training.
+    Private files are recorded by hash and row count only. Refuses while held-out rows are unchecked (ADR 0011),
+    unless --allow-unchecked is given (recorded in the manifest).
+    """
+    previous = json.loads(P.MANIFEST_PATH.read_text(encoding="utf-8")) if P.MANIFEST_PATH.exists() else None
+    if previous and not args.reason:
+        print(f"Already frozen as {previous['version']}: a new freeze needs --version and --reason.")
+        return 1
+    if previous and args.version == previous["version"]:
+        print(f"{args.version} is the current version: choose a new one (e.g. testset-v1.1).")
+        return 1
+    held_out = [r for r in all_rows() if r.get("split") in ("test", "dev")]
+    unchecked = sum(not r.get("checked_by") for r in held_out)
+    if unchecked and not args.allow_unchecked:
+        print(f"{unchecked} test/dev rows are not checked yet (checked_by is empty). Run `pairs check` first, "
+              "or freeze anyway with --allow-unchecked (recorded in the manifest).")
+        return 1
+    files = {}
+    for key, (path, private) in P.held_out_files().items():
+        if path.exists():
+            rows = sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+            files[key] = {"sha256": P.sha256_file(path), "rows": rows, "private": private}
+    manifest = {
+        "_comment": "Frozen held-out data (roadmap P2 step 4). `pairs validate` and CI fail if a listed file changes. "
+                    "Private files: hash and row count only, checked where they exist. Do not edit by hand: use "
+                    "`pairs freeze --version ... --reason ...` with the testset-change label (docs/DATA.md).",
+        "version": args.version, "frozen_on": date.today().isoformat(),
+        "reason": args.reason or "first freeze, before any fine-tuning (P4)",
+        "previous_version": previous["version"] if previous else None,
+        "unchecked_rows": unchecked, "files": files,
+    }
+    P.MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    total = sum(f["rows"] for f in files.values())
+    print(f"froze {args.version}: {total} held-out rows in {len(files)} files "
+          f"({sum(f['rows'] for f in files.values() if f['private'])} private, hashes only); "
+          f"{unchecked} unchecked. Commit data/pairs/manifest.json in a PR with the testset-change label, then tag "
+          f"the merge commit: git tag {args.version} && git push origin {args.version}")
     return 0
 
 
@@ -456,6 +502,9 @@ def cmd_stats(args: argparse.Namespace) -> int:
     for (split, method), n in sorted(by_method.items()):
         print(f"  {split:5} {method:12} {n}")
     print(f"Unchecked: {unchecked}   Written today: {today}")
+    if P.MANIFEST_PATH.exists():
+        frozen = json.loads(P.MANIFEST_PATH.read_text(encoding="utf-8"))
+        print(f"Test set frozen: {frozen['version']} ({frozen['frozen_on']}); new hand-written rows go to training")
     print(f"Held-out: {len(held_out)} / {TARGETS['held_out']} (goal {TARGETS['held_out_goal']})")
     hand_train = sum(r["method"] in ("hand", "public") for r in train)
     print(f"Train: {len(train)} / {TARGETS['train']}  (hand or public: {hand_train} / "
@@ -519,12 +568,16 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
+    freeze = sub.add_parser("freeze", help="freeze the test and dev sets (roadmap P2 step 4)")
+    freeze.add_argument("--version", default="testset-v1.0")
+    freeze.add_argument("--reason", help="required when re-freezing: why the held-out data changed")
+    freeze.add_argument("--allow-unchecked", action="store_true", help="freeze although some rows are unchecked")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
                 "import-chats": cmd_import_chats, "variants": cmd_variants, "lexicon": cmd_lexicon,
-                "check": cmd_check, "stats": cmd_stats, "export-train": cmd_export_train,
-                "validate": cmd_validate}
+                "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze,
+                "export-train": cmd_export_train, "validate": cmd_validate}
     return commands[args.command](args)
 
 

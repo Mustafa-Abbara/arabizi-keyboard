@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -161,6 +162,41 @@ def row_warnings(row: dict) -> list[str]:
     return warnings
 
 
+FROZEN_NAMES = ("test.jsonl", "dev.jsonl")  # the held-out files the freeze protects (roadmap P2 step 4)
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def held_out_files() -> dict[str, tuple[Path, bool]]:
+    """Manifest key -> (path, private) for the public and private test/dev files."""
+    files = {f"public/{name}": (PAIRS_DIR / name, False) for name in FROZEN_NAMES}
+    files.update({f"private/{name}": (PRIVATE_DIR / name, True) for name in FROZEN_NAMES})
+    return files
+
+
+def freeze_problems(manifest_path: Path | None = None) -> list[Problem]:
+    """Frozen held-out files that changed or disappeared. Private files are only checked where they exist."""
+    path = manifest_path or MANIFEST_PATH
+    if not path.exists():
+        return []
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    files = held_out_files()
+    problems = []
+    for key, entry in manifest["files"].items():
+        file, private = files[key]
+        if not file.exists():
+            if not private:
+                problems.append(Problem(key, f"frozen in {manifest['version']} but missing"))
+            continue
+        if sha256_file(file) != entry["sha256"]:
+            problems.append(Problem(key, f"changed after the freeze ({manifest['version']}): a deliberate change "
+                                         "needs `pairs freeze --version ... --reason ...` and the testset-change "
+                                         "label on the PR (docs/DATA.md)"))
+    return problems
+
+
 def validate(pairs_dir: Path | None = None) -> Report:
     """Validate every pair file, then check ids, duplicates and test/dev leakage across files."""
     report = Report()
@@ -202,6 +238,8 @@ def validate(pairs_dir: Path | None = None) -> Report:
         parent = row.get("parent")
         if parent and splits.get(parent) != "train":
             report.errors.append(Problem(where, f"parent {parent} is missing or not a train row"))
+    if pairs_dir is None:
+        report.errors += freeze_problems()
     return report
 
 
