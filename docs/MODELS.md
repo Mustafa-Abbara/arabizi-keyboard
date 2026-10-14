@@ -1,0 +1,42 @@
+# Models
+
+Which language models the project uses, where they come from, their licences, and how they are fetched. Weights are **never committed** (`models/` is in `.gitignore`); `config/models.json` pins every file to a repository revision and SHA-256 (taken from the Hugging Face API, 14 Oct 2026), and `scripts/fetch_models.py` downloads and checks them. Runtime: llama.cpp ([ADR 0003](decisions/0003-runtime-llama-cpp.md)).
+
+## B1 candidates (P3: base models, no fine-tuning)
+
+| Id | Model | Params | File (Q4_K_M) | Size | Licence | From | Why it is a candidate |
+|---|---|---|---|---|---|---|---|
+| `qwen2.5-0.5b` | Qwen2.5-0.5B-Instruct | 0.5B | `qwen2.5-0.5b-instruct-q4_k_m.gguf` | 0.49 GB | Apache-2.0 | Qwen (official) | Roadmap; smallest, fastest |
+| `qwen2.5-1.5b` | Qwen2.5-1.5B-Instruct | 1.5B | `qwen2.5-1.5b-instruct-q4_k_m.gguf` | 1.12 GB | Apache-2.0 | Qwen (official) | Roadmap; likely better Arabic, still fits 8 GB |
+| `qwen3-0.6b` | Qwen3-0.6B | 0.6B | `Qwen3-0.6B-Q4_K_M.gguf` | 0.40 GB | Apache-2.0 | Unsloth conversion | **Claude's recommendation**: the newer generation of the same family |
+| `qwen3-1.7b` | Qwen3-1.7B | 1.7B | `Qwen3-1.7B-Q4_K_M.gguf` | 1.11 GB | Apache-2.0 | Unsloth conversion | **Claude's recommendation** |
+| `gemma3-1b` | Gemma 3 1B IT | 1B | `google_gemma-3-1b-it-Q4_K_M.gguf` | 0.81 GB | Gemma Terms of Use | bartowski conversion | Roadmap; needs licence acceptance |
+| `llama3.2-1b` | Llama 3.2 1B Instruct | 1B | `Llama-3.2-1B-Instruct-Q4_K_M.gguf` | 0.81 GB | Llama 3.2 Community License | bartowski conversion | Roadmap; Arabic is not among Meta's 8 officially supported languages; needs licence acceptance |
+
+Total: 3.11 GB for the four Qwen files, 4.73 GB with Gemma and Llama.
+
+- **Never Qwen2.5-3B** (Qwen Research licence, non-commercial; v1 decision D2).
+- **Community conversions:** Qwen publishes official GGUF files for Qwen3 only as Q8_0 (too large for the memory budget), and Google/Meta publish theirs behind a login; the Unsloth and bartowski repositories are widely used conversions of the official weights. The original licence still applies to a conversion. Pinning the revision and SHA-256 makes the exact file reproducible.
+- **Licences that need acceptance:** Gemma (Gemma Terms of Use, including Google's prohibited-use policy) and Llama 3.2 (Community License: acceptable-use policy; "Built with Llama" attribution if distributed). `fetch_models.py` only fetches them with `--accept-licence gemma` / `--accept-licence llama`; record the acceptance here (who, date) when it is given.
+- **Memory budget** (≤ 1.5 GB engine RSS on the 8 GB Air): all Q4_K_M files above are ≤ 1.12 GB on disk; the run also needs a context buffer, so the 1.5–1.7B models will be close and P3 measures it.
+- **Fine-tuning (P4)** uses the original Hugging Face weights of the chosen base model **on Kaggle**, not these GGUF files; the fine-tuned model is converted to GGUF there and fetched like the others (its entry is added to `config/models.json` then).
+
+## The download step (one step, when Moustafa says go)
+
+Everything that has to be downloaded to this Mac for P3, in one go:
+
+```bash
+brew install llama.cpp                                  # runtime: llama-cli / llama-server (~30 MB)
+python3 scripts/fetch_models.py --list                   # check the plan first
+python3 scripts/fetch_models.py                          # the four Qwen files, 3.11 GB, hash-checked
+python3 scripts/fetch_models.py --accept-licence gemma --accept-licence llama   # only if those licences are accepted
+```
+
+Not part of this step: the llama.cpp Swift library for the keyboard engine (P5) is fetched by Swift Package Manager during the build; its exact source and version are pinned when P5 starts (the release packaging changed in 2026 and is checked then). Fine-tuning downloads happen on Kaggle.
+
+## Licence acceptance log
+
+| Licence | Accepted by | Date |
+|---|---|---|
+| Gemma Terms of Use | — | — |
+| Llama 3.2 Community License | — | — |
