@@ -32,7 +32,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 | P2 | SPELLING.md v1.2. Held-out: **350 hand-written** (public 35 test + 15 dev; private 210 test + 90 dev from Moustafa's chats, ADR 0014). Training: 2,000 Claude-drafted rows revised by Moustafa (ADR 0012) + 1,687 private chat rows + generated variants. **Not frozen yet.** |
 | P3 | Harness `evalrun` (docs/EVAL.md). B0 rules **0.547** on 105 dev rows; B1 best **0.169** (Llama 3.2 1B, 5-shot). ADR 0004: fine-tune Llama 3.2 1B + Qwen3-1.7B (fallback Qwen3-0.6B). Gate open: re-run one baseline from a fresh clone. |
 | P4 | Pipeline merged (ADR 0015, docs/TRAINING.md): `pairs export-train` → private Kaggle dataset → `train/finetune_lora.ipynb` → GGUF back to `models/`. **Training not run yet.** |
-| P5 | Started (ADR 0016): Swift rule fallback `RuleConverter` (B0 port, exact parity with Python via `b0_parity.json`) and `ProtectedSpans`; the keyboard now uses the rule converter. Next: output checks, llama.cpp from Swift, XPC, CLI, config. |
+| P5 | Started (ADR 0016): Swift rule fallback `RuleConverter` (B0 port, exact parity with Python via `b0_parity.json`) and `ProtectedSpans`; the keyboard now uses the rule converter. `ArabiziLLM` (ADR 0017): llama.cpp XCFramework b11429 (= export commit) as a SwiftPM binary target, `LlamaModel` with deadline. Next: output checks, XPC, CLI, config. |
 | P6–P7 | Not started. |
 
 **Next steps, in order:**
@@ -41,9 +41,10 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 3. **Optional before the freeze:** Kaggle smoke run with `pairs export-train --public-only` and `--limit 200 --epochs 1` (TRAINING.md), to catch setup problems.
 4. **Moustafa, after the freeze:** `pairs variants`, `pairs export-train` (with private rows), upload `build/train-export/` as a **private** Kaggle dataset, run the notebook (GPU T4, Internet on), download the two `.gguf` (→ `models/`) and `run.json` (→ `train/runs/`).
 5. **Claude, then:** verify hashes, add the fine-tuned models to `config/models.json`, score on dev against B0/B1 (paired bootstrap), write ADR 0005 (final model).
-6. **Claude, can start any time (no fine-tuned model needed):** rest of P5: output checks (step 3), check how to call llama.cpp from Swift in 2026 (its release packaging changed; ADR 0003), then `ArabiziLLM`. The Swift rule fallback and protected spans are done (ADR 0016).
+6. **Claude, can start any time (no fine-tuned model needed):** rest of P5: output checks (step 3), `config/engine.json`, then the XPC service (copies `llama.framework` and the model into the bundle; ADR 0017). The Swift rule fallback and protected spans are done (ADR 0016).
 
 **Practical notes:**
+- GitHub release downloads are slow and stall here; SwiftPM's own download of the llama.cpp XCFramework timed out. Fetch it with a resuming `curl` and place it in SwiftPM's cache (`~/Library/Caches/org.swift.swiftpm/artifacts/`, file name from `swift package resolve -vv`); SwiftPM still checks the checksum.
 - Claude's sandbox cannot reach Hugging Face or Kaggle: Moustafa runs downloads (`scripts/fetch_models.py`) and Kaggle himself. Models are in `models/` (all six B1 models downloaded and verified).
 - Private data (ADR 0014): `data/private/` and `eval/results/private/` are never committed; the public B0 dictionary is built from public rows only; quote only aggregate numbers from private runs; never print private message text.
 - Rules or dictionary changes: regenerate the Swift parity fixture (`uv run --project eval python -m arabizi_eval.parity`; `pairs lexicon` does it) in the same PR.
