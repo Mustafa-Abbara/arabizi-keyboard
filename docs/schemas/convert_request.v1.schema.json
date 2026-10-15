@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Mustafa-Abbara/arabizi-keyboard/docs/schemas/convert_request.v1.schema.json",
+  "title": "ConvertRequest v1",
+  "description": "Convert this Latin (Arabizi) text. Sent by the keyboard to the engine, and read by arabizi-cli as one JSON object per line. Swift: ArabiziContracts.ConvertRequest. Explained in docs/API_CONTRACTS.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "id", "text", "deadlineMs"],
+  "properties": {
+    "v": {"description": "Contract version; anything else is rejected.", "const": 1},
+    "id": {"description": "Request id (UUID), echoed in the response.", "type": "string", "format": "uuid",
+           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
+    "text": {"description": "The Latin text as typed. The engine's limit is max_input_chars in config/engine.json.", "type": "string"},
+    "deadlineMs": {"description": "How long the caller waits for the model before the rule fallback answers.", "type": "integer", "minimum": 1}
+  }
+}

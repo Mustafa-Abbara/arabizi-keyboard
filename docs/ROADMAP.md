@@ -278,15 +278,18 @@ arabizi-keyboard/
                                             public let outcome: Outcome; public let latencyMs: Int }
    public enum Outcome: String, Codable { case model, fallbackTimeout, fallbackCheckFailed, fallbackModelUnavailable, passthrough }
    ```
+   Built, with the output checks (step 3) and `config/engine.json` (step 8): [API_CONTRACTS.md](API_CONTRACTS.md), [ADR 0018](decisions/0018-engine-contracts-checks-config.md).
 2. **(Moustafa) Protected spans** in `ArabiziCore` [Claude's recommendation]: before calling the model, replace URLs, emails, `@mentions`, emoji and **standalone numbers** with placeholders (`⟦0⟧`, `⟦1⟧` …) and put them back afterwards. A digit inside a word (`3am`, `7elo`) is **not** protected; it is a letter.
    Built with the rule fallback (a Swift port of B0 with a parity test against Python): `ArabiziCore/ProtectedSpans.swift` and `RuleConverter.swift`, decisions in [ADR 0016](decisions/0016-swift-rule-fallback.md).
 3. **(Moustafa) Output checks:** every placeholder comes back exactly once; output length is within 0.5–2× the input word count; no Latin text appears that was not in the input. If any check fails, use the rule fallback and set `outcome = fallbackCheckFailed`.
+   Built as `ArabiziCore/OutputChecks.swift`, with one word of slack on the length check so short messages can join words (ADR 0018 #3).
 4. **(Moustafa) `ArabiziLLM`:** llama.cpp XCFramework as a Swift Package `binaryTarget`; load the GGUF once and keep it warm; greedy decoding; stop at end of turn; hard deadline from config (default 1,500 ms) → rule fallback with `outcome = fallbackTimeout`.
    Checked 15 Oct 2026 ([ADR 0017](decisions/0017-llama-cpp-from-swift.md)): the XCFramework of release b11429 matches the export commit; prompts are pre-rendered because the framework has no Jinja templates; a Swift prototype ran Llama 3.2 1B and Qwen3-1.7B within the memory budget.
 5. **(Moustafa) `ArabiziEngineXPC`:** sandboxed XPC service with **no** `com.apple.security.network.client` entitlement. The IME talks to it over a small XPC protocol (`convert`, `status`). If the service crashes, the IME restarts it and uses the rules meanwhile.
 6. **(Moustafa) `arabizi-cli`:** reads `ConvertRequest` JSON lines on stdin, writes `ConvertResponse` lines. `eval/run.py` uses it, so the eval measures the **real Swift engine**, not only Python.
 7. **(Moustafa) CI** `.github/workflows/ci.yml` (see v1 S4 step 3 for the full YAML): `lint` (SwiftLint, ruff), `build-test` (`swift test` for the packages, `xcodebuild` build for the apps with `CODE_SIGNING_ALLOWED=NO`), `eval-smoke` (`pytest eval/tests` + the test-set freeze check + a 20-sentence regression run with the rule fallback only, since CI has no model), `secrets` (gitleaks). Add CodeQL and Dependabot as in v1 S4 steps 4–5. Then require these checks on `main` with `bootstrap.py protect --checks lint,build-test,eval-smoke`.
 8. **(Moustafa) Config** `config/engine.json` (typed `EngineConfig: Codable`, validated at startup): model path and SHA-256, deadline, max input length, feature flags. No magic numbers in code.
+   Built: the model is named by its id in `config/models.json` (file, SHA-256, prompt come from there); `use_model` stays false until ADR 0005 (ADR 0018 #5).
 
 **Deliverables:** packages + XPC service + CLI compiling, `docs/API_CONTRACTS.md`, schemas, CI green and required, CodeQL first scan, Dependabot.
 
