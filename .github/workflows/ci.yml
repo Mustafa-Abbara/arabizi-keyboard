@@ -35,6 +35,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: swift --version
       - run: swift test --package-path Packages/ArabiziCore
+      # ArabiziLLM pulls llama.cpp's 62 MB XCFramework (ADR 0017); SwiftPM keeps downloads in this cache. CI has no
+      # model weights, so the tests that need a model are skipped.
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/ArabiziLLM/Package.swift') }}
+      - run: swift test --package-path Packages/ArabiziLLM
       - run: scripts/build_ime.sh
 
   hygiene:

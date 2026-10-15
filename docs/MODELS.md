@@ -32,7 +32,7 @@ python3 scripts/fetch_models.py                          # the four Qwen files, 
 python3 scripts/fetch_models.py --accept-licence gemma --accept-licence llama   # only if those licences are accepted
 ```
 
-Not part of this step: the llama.cpp Swift library for the keyboard engine (P5) is fetched by Swift Package Manager during the build; its exact source and version are pinned when P5 starts (the release packaging changed in 2026 and is checked then). Fine-tuning downloads happen on Kaggle.
+Not part of this step: the llama.cpp Swift library for the keyboard engine (P5) is fetched by Swift Package Manager during the build; it is the official XCFramework of release b11429 (62 MB, same commit as Homebrew's build and the GGUF export), pinned by URL and checksum ([ADR 0017](decisions/0017-llama-cpp-from-swift.md)). Fine-tuning downloads happen on Kaggle.
 
 ## Licence acceptance log
 

@@ -27,4 +27,4 @@ The keyboard runs a small language model on the Mac only (ADR 0010), inside a sa
 - B1 and later runs record the llama.cpp version, model id, quantisation and SHA-256 in `metrics.json`.
 - The fine-tuned model (P4) must be exported to GGUF (llama.cpp's converter, on Kaggle) to be used.
 - MLX stays the fallback for on-device fine-tuning if Kaggle is unavailable (roadmap C5).
-- The Swift packaging of llama.cpp is checked and pinned at P5: its 2026 releases no longer list an XCFramework asset under the old name.
+- The Swift packaging of llama.cpp is checked and pinned at P5: its 2026 releases no longer list an XCFramework asset under the old name. **Update 15 Oct 2026:** checked, and this was wrong: every release still ships `llama-bNNNN-xcframework.zip`, including b11429 (= commit d81235049). See [ADR 0017](0017-llama-cpp-from-swift.md).
