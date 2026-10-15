@@ -40,7 +40,7 @@ From the notebook's **Output**, download per model:
 | the matching `.sha256` files | check with `shasum -a 256 models/<file>` |
 | each `run.json` | `train/runs/` (committed: hyperparameters, losses, versions; no private text) |
 
-Then tell Claude: the models get entries in `config/models.json` (with their SHA-256) and are scored on dev with the same harness as B0 and B1, without examples (the fine-tuned model has learnt the task).
+Then tell Claude: the models get entries in `config/models.json` (with their SHA-256 and the `prompt` prefix and suffix the engine needs, ADR 0017/0018) and are scored on dev with the same harness as B0 and B1, without examples (the fine-tuned model has learnt the task).
 
 ## Smoke run first (optional)
 
