@@ -2,12 +2,26 @@ import AppKit
 import ArabiziCore
 import Carbon
 import InputMethodKit
+import os
 
 /// Thin bridge between macOS key events and `Composer`. All behaviour lives in ArabiziCore (tested there).
 /// Never log what the user types: only key kinds and lengths.
 @objc(ArabiziInputController)
 final class ArabiziInputController: IMKInputController {
-    private var composer = Composer(convert: ToyTransliterator.convert)
+    /// The rule converter (P5 rule fallback), loaded once for all text fields from the rule files that
+    /// scripts/build_ime.sh copies into Resources. Without them the P1 toy converter keeps the keyboard usable.
+    private static let convert: @Sendable (String) -> String = {
+        let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
+        do {
+            let converter = try RuleConverter(rulesDirectory: Bundle.main.resourceURL ?? Bundle.main.bundleURL)
+            log.info("Rule converter loaded")
+            return { converter.convert($0) }
+        } catch {
+            log.error("Rule files not loaded (\(String(describing: error), privacy: .public)): using the toy converter")
+            return ToyTransliterator.convert
+        }
+    }()
+    private var composer = Composer(convert: ArabiziInputController.convert)
     /// Where the cursor was right after the last conversion, so ⌘Z can tell whether it moved since.
     private var conversionEnd: Int?
 

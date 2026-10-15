@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from arabizi_eval import b0, run
+from arabizi_eval import b0, parity, run
 from arabizi_eval import pairs as P
 from arabizi_eval.pairs_cli import held_out_quota, main
 
@@ -17,6 +17,7 @@ def folders(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "PRIVATE_DIR", private)
     monkeypatch.setattr(P, "MANIFEST_PATH", public / "manifest.json")
     monkeypatch.setattr(b0, "LEXICON_PATH", tmp_path / "lexicon.json")
+    monkeypatch.setattr(parity, "FIXTURE", tmp_path / "b0_parity.json")  # `pairs lexicon` rewrites it
     monkeypatch.setattr(run, "RESULTS_DIR", tmp_path / "results")
     monkeypatch.setattr(run, "PRIVATE_RESULTS_DIR", tmp_path / "results" / "private")
     public_row = {"id": "ai-0001", "arabizi": "shu 3am ta3mel ya 7abibi", "arabic": "شو عم تعمل يا حبيبي",
@@ -71,6 +72,7 @@ def test_public_dictionary_never_learns_private_words(folders):
     assert main(["lexicon"]) == 0
     lexicon = (tmp / "lexicon.json").read_text(encoding="utf-8")
     assert "sirrewordzz" not in lexicon and "shu" in json.loads(lexicon)["words"]
+    assert "sirrewordzz" not in (tmp / "b0_parity.json").read_text(encoding="utf-8")  # the Swift fixture is public too
 
 
 def test_runs_with_private_rows_go_to_the_private_results_folder(folders):

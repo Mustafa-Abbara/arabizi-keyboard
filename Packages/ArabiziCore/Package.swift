@@ -10,6 +10,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "ArabiziCore"),
-        .testTarget(name: "ArabiziCoreTests", dependencies: ["ArabiziCore"]),
+        // Fixtures are read from the source tree (like data/rules), not bundled.
+        .testTarget(name: "ArabiziCoreTests", dependencies: ["ArabiziCore"], exclude: ["Fixtures"]),
     ]
 )
