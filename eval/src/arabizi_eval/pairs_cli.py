@@ -436,26 +436,127 @@ def publish_review_path() -> Path:
     return P.PRIVATE_DIR.parent / "publish_review.json"
 
 
+def publish_sheet_path() -> Path:
+    """The spreadsheet for choosing rows to publish; in data/private, so never committed."""
+    return P.PRIVATE_DIR.parent / "publish_review.xlsx"
+
+
+YES = {"y", "yes", "x", "1", "true", "✓", "✔"}
+NO = {"n", "no", "0", "false"}
+
+
+def _declined() -> set[str]:
+    review = publish_review_path()
+    return set(json.loads(review.read_text(encoding="utf-8"))["declined"]) if review.exists() else set()
+
+
+def _save_declined(declined: set[str]) -> None:
+    publish_review_path().write_text(json.dumps({"declined": sorted(declined)}, indent=1) + "\n", encoding="utf-8")
+
+
+def _private_held_out() -> list[dict]:
+    if not P.PRIVATE_DIR.exists():
+        return []
+    return [row for split in ("test", "dev") for _, row, err in P.read_jsonl(path_for(split, private=True)) if not err]
+
+
+def _publish_row(row: dict) -> None:
+    """Move one private held-out row to the public file of its split, with the chat label replaced."""
+    private_path = path_for(row["split"], private=True)
+    rewrite(private_path, [r for _, r, err in P.read_jsonl(private_path) if not err and r["id"] != row["id"]])
+    append(path_for(row["split"]), row | {"source": PUBLISHED_SOURCE})
+
+
+def _publish_summary(published: Counter) -> None:
+    from arabizi_eval import parity
+
+    if published:
+        parity.write()  # public dev rows are part of the Swift parity fixture
+    public = Counter(r["split"] for r in all_rows(include_private=False) if r.get("split") in ("test", "dev"))
+    print(f"published {sum(published.values())} rows ({published['test']} test, {published['dev']} dev); public "
+          f"held-out now {public['test']} test + {public['dev']} dev. Commit data/pairs/test.jsonl, dev.jsonl and "
+          "the parity fixture in a PR; freeze only after `pairs check` has covered every row.")
+
+
+def _write_publish_sheet(rows: list[dict]) -> Path:
+    import openpyxl
+    from openpyxl.styles import Alignment, Font
+
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "publish"
+    sheet.append(["publish", "split", "arabizi", "arabic", "id"])
+    for row in rows:
+        sheet.append(["", row["split"], row["arabizi"], row["arabic"], row["id"]])
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for cell in sheet["D"][1:]:
+        cell.alignment = Alignment(horizontal="right", readingOrder=2)  # right to left
+    for column, width in zip("ABCDE", (9, 6, 60, 60, 10), strict=True):
+        sheet.column_dimensions[column].width = width
+    sheet.freeze_panes = "A2"
+    path = publish_sheet_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    book.save(path)
+    return path
+
+
+def _apply_publish_sheet(path: Path) -> int:
+    """Publish the rows marked y in the sheet, remember the rows marked n, leave the blank ones for later."""
+    by_id = {row["id"]: row for row in _private_held_out()}
+    declined = _declined()
+    published, changed, gone = Counter(), [], 0
+    for line in read_sheet(path):
+        row = by_id.get(str(line.get("id") or "").strip())
+        answer = str(line.get("publish") or "").strip().lower()
+        if row is None:
+            gone += answer in YES  # already published, or not a private held-out id
+            continue
+        if answer in YES:
+            if (str(line.get("arabizi") or ""), str(line.get("arabic") or "")) != (row["arabizi"], row["arabic"]):
+                changed.append(row["id"])  # the sheet is for choosing, not editing: edits go through `pairs check`
+                continue
+            _publish_row(row)
+            published[row["split"]] += 1
+        elif answer in NO:
+            declined.add(row["id"])
+    _save_declined(declined)
+    if changed:
+        print(f"Not published, the text was changed in the sheet: {', '.join(changed)}. Fix spelling with "
+              "`pairs check`, then mark them again.")
+    if gone:
+        print(f"{gone} rows marked y were already public or unknown; skipped.")
+    _publish_summary(published)
+    return 1 if changed else 0
+
+
 def cmd_publish(args: argparse.Namespace) -> int:
     """Move private test/dev rows that Moustafa chooses into the public files, before the freeze (ADR 0014).
 
-    Each row is shown in this terminal only. A published row keeps its id, split, text, date and check; its source
-    becomes PUBLISHED_SOURCE, so the private chat label is never published. Declined rows are remembered in
-    data/private/publish_review.json and skipped next time.
+    Two ways to choose: one row at a time in the terminal, or (better for Arabic, which many terminals cannot lay
+    out) `--sheet` writes data/private/publish_review.xlsx to mark with y/n in Numbers or Excel and `--apply` reads
+    it back. A published row keeps its id, split, text, date and check; its source becomes PUBLISHED_SOURCE, so the
+    private chat label is never published. Declined rows are remembered in data/private/publish_review.json.
     """
-    from arabizi_eval import parity
-
     if P.MANIFEST_PATH.exists():
         print("The test set is frozen: publishing rows would change it. Publish before `pairs freeze`, or plan a new "
               "freeze version with a reason (docs/DATA.md).")
         return 1
-    review = publish_review_path()
-    declined = set(json.loads(review.read_text(encoding="utf-8"))["declined"]) if review.exists() else set()
-    candidates = [row for split in ("test", "dev") for _, row, err in P.read_jsonl(path_for(split, private=True))
-                  if not err and row["id"] not in declined] if P.PRIVATE_DIR.exists() else []
+    if args.apply:
+        return _apply_publish_sheet(Path(args.apply))
+    declined = _declined()
+    candidates = [row for row in _private_held_out() if row["id"] not in declined]
     random.Random(args.seed).shuffle(candidates)  # test and dev mixed, so the published share stays near 70/30
     if not candidates:
         print("No private test/dev rows left to review.")
+        return 0
+    if args.sheet:
+        path = _write_publish_sheet(candidates)
+        print(f"wrote {path.relative_to(P.ROOT) if path.is_relative_to(P.ROOT) else path} ({len(candidates)} rows; "
+              "never committed). Open it in Numbers or Excel (not Google Sheets: it holds private text), type y in "
+              "the publish column for each row with nothing personal (no names, places, other people or private "
+              "details), n to keep it private, or leave it blank to decide later. Save it as .xlsx (Numbers: File > "
+              f"Export To > Excel, same name), then run:\n  uv run --project eval pairs publish --apply {path}")
         return 0
     print(f"{len(candidates)} private test/dev rows to review. Publish a row only if it holds nothing personal: no "
           "names, places, other people, plans or details you would not post publicly.\n"
@@ -470,18 +571,12 @@ def cmd_publish(args: argparse.Namespace) -> int:
             break
         if answer != "y":
             declined.add(row["id"])
-            review.write_text(json.dumps({"declined": sorted(declined)}, indent=1) + "\n", encoding="utf-8")
+            _save_declined(declined)
             continue
-        private_path = path_for(row["split"], private=True)
-        rewrite(private_path, [r for _, r, err in P.read_jsonl(private_path) if not err and r["id"] != row["id"]])
-        append(path_for(row["split"]), row | {"source": PUBLISHED_SOURCE})
+        _publish_row(row)
         published[row["split"]] += 1
-    if published:
-        parity.write()  # public dev rows are part of the Swift parity fixture
-    public = Counter(r["split"] for r in all_rows(include_private=False) if r.get("split") in ("test", "dev"))
-    print(f"\npublished {sum(published.values())} rows ({published['test']} test, {published['dev']} dev); public "
-          f"held-out now {public['test']} test + {public['dev']} dev. Commit data/pairs/test.jsonl, dev.jsonl and "
-          "the parity fixture in a PR; freeze only after `pairs check` has covered every row.")
+    print()
+    _publish_summary(published)
     return 0
 
 
@@ -630,6 +725,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("stats", help="counts and progress")
     pub = sub.add_parser("publish", help="choose private chat test/dev rows to make public (before the freeze)")
     pub.add_argument("--target", type=int, help="stop after publishing this many rows")
+    pub.add_argument("--sheet", action="store_true", help="write a spreadsheet to choose in, instead of the terminal")
+    pub.add_argument("--apply", metavar="FILE", help="publish the rows marked y in that spreadsheet")
     pub.add_argument("--seed", type=int, default=2026, help="order in which rows are shown")
     freeze = sub.add_parser("freeze", help="freeze the test and dev sets (roadmap P2 step 4)")
     freeze.add_argument("--version", default="testset-v1.0")

@@ -34,7 +34,7 @@ With only 35 public test rows, anyone checking the results from the repo gets a 
 
 | # | Decision | Source |
 |---|---|---|
-| 7 | `pairs publish` shows each private test/dev row only in Moustafa's terminal; he approves rows one by one. Approved rows move to the public files unchanged except `source`, which becomes `own-chat-published` (the chat labels may name people). Declined ids are kept in `data/private/` so they are not asked again. Training rows are never published. It refuses after the freeze. | Mechanism **Claude's recommendation** |
+| 7 | `pairs publish` shows each private test/dev row only to Moustafa, in a spreadsheet kept in `data/private/` (`--sheet`, then `--apply`; terminals often cannot display Arabic) or in the terminal; he approves rows one by one. Approved rows move to the public files unchanged except `source`, which becomes `own-chat-published` (the chat labels may name people). Declined ids are kept in `data/private/` so they are not asked again. Training rows are never published. It refuses after the freeze. | Mechanism **Claude's recommendation** |
 | 8 | Published rows keep their split, so the public set stays close to 70/30, and keep their id, date and `checked_by`; `pairs check` still covers them if they are unchecked. | **Claude's recommendation** |
 
 Consequence: the public held-out set grows by the number of rows published; results on the published rows become reproducible from the repo, and the private remainder stays aggregate-only.

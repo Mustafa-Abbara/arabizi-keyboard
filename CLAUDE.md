@@ -37,7 +37,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 
 **Next steps, in order:**
 1. **Moustafa, 16 Oct:** `uv run --project eval pairs check` for the 300 private rows (49 of the 50 sheet pairs were checked on 15 Oct; their `checked_by` edits are uncommitted and go in the freeze PR).
-2. **Moustafa, before the freeze:** `uv run --project eval pairs publish` (choose private chat test/dev rows with nothing personal to make public; aim for ~100 so the public test set is ~100 rows; ADR 0014 amendment). Claude commits the public files and parity fixture in a PR.
+2. **Moustafa, before the freeze:** `uv run --project eval pairs publish --sheet`, mark y/n in Numbers, then `pairs publish --apply data/private/publish_review.xlsx` (choose private chat test/dev rows with nothing personal to make public; aim for ~100 so the public test set is ~100 rows; ADR 0014 amendment). Claude commits the public files and parity fixture in a PR.
 3. **Moustafa:** `uv run --project eval pairs freeze` (or `--allow-unchecked`; the count is recorded). Then Claude commits `data/pairs/manifest.json` in a PR with the **testset-change** label; after merge, tag `testset-v1.0`.
 4. **Optional before the freeze:** Kaggle smoke run with `pairs export-train --public-only` and `--limit 200 --epochs 1` (TRAINING.md), to catch setup problems.
 5. **Moustafa, after the freeze:** `pairs variants`, `pairs export-train` (with private rows), upload `build/train-export/` as a **private** Kaggle dataset, run the notebook (GPU T4, Internet on), download the two `.gguf` (→ `models/`) and `run.json` (→ `train/runs/`).

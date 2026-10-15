@@ -129,3 +129,35 @@ def test_publish_refuses_after_the_freeze(folders, capsys):
     P.MANIFEST_PATH.write_text("{}", encoding="utf-8")
     assert main(["publish"]) == 1
     assert "frozen" in capsys.readouterr().out
+
+
+def test_publish_through_a_spreadsheet(folders, monkeypatch):
+    import openpyxl
+
+    from arabizi_eval import pairs_cli
+
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    monkeypatch.setattr(parity, "write", lambda: None)
+    assert main(["publish", "--sheet"]) == 0
+    sheet_path = pairs_cli.publish_sheet_path()
+    assert sheet_path.is_relative_to(tmp)  # written next to the private data, never in the public folder
+
+    book = openpyxl.load_workbook(sheet_path)
+    sheet = book.active
+    assert [c.value for c in sheet[1]] == ["publish", "split", "arabizi", "arabic", "id"]
+    marked = {sheet.cell(2, 5).value, sheet.cell(3, 5).value}
+    sheet.cell(2, 1, "y")
+    sheet.cell(3, 1, "Y")
+    sheet.cell(4, 1, "n")
+    sheet.cell(5, 1, "y")
+    sheet.cell(5, 4, sheet.cell(5, 4).value + " edited")  # text changed in the sheet: not published
+    book.save(sheet_path)
+
+    assert main(["publish", "--apply", str(sheet_path)]) == 1  # 1: one row was refused
+    moved = {r["id"] for name in ("test.jsonl", "dev.jsonl") if (public / name).exists()
+             for _, r, _ in P.read_jsonl(public / name)}
+    assert moved == marked
+    declined = json.loads(pairs_cli.publish_review_path().read_text(encoding="utf-8"))["declined"]
+    assert declined == [sheet.cell(4, 5).value]
+    assert P.validate().ok
