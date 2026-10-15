@@ -145,13 +145,13 @@ def test_publish_through_a_spreadsheet(folders, monkeypatch):
 
     book = openpyxl.load_workbook(sheet_path)
     sheet = book.active
-    assert [c.value for c in sheet[1]] == ["publish", "split", "arabizi", "arabic", "id"]
+    assert [c.value for c in sheet[1]] == ["arabizi", "arabic", "publish", "split", "id"]
     marked = {sheet.cell(2, 5).value, sheet.cell(3, 5).value}
-    sheet.cell(2, 1, "y")
-    sheet.cell(3, 1, "Y")
-    sheet.cell(4, 1, "n")
-    sheet.cell(5, 1, "y")
-    sheet.cell(5, 4, sheet.cell(5, 4).value + " edited")  # text changed in the sheet: not published
+    sheet.cell(2, 3, "y")
+    sheet.cell(3, 3, "Y")
+    sheet.cell(4, 3, "n")
+    sheet.cell(5, 3, "y")
+    sheet.cell(5, 2, sheet.cell(5, 2).value + " edited")  # text changed in the sheet: not published
     book.save(sheet_path)
 
     assert main(["publish", "--apply", str(sheet_path)]) == 1  # 1: one row was refused
@@ -187,23 +187,25 @@ def test_check_through_a_spreadsheet(folders):
     assert path.is_relative_to(tmp)
     book = openpyxl.load_workbook(path)
     sheet = book.active
-    assert [c.value for c in sheet[1]] == ["ok", "arabizi", "arabic", "accepted", "split", "id"]
+    assert [c.value for c in sheet[1]] == ["arabizi", "arabic", "ok", "accepted", "split", "id"]
     assert {sheet.cell(r, 5).value for r in range(2, sheet.max_row + 1)} <= {"test", "dev"}  # no training rows
-    ids = {r: sheet.cell(r, 6).value for r in range(2, 7)}
-    sheet.cell(2, 1, "y")  # correct as it is
-    sheet.cell(3, 1, "Y")
-    sheet.cell(3, 3, "‏" + sheet.cell(3, 3).value + "ك")  # fixed in the sheet (with a stray direction mark)
-    sheet.cell(4, 1, "y")
-    sheet.cell(4, 2, sheet.cell(4, 2).value + " x")  # Arabizi changed: refused
-    sheet.cell(5, 1, "y")
-    sheet.cell(5, 3, sheet.cell(5, 3).value + "ً")  # diacritic: breaks a rule, refused
+    ids = {r: sheet.cell(r, 6).value for r in range(2, 8)}
+    sheet.cell(2, 3, "y")  # correct as it is
+    sheet.cell(3, 3, "Y")
+    sheet.cell(3, 2, "\u200f" + sheet.cell(3, 2).value + "ك")  # fixed in the sheet, with a stray direction mark
+    sheet.cell(4, 3, "y")
+    sheet.cell(4, 1, sheet.cell(4, 1).value + " x")  # Arabizi changed: refused
+    sheet.cell(5, 3, "y")
+    sheet.cell(5, 2, sheet.cell(5, 2).value + "ً")  # a diacritic breaks a rule: refused
+    sheet.cell(7, 4, "y")  # typed one column off, in accepted: taken as ok
     book.save(path)  # row 6 left blank: checked later
 
     assert main(["check", "--apply", str(path)]) == 1
     rows = {r["id"]: r for r in pairs_cli.private_rows()}
-    assert {i for i, r in rows.items() if r.get("checked_by") == pairs_cli.CHECKER} == {ids[2], ids[3]}
-    assert rows[ids[3]]["arabic"].endswith("كيفك") and "‏" not in rows[ids[3]]["arabic"]
-    assert rows[ids[5]]["arabic"] == sheet.cell(5, 3).value[:-1]  # the bad edit was not saved
+    assert {i for i, r in rows.items() if r.get("checked_by") == pairs_cli.CHECKER} == {ids[2], ids[3], ids[7]}
+    assert rows[ids[3]]["arabic"].endswith("كيفك") and "\u200f" not in rows[ids[3]]["arabic"]
+    assert rows[ids[7]]["accepted"] == {}  # the stray y did not become a variant
+    assert rows[ids[5]]["arabic"] == sheet.cell(5, 2).value[:-1]  # the bad edit was not saved
     assert P.validate().ok
 
     assert main(["check", "--sheet", "--train"]) == 0

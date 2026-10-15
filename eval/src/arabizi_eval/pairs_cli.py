@@ -485,14 +485,14 @@ def _write_publish_sheet(rows: list[dict]) -> Path:
     book = openpyxl.Workbook()
     sheet = book.active
     sheet.title = "publish"
-    sheet.append(["publish", "split", "arabizi", "arabic", "id"])
+    sheet.append(["arabizi", "arabic", "publish", "split", "id"])  # the choice sits right after the Arabic
     for row in rows:
-        sheet.append(["", row["split"], row["arabizi"], row["arabic"], row["id"]])
+        sheet.append([row["arabizi"], row["arabic"], "", row["split"], row["id"]])
     for cell in sheet[1]:
         cell.font = Font(bold=True)
-    for cell in sheet["D"][1:]:
+    for cell in sheet["B"][1:]:
         cell.alignment = Alignment(horizontal="right", readingOrder=2)  # right to left
-    for column, width in zip("ABCDE", (9, 6, 60, 60, 10), strict=True):
+    for column, width in zip("ABCDE", (60, 60, 9, 6, 10), strict=True):
         sheet.column_dimensions[column].width = width
     sheet.freeze_panes = "A2"
     path = publish_sheet_path()
@@ -555,8 +555,11 @@ def cmd_publish(args: argparse.Namespace) -> int:
         print(f"wrote {path.relative_to(P.ROOT) if path.is_relative_to(P.ROOT) else path} ({len(candidates)} rows; "
               "never committed). Open it in Numbers or Excel (not Google Sheets: it holds private text), type y in "
               "the publish column for each row with nothing personal (no names, places, other people or private "
-              "details), n to keep it private, or leave it blank to decide later. Save it as .xlsx (Numbers: File > "
-              f"Export To > Excel, same name), then run:\n  uv run --project eval pairs publish --apply {path}")
+              "details), n to keep it private, or leave it blank to decide later. Export it as .xlsx into "
+              "data/private, not iCloud Drive (Numbers: File > Export To > Excel, then choose this folder; close the "
+              "Numbers copy "
+              "without saving it to iCloud, which would upload private text), then run:\n"
+              f"  uv run --project eval pairs publish --apply {path}")
         return 0
     print(f"{len(candidates)} private test/dev rows to review. Publish a row only if it holds nothing personal: no "
           "names, places, other people, plans or details you would not post publicly.\n"
@@ -612,15 +615,16 @@ def _write_check_sheet(rows: list[dict]) -> Path:
     book = openpyxl.Workbook()
     sheet = book.active
     sheet.title = "check"
-    sheet.append(["ok", "arabizi", "arabic", "accepted", "split", "id"])
+    # ok sits right after the Arabic, where the eye ends up (a first-column ok was missed: y went into accepted).
+    sheet.append(["arabizi", "arabic", "ok", "accepted", "split", "id"])
     for row in rows:
-        sheet.append(["", row["arabizi"], row["arabic"], format_accepted(row["accepted"]), row["split"], row["id"]])
+        sheet.append([row["arabizi"], row["arabic"], "", format_accepted(row["accepted"]), row["split"], row["id"]])
     for cell in sheet[1]:
         cell.font = Font(bold=True)
-    for column in ("C", "D"):
+    for column in ("B", "D"):
         for cell in sheet[column][1:]:
             cell.alignment = Alignment(horizontal="right", readingOrder=2)  # right to left
-    for column, width in zip("ABCDEF", (6, 60, 60, 30, 6, 10), strict=True):
+    for column, width in zip("ABCDEF", (60, 60, 8, 30, 6, 10), strict=True):
         sheet.column_dimensions[column].width = width
     sheet.freeze_panes = "A2"
     path = check_sheet_path()
@@ -647,8 +651,19 @@ def _check_candidates(cutoff: date, include_train: bool) -> list[dict]:
 
 def _apply_check_sheet(sheet_path: Path, cutoff: date) -> int:
     """Mark the rows with ok = y as checked, taking the Arabic and accepted variants as fixed in the sheet."""
-    marks = {_sheet_text(line.get("id")): line for line in read_sheet(sheet_path)
-             if _sheet_text(line.get("ok")).lower() in YES}
+    marks, keep_accepted = {}, set()
+    for line in read_sheet(sheet_path):
+        row_id = _sheet_text(line.get("id"))
+        ok, accepted = _sheet_text(line.get("ok")).lower(), _sheet_text(line.get("accepted"))
+        if not ok and accepted.lower() in YES:
+            # A check mark typed one column off (accepted instead of ok). "y" can never be a variant, so it is
+            # read as ok and the row keeps the accepted variants it had.
+            ok = "y"
+            keep_accepted.add(row_id)
+        if ok in YES:
+            marks[row_id] = line
+    if keep_accepted:
+        print(f"{len(keep_accepted)} row(s) had the y in the accepted column; taken as ok.")
     checked, refused = 0, []
     for path in P.pair_files():
         lines = P.read_jsonl(path)
@@ -670,7 +685,8 @@ def _apply_check_sheet(sheet_path: Path, cutoff: date) -> int:
             original = dict(row)
             row["arabic"] = _sheet_text(line.get("arabic")) or row["arabic"]
             try:
-                row["accepted"] = parse_accepted(_sheet_text(line.get("accepted")))
+                if row["id"] not in keep_accepted:
+                    row["accepted"] = parse_accepted(_sheet_text(line.get("accepted")))
             except ValueError as exc:
                 refused.append(f"{row['id']}: {exc}")
                 row.clear()
@@ -717,8 +733,9 @@ def cmd_check(args: argparse.Namespace) -> int:
               f"written before {cutoff} (never committed). Re-read docs/SPELLING.md, then open it in Numbers or Excel "
               "(not Google Sheets: it can hold private text). For each row: fix the arabic (and accepted, as "
               "primary=variant; ...) if needed, then type y in ok. Leave ok blank to check it later. Do not change "
-              "the arabizi. Save as .xlsx (Numbers: File > Export To > Excel, same name), then run:\n"
-              f"  uv run --project eval pairs check --apply {path}")
+              "the arabizi. Export as .xlsx into data/private, not iCloud Drive (Numbers: File > Export To > Excel, "
+              "then choose this folder in the save dialog; close the Numbers copy without saving it to iCloud), then "
+              f"run:\n  uv run --project eval pairs check --apply {path}")
         return 0
     print(f"Self-check of rows written before {cutoff}. Re-read docs/SPELLING.md first.")
     print("Enter = correct, e = edit Arabic, a = edit accepted, s = skip, q = quit\n")
