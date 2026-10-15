@@ -53,6 +53,7 @@ def test_join_clitic_never_doubles_the_article(prefix, word, joined):
     ("b3at 100$ la", "بعت 100$ ل"),  # numbers untouched; a trailing clitic stays
     ("shuf www.lau.edu, @rami #lebanon 😂", "شوف www.lau.edu, @rami #lebanon 😂"),
     ("3al 7:30?", "عال 7:30؟"),
+    ("shu\nkifak 3am", "shu\nkifak عم"),  # a newline inside a token used to crash TOKEN.match
 ])
 def test_conversion(conv, arabizi, arabic):
     assert conv.convert(arabizi) == arabic
@@ -88,3 +89,10 @@ def test_committed_files_load():
     rules, lexicon = b0.load_rules(), b0.load_lexicon()
     assert rules["version"] == 1 and "w" in rules["clitics"]
     assert lexicon["words"] and lexicon["built_from"]["rows"] > 0
+
+
+def test_swift_parity_fixture_is_current():
+    # The Swift rule fallback (P5) is checked against this file; rebuild it when rules or the dictionary change.
+    from arabizi_eval import parity
+
+    assert parity.is_current(), "run `uv run --project eval python -m arabizi_eval.parity` and commit the fixture"

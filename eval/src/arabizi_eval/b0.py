@@ -22,7 +22,7 @@ from arabizi_eval import pairs as P
 
 RULES_PATH = P.ROOT / "data" / "rules" / "arabizi_to_arabic.json"
 LEXICON_PATH = P.ROOT / "data" / "rules" / "arabizi_lexicon.json"
-TOKEN = re.compile(r"^(\W*)(.*?)(\W*)$")
+TOKEN = re.compile(r"^(\W*)(.*?)(\W*)$", re.DOTALL)  # DOTALL: a token holding a newline still matches
 WORD = re.compile(r"^[a-z0-9']+$")
 LATIN = re.compile(r"[A-Za-z]")
 VOWELS = set("aeiou")

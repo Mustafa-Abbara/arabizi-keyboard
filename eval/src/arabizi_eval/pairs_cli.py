@@ -279,6 +279,10 @@ def cmd_lexicon(args: argparse.Namespace) -> int:
     built = lexicon["built_from"]
     print(f"wrote {b0.LEXICON_PATH.name}: {len(lexicon['words'])} words, {len(lexicon['keep_latin'])} kept in Latin, "
           f"from {built['aligned_rows']} of {built['rows']} training rows that line up word for word")
+    from arabizi_eval import parity
+
+    parity.write()  # the Swift rule fallback is tested against B0's output with this dictionary
+    print(f"wrote {parity.FIXTURE.name} (Swift parity fixture): commit it with the dictionary")
     return 0
 
 

@@ -12,6 +12,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/ArabiziIME"
 cp "$PKG/Resources/Info.plist" "$APP/Contents/Info.plist"
+# The rule converter reads these at start-up (ArabiziCore RuleConverter, P5 rule fallback).
+cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$APP/Contents/Resources/"
 plutil -lint -s "$APP/Contents/Info.plist"
 swift "$PKG/Tools/make_icon.swift" "$APP/Contents/Resources/MenuIcon.tiff"
 codesign --force --sign - "$APP"

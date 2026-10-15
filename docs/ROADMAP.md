@@ -279,6 +279,7 @@ arabizi-keyboard/
    public enum Outcome: String, Codable { case model, fallbackTimeout, fallbackCheckFailed, fallbackModelUnavailable, passthrough }
    ```
 2. **(Moustafa) Protected spans** in `ArabiziCore` [Claude's recommendation]: before calling the model, replace URLs, emails, `@mentions`, emoji and **standalone numbers** with placeholders (`⟦0⟧`, `⟦1⟧` …) and put them back afterwards. A digit inside a word (`3am`, `7elo`) is **not** protected; it is a letter.
+   Built with the rule fallback (a Swift port of B0 with a parity test against Python): `ArabiziCore/ProtectedSpans.swift` and `RuleConverter.swift`, decisions in [ADR 0016](decisions/0016-swift-rule-fallback.md).
 3. **(Moustafa) Output checks:** every placeholder comes back exactly once; output length is within 0.5–2× the input word count; no Latin text appears that was not in the input. If any check fails, use the rule fallback and set `outcome = fallbackCheckFailed`.
 4. **(Moustafa) `ArabiziLLM`:** llama.cpp XCFramework as a Swift Package `binaryTarget`; load the GGUF once and keep it warm; greedy decoding; stop at end of turn; hard deadline from config (default 1,500 ms) → rule fallback with `outcome = fallbackTimeout`.
 5. **(Moustafa) `ArabiziEngineXPC`:** sandboxed XPC service with **no** `com.apple.security.network.client` entitlement. The IME talks to it over a small XPC protocol (`convert`, `status`). If the service crashes, the IME restarts it and uses the rules meanwhile.
