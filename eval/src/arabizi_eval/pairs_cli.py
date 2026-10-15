@@ -588,13 +588,138 @@ def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     return None
 
 
+BIDI_MARKS = re.compile("[\u200e\u200f\u202a-\u202e\u2066-\u2069]")  # spreadsheets may add these around Arabic
+
+
+def check_sheet_path() -> Path:
+    """The spreadsheet for the self-check; in data/private (it can hold private rows), so never committed."""
+    return P.PRIVATE_DIR.parent / "check_review.xlsx"
+
+
+def format_accepted(accepted: dict[str, list[str]]) -> str:
+    """{'هلق': ['هلأ']} -> 'هلق=هلأ', the form parse_accepted reads back."""
+    return "; ".join(f"{primary}={'|'.join(variants)}" for primary, variants in accepted.items())
+
+
+def _sheet_text(value: object) -> str:
+    return BIDI_MARKS.sub("", str(value if value is not None else "")).strip()
+
+
+def _write_check_sheet(rows: list[dict]) -> Path:
+    import openpyxl
+    from openpyxl.styles import Alignment, Font
+
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "check"
+    sheet.append(["ok", "arabizi", "arabic", "accepted", "split", "id"])
+    for row in rows:
+        sheet.append(["", row["arabizi"], row["arabic"], format_accepted(row["accepted"]), row["split"], row["id"]])
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for column in ("C", "D"):
+        for cell in sheet[column][1:]:
+            cell.alignment = Alignment(horizontal="right", readingOrder=2)  # right to left
+    for column, width in zip("ABCDEF", (6, 60, 60, 30, 6, 10), strict=True):
+        sheet.column_dimensions[column].width = width
+    sheet.freeze_panes = "A2"
+    path = check_sheet_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    book.save(path)
+    return path
+
+
+def _check_candidates(cutoff: date, include_train: bool) -> list[dict]:
+    """Unchecked rows old enough to check: test and dev, plus hand-written training rows if asked (never variants)."""
+    out = []
+    for path in P.pair_files():
+        lines = P.read_jsonl(path)
+        if any(err for _, _, err in lines):
+            print(f"Skipping {path.name}: it has broken lines. Run `pairs validate` and fix them first.")
+            continue
+        for _, row, _ in lines:
+            if row.get("checked_by") or date.fromisoformat(row["date"]) >= cutoff:
+                continue
+            if row["split"] in ("test", "dev") or (include_train and row["method"] in ("hand", "ai_checked")):
+                out.append(row)
+    return out
+
+
+def _apply_check_sheet(sheet_path: Path, cutoff: date) -> int:
+    """Mark the rows with ok = y as checked, taking the Arabic and accepted variants as fixed in the sheet."""
+    marks = {_sheet_text(line.get("id")): line for line in read_sheet(sheet_path)
+             if _sheet_text(line.get("ok")).lower() in YES}
+    checked, refused = 0, []
+    for path in P.pair_files():
+        lines = P.read_jsonl(path)
+        if any(err for _, _, err in lines):
+            print(f"Skipping {path.name}: it has broken lines. Run `pairs validate` and fix them first.")
+            continue
+        rows = [row for _, row, _ in lines]
+        changed = False
+        for row in rows:
+            line = marks.pop(row["id"], None)
+            if line is None or row.get("checked_by"):
+                continue
+            if date.fromisoformat(row["date"]) >= cutoff:
+                refused.append(f"{row['id']}: written less than {(date.today() - cutoff).days} day(s) ago")
+                continue
+            if _sheet_text(line.get("arabizi")) != row["arabizi"].strip():
+                refused.append(f"{row['id']}: the Arabizi was changed (the self-check only fixes the Arabic)")
+                continue
+            original = dict(row)
+            row["arabic"] = _sheet_text(line.get("arabic")) or row["arabic"]
+            try:
+                row["accepted"] = parse_accepted(_sheet_text(line.get("accepted")))
+            except ValueError as exc:
+                refused.append(f"{row['id']}: {exc}")
+                row.clear()
+                row.update(original)
+                continue
+            errors = P.row_errors(row)
+            if errors:
+                refused.append(f"{row['id']}: " + "; ".join(errors))
+                row.clear()
+                row.update(original)
+                continue
+            row["checked_by"] = CHECKER
+            changed = True
+            checked += 1
+        if changed:
+            rewrite(path, rows)
+    for row_id in marks:
+        refused.append(f"{row_id}: no unchecked row with this id")
+    for message in refused:
+        print(f"  not checked: {message}")
+    rest = f", {len(refused)} not (fix them in the sheet and apply again)" if refused else ""
+    print(f"{checked} row(s) checked{rest}.")
+    return 1 if refused else 0
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     """Delayed self-check (ADR 0011) of unchecked rows.
 
     Rows only carry a date, so "at least N days" means written before the date N days ago: with --days 1, a row
     from yesterday waits until tomorrow, which guarantees >= 24 hours whatever time it was written.
+    `--sheet` writes data/private/check_review.xlsx to check in Numbers or Excel, which lay out Arabic correctly
+    (many terminals do not); `--apply` reads it back.
     """
     cutoff = date.today() - timedelta(days=args.days)
+    if args.apply:
+        return _apply_check_sheet(Path(args.apply), cutoff)
+    if args.sheet:
+        rows = _check_candidates(cutoff, args.train)
+        if not rows:
+            print(f"No unchecked rows written before {cutoff}.")
+            return 0
+        path = _write_check_sheet(rows)
+        print(f"wrote {path.relative_to(P.ROOT) if path.is_relative_to(P.ROOT) else path}: {len(rows)} unchecked rows "
+              f"written before {cutoff} (never committed). Re-read docs/SPELLING.md, then open it in Numbers or Excel "
+              "(not Google Sheets: it can hold private text). For each row: fix the arabic (and accepted, as "
+              "primary=variant; ...) if needed, then type y in ok. Leave ok blank to check it later. Do not change "
+              "the arabizi. Save as .xlsx (Numbers: File > Export To > Excel, same name), then run:\n"
+              f"  uv run --project eval pairs check --apply {path}")
+        return 0
     print(f"Self-check of rows written before {cutoff}. Re-read docs/SPELLING.md first.")
     print("Enter = correct, e = edit Arabic, a = edit accepted, s = skip, q = quit\n")
     checked = 0
@@ -722,6 +847,10 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
+    check.add_argument("--sheet", action="store_true", help="write a spreadsheet to check in, instead of the terminal")
+    check.add_argument("--apply", metavar="FILE", help="mark the rows with ok = y in that spreadsheet as checked")
+    check.add_argument("--train", action="store_true",
+                       help="with --sheet: include hand-written training rows too (never generated variants)")
     sub.add_parser("stats", help="counts and progress")
     pub = sub.add_parser("publish", help="choose private chat test/dev rows to make public (before the freeze)")
     pub.add_argument("--target", type=int, help="stop after publishing this many rows")

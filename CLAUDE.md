@@ -36,7 +36,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 | P6–P7 | Not started. |
 
 **Next steps, in order:**
-1. **Moustafa, 16 Oct:** `uv run --project eval pairs check` for the 300 private rows (49 of the 50 sheet pairs were checked on 15 Oct; their `checked_by` edits are uncommitted and go in the freeze PR).
+1. **Moustafa:** self-check in a spreadsheet: `uv run --project eval pairs check --sheet`, fix/mark `y` in Numbers, export .xlsx, `pairs check --apply data/private/check_review.xlsx`. The 49 public rows dated 13 Oct can be done now; the 300 private rows and 1 public row (dated 14 Oct) from 16 Oct. The 15 Oct terminal checks were made with unreadable Arabic and set aside (`git stash` "15 Oct pairs check"; drop it once redone).
 2. **Moustafa, before the freeze:** `uv run --project eval pairs publish --sheet`, mark y/n in Numbers, then `pairs publish --apply data/private/publish_review.xlsx` (choose private chat test/dev rows with nothing personal to make public; aim for ~100 so the public test set is ~100 rows; ADR 0014 amendment). Claude commits the public files and parity fixture in a PR.
 3. **Moustafa:** `uv run --project eval pairs freeze` (or `--allow-unchecked`; the count is recorded). Then Claude commits `data/pairs/manifest.json` in a PR with the **testset-change** label; after merge, tag `testset-v1.0`.
 4. **Optional before the freeze:** Kaggle smoke run with `pairs export-train --public-only` and `--limit 200 --epochs 1` (TRAINING.md), to catch setup problems.
@@ -51,3 +51,4 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 - Rules or dictionary changes: regenerate the Swift parity fixture (`uv run --project eval python -m arabizi_eval.parity`; `pairs lexicon` does it) in the same PR.
 - `pairs` CLI: add, import, import-batch, import-chats, variants, lexicon, export-train, check, stats, publish, freeze, validate. Variants (`pairs variants`) are generated, not committed.
 - Before adding commits to a PR branch, check the PR is still open: Moustafa merges quickly.
+- The app's terminal panel cannot display Arabic (unjoined, reversed): anything Moustafa must read in Arabic goes through a spreadsheet (`pairs check --sheet`, `pairs publish --sheet`), never the terminal.

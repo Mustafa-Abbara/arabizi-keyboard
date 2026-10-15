@@ -161,3 +161,52 @@ def test_publish_through_a_spreadsheet(folders, monkeypatch):
     declined = json.loads(pairs_cli.publish_review_path().read_text(encoding="utf-8"))["declined"]
     assert declined == [sheet.cell(4, 5).value]
     assert P.validate().ok
+
+
+def _age_private_rows(private_dir, when="2026-01-01"):
+    """Rows imported today are too new to check; give them an old date."""
+    for path in private_dir.glob("*.jsonl"):
+        rows = [r for _, r, _ in P.read_jsonl(path)]
+        path.write_text("".join(json.dumps(r | {"date": when}, ensure_ascii=False) + "\n" for r in rows),
+                        encoding="utf-8")
+
+
+def test_check_through_a_spreadsheet(folders):
+    import openpyxl
+
+    from arabizi_eval import pairs_cli
+
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    assert main(["check", "--sheet"]) == 0
+    assert not pairs_cli.check_sheet_path().exists()  # rows written today are not offered (>= 24 h rule)
+
+    _age_private_rows(private)
+    assert main(["check", "--sheet"]) == 0
+    path = pairs_cli.check_sheet_path()
+    assert path.is_relative_to(tmp)
+    book = openpyxl.load_workbook(path)
+    sheet = book.active
+    assert [c.value for c in sheet[1]] == ["ok", "arabizi", "arabic", "accepted", "split", "id"]
+    assert {sheet.cell(r, 5).value for r in range(2, sheet.max_row + 1)} <= {"test", "dev"}  # no training rows
+    ids = {r: sheet.cell(r, 6).value for r in range(2, 7)}
+    sheet.cell(2, 1, "y")  # correct as it is
+    sheet.cell(3, 1, "Y")
+    sheet.cell(3, 3, "‏" + sheet.cell(3, 3).value + "ك")  # fixed in the sheet (with a stray direction mark)
+    sheet.cell(4, 1, "y")
+    sheet.cell(4, 2, sheet.cell(4, 2).value + " x")  # Arabizi changed: refused
+    sheet.cell(5, 1, "y")
+    sheet.cell(5, 3, sheet.cell(5, 3).value + "ً")  # diacritic: breaks a rule, refused
+    book.save(path)  # row 6 left blank: checked later
+
+    assert main(["check", "--apply", str(path)]) == 1
+    rows = {r["id"]: r for r in pairs_cli.private_rows()}
+    assert {i for i, r in rows.items() if r.get("checked_by") == pairs_cli.CHECKER} == {ids[2], ids[3]}
+    assert rows[ids[3]]["arabic"].endswith("كيفك") and "‏" not in rows[ids[3]]["arabic"]
+    assert rows[ids[5]]["arabic"] == sheet.cell(5, 3).value[:-1]  # the bad edit was not saved
+    assert P.validate().ok
+
+    assert main(["check", "--sheet", "--train"]) == 0
+    sheet = openpyxl.load_workbook(path).active
+    splits = [sheet.cell(r, 5).value for r in range(2, sheet.max_row + 1)]
+    assert "train" in splits and ids[2] not in {sheet.cell(r, 6).value for r in range(2, sheet.max_row + 1)}
