@@ -8,6 +8,7 @@
   uv run --project eval pairs lexicon  # rebuild the B0 word dictionary from the train split
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
+  uv run --project eval pairs publish  # choose private chat test/dev rows to make public (before the freeze)
   uv run --project eval pairs freeze   # freeze the test and dev sets (roadmap P2 step 4)
   uv run --project eval pairs export-train  # training files for Kaggle (P4, ADR 0015)
   uv run --project eval pairs validate # same checks as the test suite
@@ -30,6 +31,7 @@ WRITER = "moustafa"
 CHECKER = "moustafa-delayed"
 DEV_SLOTS = {2, 5, 8}  # of every 10 hand-written held-out rows, 3 go to dev: 70/30 (roadmap P2 step 3)
 TARGETS = {"held_out": 300, "held_out_goal": 350, "train": 2000, "train_hand_or_public": 400}  # ADR 0011
+PUBLISHED_SOURCE = "own-chat-published"  # replaces the private chat label, which may name a person (ADR 0014)
 SMALL_WORDS = re.compile(r"(?<![a-z0-9])(la|ma|3a|3al|w|b|bi|bel|bil)(?![a-z0-9])", re.IGNORECASE)
 
 
@@ -429,6 +431,60 @@ def cmd_freeze(args: argparse.Namespace) -> int:
     return 0
 
 
+def publish_review_path() -> Path:
+    """Ids already declined by `pairs publish`; in data/private, so never committed."""
+    return P.PRIVATE_DIR.parent / "publish_review.json"
+
+
+def cmd_publish(args: argparse.Namespace) -> int:
+    """Move private test/dev rows that Moustafa chooses into the public files, before the freeze (ADR 0014).
+
+    Each row is shown in this terminal only. A published row keeps its id, split, text, date and check; its source
+    becomes PUBLISHED_SOURCE, so the private chat label is never published. Declined rows are remembered in
+    data/private/publish_review.json and skipped next time.
+    """
+    from arabizi_eval import parity
+
+    if P.MANIFEST_PATH.exists():
+        print("The test set is frozen: publishing rows would change it. Publish before `pairs freeze`, or plan a new "
+              "freeze version with a reason (docs/DATA.md).")
+        return 1
+    review = publish_review_path()
+    declined = set(json.loads(review.read_text(encoding="utf-8"))["declined"]) if review.exists() else set()
+    candidates = [row for split in ("test", "dev") for _, row, err in P.read_jsonl(path_for(split, private=True))
+                  if not err and row["id"] not in declined] if P.PRIVATE_DIR.exists() else []
+    random.Random(args.seed).shuffle(candidates)  # test and dev mixed, so the published share stays near 70/30
+    if not candidates:
+        print("No private test/dev rows left to review.")
+        return 0
+    print(f"{len(candidates)} private test/dev rows to review. Publish a row only if it holds nothing personal: no "
+          "names, places, other people, plans or details you would not post publicly.\n"
+          "y = publish, Enter or n = keep private, q = stop (choices so far are saved)")
+    published = Counter()
+    for row in candidates:
+        if args.target and sum(published.values()) >= args.target:
+            break
+        print(f"\n[{row['split']}] {row['arabizi']}\n       {row['arabic']}")
+        answer = ask("  publish? [y/N/q] ").lower()
+        if answer == "q":
+            break
+        if answer != "y":
+            declined.add(row["id"])
+            review.write_text(json.dumps({"declined": sorted(declined)}, indent=1) + "\n", encoding="utf-8")
+            continue
+        private_path = path_for(row["split"], private=True)
+        rewrite(private_path, [r for _, r, err in P.read_jsonl(private_path) if not err and r["id"] != row["id"]])
+        append(path_for(row["split"]), row | {"source": PUBLISHED_SOURCE})
+        published[row["split"]] += 1
+    if published:
+        parity.write()  # public dev rows are part of the Swift parity fixture
+    public = Counter(r["split"] for r in all_rows(include_private=False) if r.get("split") in ("test", "dev"))
+    print(f"\npublished {sum(published.values())} rows ({published['test']} test, {published['dev']} dev); public "
+          f"held-out now {public['test']} test + {public['dev']} dev. Commit data/pairs/test.jsonl, dev.jsonl and "
+          "the parity fixture in a PR; freeze only after `pairs check` has covered every row.")
+    return 0
+
+
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     keys = P._dedupe_keys(row)
     for other in rows:
@@ -572,6 +628,9 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
     sub.add_parser("stats", help="counts and progress")
+    pub = sub.add_parser("publish", help="choose private chat test/dev rows to make public (before the freeze)")
+    pub.add_argument("--target", type=int, help="stop after publishing this many rows")
+    pub.add_argument("--seed", type=int, default=2026, help="order in which rows are shown")
     freeze = sub.add_parser("freeze", help="freeze the test and dev sets (roadmap P2 step 4)")
     freeze.add_argument("--version", default="testset-v1.0")
     freeze.add_argument("--reason", help="required when re-freezing: why the held-out data changed")
@@ -580,7 +639,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
                 "import-chats": cmd_import_chats, "variants": cmd_variants, "lexicon": cmd_lexicon,
-                "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze,
+                "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze, "publish": cmd_publish,
                 "export-train": cmd_export_train, "validate": cmd_validate}
     return commands[args.command](args)
 

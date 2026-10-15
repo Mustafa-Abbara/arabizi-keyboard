@@ -36,17 +36,18 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 | P6–P7 | Not started. |
 
 **Next steps, in order:**
-1. **Moustafa, 15 Oct:** `uv run --project eval pairs check` (delayed self-check; the 50 sheet pairs become eligible on 15 Oct, the 300 private ones on 16 Oct).
-2. **Moustafa:** `uv run --project eval pairs freeze` (or `--allow-unchecked`; the count is recorded). Then Claude commits `data/pairs/manifest.json` in a PR with the **testset-change** label; after merge, tag `testset-v1.0`.
-3. **Optional before the freeze:** Kaggle smoke run with `pairs export-train --public-only` and `--limit 200 --epochs 1` (TRAINING.md), to catch setup problems.
-4. **Moustafa, after the freeze:** `pairs variants`, `pairs export-train` (with private rows), upload `build/train-export/` as a **private** Kaggle dataset, run the notebook (GPU T4, Internet on), download the two `.gguf` (→ `models/`) and `run.json` (→ `train/runs/`).
-5. **Claude, then:** verify hashes, add the fine-tuned models to `config/models.json` (with their `prompt`, ADR 0018), score on dev against B0/B1 (paired bootstrap), write ADR 0005 (final model).
-6. **Claude, can start any time (no fine-tuned model needed):** rest of P5: the XPC service (step 5: copies `llama.framework` and the model into the bundle, ADR 0017; no network entitlement) and `arabizi-cli` (step 6), both on the ADR 0018 contracts. The Swift rule fallback and protected spans are done (ADR 0016).
+1. **Moustafa, 16 Oct:** `uv run --project eval pairs check` for the 300 private rows (49 of the 50 sheet pairs were checked on 15 Oct; their `checked_by` edits are uncommitted and go in the freeze PR).
+2. **Moustafa, before the freeze:** `uv run --project eval pairs publish` (choose private chat test/dev rows with nothing personal to make public; aim for ~100 so the public test set is ~100 rows; ADR 0014 amendment). Claude commits the public files and parity fixture in a PR.
+3. **Moustafa:** `uv run --project eval pairs freeze` (or `--allow-unchecked`; the count is recorded). Then Claude commits `data/pairs/manifest.json` in a PR with the **testset-change** label; after merge, tag `testset-v1.0`.
+4. **Optional before the freeze:** Kaggle smoke run with `pairs export-train --public-only` and `--limit 200 --epochs 1` (TRAINING.md), to catch setup problems.
+5. **Moustafa, after the freeze:** `pairs variants`, `pairs export-train` (with private rows), upload `build/train-export/` as a **private** Kaggle dataset, run the notebook (GPU T4, Internet on), download the two `.gguf` (→ `models/`) and `run.json` (→ `train/runs/`).
+6. **Claude, then:** verify hashes, add the fine-tuned models to `config/models.json` (with their `prompt`, ADR 0018), score on dev against B0/B1 (paired bootstrap), write ADR 0005 (final model).
+7. **Claude, can start any time (no fine-tuned model needed):** rest of P5: the XPC service (step 5: copies `llama.framework` and the model into the bundle, ADR 0017; no network entitlement) and `arabizi-cli` (step 6), both on the ADR 0018 contracts. The Swift rule fallback and protected spans are done (ADR 0016).
 
 **Practical notes:**
 - GitHub release downloads are slow and stall here; SwiftPM's own download of the llama.cpp XCFramework timed out. Fetch it with a resuming `curl` and place it in SwiftPM's cache (`~/Library/Caches/org.swift.swiftpm/artifacts/`, file name from `swift package resolve -vv`); SwiftPM still checks the checksum.
 - Claude's sandbox cannot reach Hugging Face or Kaggle: Moustafa runs downloads (`scripts/fetch_models.py`) and Kaggle himself. Models are in `models/` (all six B1 models downloaded and verified).
 - Private data (ADR 0014): `data/private/` and `eval/results/private/` are never committed; the public B0 dictionary is built from public rows only; quote only aggregate numbers from private runs; never print private message text.
 - Rules or dictionary changes: regenerate the Swift parity fixture (`uv run --project eval python -m arabizi_eval.parity`; `pairs lexicon` does it) in the same PR.
-- `pairs` CLI: add, import, import-batch, import-chats, variants, lexicon, export-train, check, stats, freeze, validate. Variants (`pairs variants`) are generated, not committed.
+- `pairs` CLI: add, import, import-batch, import-chats, variants, lexicon, export-train, check, stats, publish, freeze, validate. Variants (`pairs variants`) are generated, not committed.
 - Before adding commits to a PR branch, check the PR is still open: Moustafa merges quickly.

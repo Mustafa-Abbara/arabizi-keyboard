@@ -92,3 +92,40 @@ def test_import_chats_with_nothing_importable_reports_instead_of_crashing(folder
                      encoding="utf-8")  # repeats the public training row
     assert main(["import-chats", str(empty)]) == 1
     assert "every row was skipped" in capsys.readouterr().out
+
+
+def test_publish_moves_chosen_rows_and_hides_the_chat_label(folders, monkeypatch, capsys):
+    from arabizi_eval import pairs_cli
+
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    monkeypatch.setattr(parity, "write", lambda: None)  # the fixture is tested on its own
+    held_out_before = [r for r in pairs_cli.private_rows() if r["split"] in ("test", "dev")]
+    answers = iter(["y", "n", "y", "q"])
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    assert main(["publish"]) == 0
+
+    moved = [r for name in ("test.jsonl", "dev.jsonl") if (public / name).exists()
+             for _, r, _ in P.read_jsonl(public / name)]
+    assert len(moved) == 2
+    assert all(r["source"] == pairs_cli.PUBLISHED_SOURCE for r in moved)  # no chat label in the public files
+    still_private = {r["id"] for r in pairs_cli.private_rows()}
+    assert not still_private & {r["id"] for r in moved}
+    assert len(still_private & {r["id"] for r in held_out_before}) == len(held_out_before) - 2
+    assert P.validate().ok  # ids unique, splits and methods still valid
+
+    declined = json.loads(pairs_cli.publish_review_path().read_text(encoding="utf-8"))["declined"]
+    assert len(declined) == 1 and pairs_cli.publish_review_path().is_relative_to(tmp)  # remembered, kept private
+    capsys.readouterr()
+    monkeypatch.setattr("builtins.input", lambda _prompt: "q")
+    main(["publish"])
+    # The next run offers what is left: neither the 2 published rows nor the declined one.
+    assert f"{len(held_out_before) - 3} private test/dev rows to review" in capsys.readouterr().out
+
+
+def test_publish_refuses_after_the_freeze(folders, capsys):
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    P.MANIFEST_PATH.write_text("{}", encoding="utf-8")
+    assert main(["publish"]) == 1
+    assert "frozen" in capsys.readouterr().out

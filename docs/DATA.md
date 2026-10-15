@@ -69,6 +69,7 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 - Only messages Moustafa wrote himself, with his own Arabic; imported with `pairs import-chats FILE --held-out 300` (diacritics/tatweel removed, nothing else changed; no message text is printed).
 - Variants of these rows are written to `data/private/pairs/train-rule_variant.jsonl`; the public B0 dictionary ignores private rows.
 - Limitation: held-out and training messages come from the same chats, so they share people, topics and habits.
+- **Publishing some of them (before the freeze):** `pairs publish` shows each private test/dev row in the terminal; rows Moustafa approves (nothing personal: no names, places, other people or private details) move to the public `test.jsonl`/`dev.jsonl` with the same id, split, text, date and check, and `source: own-chat-published` (the chat label is never published). Declined rows are remembered in `data/private/publish_review.json` (never committed). Only held-out rows can be published; private training rows stay private. Why: 35 public test rows are too few for others to check results ([ADR 0014](decisions/0014-private-own-chat-data.md), amendment).
 
 ### Rule-made spelling variants
 

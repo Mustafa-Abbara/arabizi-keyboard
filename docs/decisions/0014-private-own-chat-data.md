@@ -27,3 +27,14 @@ Moustafa provided 1,987 of his own chat messages (2024–2026, from one group ch
 - Human-written training rows (1,687 + their variants) reduce the AI share of training; the ADR 0010 cap is re-checked when the P4 training set is assembled.
 - Anyone cloning the repo cannot reproduce results on the private rows; public-subset results (`--subset public`) and the public test rows remain reproducible.
 - The test-set freeze (P2 step 4) must include the private files' SHA-256 hashes in the committed manifest (hashes only, no text).
+
+## Amendment (15 Oct 2026): publishing chosen held-out rows
+
+With only 35 public test rows, anyone checking the results from the repo gets a margin of about ±8 points on the difference between two systems. Before the freeze, Moustafa publishes the private test/dev messages he is comfortable sharing (**Moustafa's decision**: "publish some chat rows", chosen over writing new sentences).
+
+| # | Decision | Source |
+|---|---|---|
+| 7 | `pairs publish` shows each private test/dev row only in Moustafa's terminal; he approves rows one by one. Approved rows move to the public files unchanged except `source`, which becomes `own-chat-published` (the chat labels may name people). Declined ids are kept in `data/private/` so they are not asked again. Training rows are never published. It refuses after the freeze. | Mechanism **Claude's recommendation** |
+| 8 | Published rows keep their split, so the public set stays close to 70/30, and keep their id, date and `checked_by`; `pairs check` still covers them if they are unchecked. | **Claude's recommendation** |
+
+Consequence: the public held-out set grows by the number of rows published; results on the published rows become reproducible from the repo, and the private remainder stays aggregate-only.
