@@ -108,3 +108,10 @@ def test_unused_packages_look_uninstalled(monkeypatch):
         assert importlib.util.find_spec("torchao") is None  # what peft and transformers check
     finally:
         sys.modules.pop("torchao", None)
+
+
+def test_bf16_only_where_the_gpu_does_it_natively():
+    assert finetune.use_bf16((7, 5)) is False  # Kaggle T4: fp16 (emulated bf16 breaks TRL's loss kernel)
+    assert finetune.use_bf16((6, 0)) is False  # P100
+    assert finetune.use_bf16((8, 0)) is True and finetune.use_bf16((8, 9)) is True  # A100, L4
+    assert "is_bf16_supported" not in (P.ROOT / "train" / "finetune_lora.py").read_text().split("def main")[1]

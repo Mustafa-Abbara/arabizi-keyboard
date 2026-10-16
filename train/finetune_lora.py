@@ -90,6 +90,13 @@ def hide_unused_packages() -> None:
             sys.modules[name] = None
 
 
+def use_bf16(compute_capability: tuple[int, int]) -> bool:
+    """bf16 only on GPUs that do it natively (compute capability 8.0+, e.g. A100, L4). torch.cuda.is_bf16_supported()
+    also says yes on a T4 (7.5) by emulation, and then TRL's loss kernel fails: PyTorch's fp32-output matmul from bf16
+    inputs needs 8.0+. On a T4 or P100 training uses fp16, which that kernel supports."""
+    return compute_capability >= (8, 0)
+
+
 def warmup_steps(examples: int, batch: int, grad_accum: int, epochs: float, ratio: float) -> int:
     """Warm-up as a whole number of optimizer steps. transformers 5 dropped `warmup_ratio` (a float `warmup_steps`
     means a ratio there, but not in 4.x), so the step count is computed here and works with both."""
@@ -145,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{args.base} ({hf_id}): {len(train_ds)} training and {len(val_ds)} validation examples; "
           f"{too_long} longer than {args.max_length} tokens (truncated)")
 
-    bf16 = torch.cuda.is_bf16_supported()
+    bf16 = use_bf16(torch.cuda.get_device_capability(0))
     model = AutoModelForCausalLM.from_pretrained(hf_id, revision=revision, torch_dtype=torch.bfloat16 if bf16 else torch.float16,
                                                  device_map={"": 0})
     config = SFTConfig(
