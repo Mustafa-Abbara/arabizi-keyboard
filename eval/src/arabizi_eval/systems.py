@@ -78,16 +78,18 @@ def b1_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], Syste
     return {f"b1-{m['id']}-{shots}": partial(_b1, m["id"], shots) for m in models for shots in ("zero", "5shot")}
 
 
-def _ft(model_id: str) -> System:
+def _ft(model_id: str, protect: bool = False) -> System:
     from arabizi_eval import b1
 
-    return b1.FineTuned(model_id)
+    return b1.ProtectedFineTuned(model_id) if protect else b1.FineTuned(model_id)
 
 
 def ft_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], System]]:
-    """P4: ft-<model id> for every fine-tuned model (an entry with a saved `prompt`) in config/models.json."""
+    """P4: ft-<model id> for every fine-tuned model (an entry with a saved `prompt`) in config/models.json, and
+    ft-<model id>-protect with standalone numbers protected as the P5 engine does."""
     models = [m for m in json.loads(manifest.read_text(encoding="utf-8"))["models"] if "prompt" in m]
-    return {f"ft-{m['id']}": partial(_ft, m["id"]) for m in models}
+    return {**{f"ft-{m['id']}": partial(_ft, m["id"]) for m in models},
+            **{f"ft-{m['id']}-protect": partial(_ft, m["id"], True) for m in models}}
 
 
 REGISTRY: dict[str, Callable[[], System]] = {

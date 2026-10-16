@@ -24,13 +24,13 @@ Paired bootstrap on word accuracy: Llama − Qwen = **+0.045 [+0.017, +0.075]** 
 | # | Decision | Source |
 |---|---|---|
 | 1 | **Ship `arabizi-llama3.2-1b-v1`**: more accurate than Qwen with an interval above 0, faster (p95 853 ms vs 1,481 ms) and lighter (956 MB vs 1,333 MB); the only model of the two inside every budget. Qwen's one advantage, numbers kept unchanged (1.00 vs 0.93), is what the engine's protected spans guarantee anyway (numbers become placeholders, ADR 0016). | **Claude's recommendation** from the dev results |
-| 2 | Run the **frozen test set once** for this model (`evalrun run --system ft-arabizi-llama3.2-1b-v1 --split test --final`, all rows and `--subset public`), with B0 and the best B1 for the paired comparison; that run decides the P4 gate. | Roadmap P4 step 5 |
+| 2 | Run the **frozen test set once** for this model, raw (`ft-arabizi-llama3.2-1b-v1`) and with numbers protected as the engine does (`ft-arabizi-llama3.2-1b-v1-protect`), `--split test --final`, all rows and `--subset public`, with B0 and the best B1 for the paired comparison; that run decides the P4 gate. Added after acceptance: on dev, protecting numbers keeps 14/14 numbers (raw 13/14) and scores 0.774 (raw 0.768). | Roadmap P4 step 5; protected variant **Claude's recommendation** |
 | 3 | Switch it on in the engine when P5 can run it: `config/engine.json` `"model": "arabizi-llama3.2-1b-v1"`, `features.use_model: true`. Until then the keyboard keeps the rule converter. | ADR 0018 #5 |
 | 4 | Keep Qwen as the documented alternative (its file stays in `models/`); not trained further for now. | **Claude's recommendation** |
 
 ## Consequences
 
 - The Llama 3.2 Community License applies to the shipped model ("Built with Llama" if distributed; acceptable-use policy), already accepted (14 Oct 2026). The weights stay private: they were trained partly on private messages (ADR 0014).
-- The P4 gate's number-preservation target (≥ 99%) is not met by the raw model on dev (93%); it is measured through the engine with protected spans in P5, and the report states both.
+- The P4 gate's number-preservation target (≥ 99%) is not met by the raw model on dev (13/14 numbers) but is met with numbers protected (14/14, `-protect`), which is how the engine runs it; the report states both.
 - The engine must feed the exact saved prompt with both BOS tokens (fixed in #195); `FineTunedParityTests` guards it.
 - If the test run fails the gate (roadmap §7, C2), the fallbacks are: Qwen (also above B0 on dev), more hand-written pairs, or a larger LoRA rank.
