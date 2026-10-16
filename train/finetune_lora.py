@@ -9,6 +9,7 @@
   (system instruction + Arabizi, generation prompt, Qwen3 thinking off); the loss is on the Arabic answer only.
 - LoRA on all linear layers; the best epoch by validation loss is kept, merged into the base model and saved, ready
   for train/export_gguf.sh.
+- run.json records the rendered prompt prefix and suffix around the Arabizi, which the engine needs (ADR 0017/0018).
 - Nothing printed contains private text: progress and losses only; sample outputs come from public rows.
 """
 
@@ -49,6 +50,31 @@ def render(tokenizer, messages: list[dict]) -> dict:
     return {"prompt": prompt, "completion": messages[-1]["content"] + tokenizer.eos_token}
 
 
+PROMPT_MARKER = "ARABIZIPROMPTMARKER"
+
+
+def prompt_template(tokenizer, examples: list[dict]) -> dict:
+    """The rendered prompt around the Arabizi, as {"prefix", "suffix"}, for config/models.json (ADR 0017 #3, 0018 #5).
+
+    The engine cannot render chat templates (the llama.cpp XCFramework has no Jinja), so it uses these two strings
+    verbatim. They come from this run because templates can change with the date: Llama 3.2 writes today's date into
+    its system header. Checked against real examples: prefix + Arabizi + suffix must be exactly the training prompt.
+    """
+    system = examples[0]["messages"][0]
+    messages = [system, {"role": "user", "content": PROMPT_MARKER}, {"role": "assistant", "content": ""}]
+    prompt = render(tokenizer, messages)["prompt"]
+    if prompt.count(PROMPT_MARKER) != 1:
+        raise SystemExit("the chat template changed the Arabizi placeholder; cannot record the prompt")
+    prefix, _, suffix = prompt.partition(PROMPT_MARKER)
+    for example in examples[:20]:
+        if example["messages"][0] != system:
+            raise SystemExit("training examples use different system prompts; cannot record one prompt")
+        expected = render(tokenizer, example["messages"])["prompt"]
+        if prefix + example["messages"][1]["content"] + suffix != expected:
+            raise SystemExit("prefix + Arabizi + suffix differs from the training prompt; cannot record the prompt")
+    return {"prefix": prefix, "suffix": suffix}
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base", required=True, choices=sorted(BASES))
@@ -86,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     tokenizer = AutoTokenizer.from_pretrained(hf_id, revision=revision)
     train = load_examples(args.data, "train")[: args.limit]
     val = load_examples(args.data, "val")
+    prompt = prompt_template(tokenizer, train)  # before training: a template problem stops the run early
     train_ds = Dataset.from_list([render(tokenizer, e["messages"]) for e in train])
     val_ds = Dataset.from_list([render(tokenizer, e["messages"]) for e in val])
     too_long = sum(len(tokenizer(r["prompt"] + r["completion"])["input_ids"]) > args.max_length for r in train_ds)
@@ -145,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
                  "export_sha256_16": hashlib.sha256(json.dumps(export, sort_keys=True).encode()).hexdigest()[:16]},
         "best_eval_loss": trainer.state.best_metric, "best_checkpoint": trainer.state.best_model_checkpoint,
         "history": history, "public_samples": samples,
+        "prompt": prompt,  # copied into config/models.json with the model; the engine uses it verbatim
         "gpu": torch.cuda.get_device_name(0), "precision": "bf16" if bf16 else "fp16",
         "minutes": round((time.time() - started) / 60, 1), "python": platform.python_version(),
         "versions": {"torch": torch.__version__, "transformers": transformers.__version__,

@@ -22,6 +22,6 @@ The roadmap fixes the shape of P5 steps 1, 3 and 8: versioned request and respon
 
 ## Consequences
 
-- P4's step "add the fine-tuned models to `config/models.json`" now includes their `prompt`, taken from training (`train/finetune_lora.py` renders it); switching the model on is one line in `config/engine.json` plus `use_model: true`.
+- P4's step "add the fine-tuned models to `config/models.json`" now includes their `prompt`, recorded by `train/finetune_lora.py` in `run.json` (checked there against the real training prompts; it can contain the run date, as Llama 3.2's template does); switching the model on is one line in `config/engine.json` plus `use_model: true`.
 - The XPC service (P5 step 5) and `arabizi-cli` (step 6) build on these types: request in, `ProtectedSpans` → model with deadline → `OutputChecks` → response with the outcome, or `RuleConverter` on any failure.
 - The word-count slack and the new-Latin rule are measured again on dev once the fine-tuned model exists: how often each check fires on the model's real answers goes into the P5 gate notes.

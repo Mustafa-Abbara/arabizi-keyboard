@@ -51,3 +51,40 @@ def test_arguments_and_defaults():
     assert (args.rank, args.alpha, args.lr, args.epochs, args.max_length) == (16, 32, 2e-4, 3, 256)
     with pytest.raises(SystemExit):
         finetune.parse_args(["--base", "gemma3-1b", "--data", "d", "--out", "o"])  # dropped in ADR 0004
+
+
+def example(arabizi, arabic, system="Convert."):
+    return {"messages": [{"role": "system", "content": system}, {"role": "user", "content": arabizi},
+                         {"role": "assistant", "content": arabic}]}
+
+
+class DatedTokenizer(FakeTokenizer):
+    """Like Llama 3.2: the template writes the date into the system header."""
+
+    def apply_chat_template(self, messages, **kwargs):
+        return "<|date|>16 Oct 2026" + super().apply_chat_template(messages, **kwargs)
+
+
+class TrimmingTokenizer(FakeTokenizer):
+    """A template that changes the user text (strips it), so prefix + Arabizi + suffix is not the real prompt."""
+
+    def apply_chat_template(self, messages, **kwargs):
+        return super().apply_chat_template([m | {"content": m["content"].strip()} for m in messages], **kwargs)
+
+
+def test_prompt_template_is_exactly_the_training_prompt_around_the_arabizi():
+    examples = [example("kifak?", "كيفك؟"), example("shu 3am ta3mel", "شو عم تعمل")]
+    for tokenizer in (FakeTokenizer(), DatedTokenizer()):
+        template = finetune.prompt_template(tokenizer, examples)
+        for e in examples:
+            assert template["prefix"] + e["messages"][1]["content"] + template["suffix"] == \
+                finetune.render(tokenizer, e["messages"])["prompt"]
+        assert template["suffix"].endswith("</think>\n\n") and finetune.PROMPT_MARKER not in str(template)
+    assert finetune.prompt_template(DatedTokenizer(), examples)["prefix"].startswith("<|date|>16 Oct 2026")
+
+
+def test_prompt_template_refuses_what_the_engine_could_not_reproduce():
+    with pytest.raises(SystemExit, match="differs"):
+        finetune.prompt_template(TrimmingTokenizer(), [example(" kifak ", "كيفك")])
+    with pytest.raises(SystemExit, match="system prompts"):
+        finetune.prompt_template(FakeTokenizer(), [example("a", "ا"), example("b", "ب", system="Other.")])
