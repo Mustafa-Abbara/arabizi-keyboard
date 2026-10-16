@@ -50,6 +50,9 @@ def plan(entries: list[dict], only: list[str], accepted: set[str]) -> tuple[list
     for entry in entries:
         if only and entry["id"] not in only:
             continue
+        if "repo" not in entry:  # fine-tuned (P4): from the private Kaggle output, not Hugging Face
+            skipped.append(f"{entry['id']}: fine-tuned, copy it from the Kaggle output (docs/TRAINING.md)")
+            continue
         needs = entry.get("licence_acceptance")
         if needs and needs not in accepted:
             skipped.append(f"{entry['id']}: needs --accept-licence {needs} ({entry['licence']})")

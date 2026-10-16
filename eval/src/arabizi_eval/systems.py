@@ -73,9 +73,21 @@ def _b1(model_id: str, shots: str) -> System:
 
 
 def b1_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], System]]:
-    """B1 (b1.py): b1-<model id>-zero and b1-<model id>-5shot for every model pinned in config/models.json."""
-    models = json.loads(manifest.read_text(encoding="utf-8"))["models"]
+    """B1 (b1.py): b1-<model id>-zero and b1-<model id>-5shot for every base model pinned in config/models.json."""
+    models = [m for m in json.loads(manifest.read_text(encoding="utf-8"))["models"] if "prompt" not in m]
     return {f"b1-{m['id']}-{shots}": partial(_b1, m["id"], shots) for m in models for shots in ("zero", "5shot")}
+
+
+def _ft(model_id: str) -> System:
+    from arabizi_eval import b1
+
+    return b1.FineTuned(model_id)
+
+
+def ft_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], System]]:
+    """P4: ft-<model id> for every fine-tuned model (an entry with a saved `prompt`) in config/models.json."""
+    models = [m for m in json.loads(manifest.read_text(encoding="utf-8"))["models"] if "prompt" in m]
+    return {f"ft-{m['id']}": partial(_ft, m["id"]) for m in models}
 
 
 REGISTRY: dict[str, Callable[[], System]] = {
@@ -83,6 +95,7 @@ REGISTRY: dict[str, Callable[[], System]] = {
     "identity": lambda: Identity("identity", {"kind": "sanity", "note": "input returned unchanged"}),
     "reference": lambda: Reference("reference", {"kind": "sanity", "note": "oracle: returns the reference"}),
     **b1_systems(),
+    **ft_systems(),
 }
 
 

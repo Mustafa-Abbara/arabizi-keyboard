@@ -29,6 +29,8 @@ uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B # is
 uv run --project eval pairs variants && uv run --project eval pairs lexicon
 ```
 
+| **`ft-<model id>`** | A fine-tuned model (P4): zero-shot, with the exact prompt saved by its training run (`prompt` in `config/models.json`), sent as text to `llama-server`'s `/completion` so no chat template is re-rendered. | `b1.py` (`FineTuned`), `config/models.json`, `train/runs/` |
+
 Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a long vowel (`8ali` → غلي, not غالي) and final `-e` can be ي or ة (`2alle` → قلة, not قلي). Words in the dictionary avoid both.
 
 ## Results so far (dev)
@@ -79,6 +81,32 @@ ARABIZI_LLAMA_URL=http://127.0.0.1:8081 uv run --project eval evalrun run --syst
 ```
 
 Real typing (private chats) uses far more English than the sheet and AI rows: B0 keeps only 10% of the Latin words that should stay Latin.
+
+### P4: fine-tuned models (dev, `testset-v1.0`: 104 rows = 48 public + 56 private; 16 Oct 2026)
+
+Same harness, llama.cpp b11429, greedy decoding; the fine-tuned model is zero-shot with its training prompt (`ft-<id>`). B0 and the best B1 were re-run on the frozen dev set so all three see the same sentences. All dev rows (private: aggregate numbers only, runs not committed):
+
+| System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. | Peak RSS | p50 / p95 ms |
+|---|---|---|---|---|---|---|---|---|
+| **Llama 3.2 1B fine-tuned** (`ft-arabizi-llama3.2-1b-v1`) | **0.768** | [0.73, 0.80] | 0.097 | 0.86 | 0.93 | 0.06 | 956 MB | 421 / 853 |
+| B0 rules | 0.543 | [0.51, 0.58] | 0.189 | 0.17 | 1.00 | 0.00 | — | < 1 |
+| Llama 3.2 1B, 5-shot (best B1) | 0.166 | [0.14, 0.19] | 0.529 | 0.17 | 0.71 | 0.48 | 971 MB | 583 / 1,110 |
+
+Public dev rows only (48; reproducible from the repo: `eval/results/20261016-112328-b0-dev-public`, `…-112354-ft-arabizi-llama3.2-1b-v1-dev-public`, `…-112431-b1-llama3.2-1b-5shot-dev-public`):
+
+| System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. |
+|---|---|---|---|---|---|---|
+| **Llama 3.2 1B fine-tuned** | **0.733** | [0.68, 0.78] | 0.124 | 0.70 | 0.88 | 0.10 |
+| B0 rules | 0.555 | [0.50, 0.61] | 0.179 | 0.27 | 1.00 | 0.00 |
+| Llama 3.2 1B, 5-shot | 0.143 | [0.11, 0.17] | 0.531 | 0.10 | 0.50 | 0.50 |
+
+**Paired bootstrap** (word accuracy, 10,000 resamples): fine-tuned − B0 = **+0.225 [+0.179, +0.270]** on all dev rows and **+0.178 [+0.113, +0.245]** on the public rows; fine-tuned − best B1 = **+0.602 [+0.560, +0.643]**. Both intervals are above 0, on dev; the P4 gate is decided on the frozen test set, once, for the final model (ADR 0005).
+
+- **What fine-tuning fixed:** Lebanese spelling and joined clitics (CER halves against B0), and English kept in Latin (keep-Latin F1 0.17 → 0.86: the rules miss most English in real chats).
+- **What still needs the engine:** standalone numbers come out unchanged only 93% of the time (the P4 gate asks ≥ 99% on test) and 6% of answers are flagged as hallucinations. Both are what P5's protected spans (numbers become `⟦0⟧`) and output checks are for; the raw model is measured here, the engine (`arabizi-cli`) will be measured in P5.
+- **Speed and memory** fit the budgets on the 8 GB Air: p50 421 ms (≤ 600), p95 853 ms (≤ 1,200), 956 MB (≤ 1.5 GB), load 1.5 s.
+- **Prompt detail found while wiring this up:** the Llama run trained with **two BOS tokens** (the chat template's `<|begin_of_text|>` text plus the one the tokenizer adds). Sending the saved prompt as text lets `llama-server` do the same, and reproduces the run's own samples exactly; with a single BOS the output degrades (`سبيقة` became `سبquina`). See MODELS.md.
+- Qwen3-1.7B fine-tuned is scored the same way once its file is downloaded; then ADR 0005 picks the final model.
 
 ## Metrics
 
