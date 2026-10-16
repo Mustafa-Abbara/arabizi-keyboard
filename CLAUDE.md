@@ -38,8 +38,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 **Next steps, in order:**
 1. **Moustafa:** get `arabizi-qwen3-1.7b-v1-Q4_K_M.gguf` into `models/` (re-download if the Kaggle session lives, else re-run only the Qwen cells; in a session, the notebook's own download-link cell or split parts). Llama's file is in `models/` and verified.
 2. **Claude:** add Qwen to `config/models.json` (prompt from its `train/runs/` file), score it on dev like Llama, then ADR 0005 (final model: accuracy **and** latency on the Air), then the final test run, once (`--final`).
-3. **Claude:** fix the Swift `LlamaModel` BOS handling before the engine uses the Llama fine-tune: training saw two BOS tokens, `LlamaModel` removes one (MODELS.md, "Fine-tuned models").
-4. **Claude, then:** rest of P5: the XPC service (copies `llama.framework` and the model into the bundle, ADR 0017; no network entitlement) and `arabizi-cli` (both on the ADR 0018 contracts); P5 measures the engine with protected spans and output checks (raw model numbers: 93%, 6% hallucinations).
+3. **Claude, then:** rest of P5: the XPC service (copies `llama.framework` and the model into the bundle, ADR 0017; no network entitlement) and `arabizi-cli` (both on the ADR 0018 contracts); P5 measures the engine with protected spans and output checks (raw model numbers: 93%, 6% hallucinations).
 
 **Practical notes:**
 - GitHub release downloads are slow and stall here; SwiftPM's own download of the llama.cpp XCFramework timed out. Fetch it with a resuming `curl` and place it in SwiftPM's cache (`~/Library/Caches/org.swift.swiftpm/artifacts/`, file name from `swift package resolve -vv`); SwiftPM still checks the checksum.

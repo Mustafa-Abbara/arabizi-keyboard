@@ -32,7 +32,7 @@ Trained on Kaggle with `train/finetune_lora.py` (ADR 0015) from the frozen data 
 
 - **Getting the files:** they are not on Hugging Face; download them from the Kaggle run's output (docs/TRAINING.md) and check them against the `.sha256` files. `scripts/fetch_models.py` lists them as skipped.
 - **Licence:** the Llama 3.2 Community License applies to the fine-tune (accepted 14 Oct 2026); "Built with Llama" if it is ever distributed.
-- **BOS tokens (Llama):** the saved prompt starts with the text `<|begin_of_text|>`, and the tokenizer adds another BOS, so training saw **two**. Evaluation sends the prompt as text to `llama-server`, which does the same and reproduces the run's samples; a single BOS degrades the output. The Swift `LlamaModel` currently removes a duplicate BOS (ADR 0017) and must keep it for this model before the engine uses it (P5).
+- **BOS tokens (Llama):** the saved prompt starts with the text `<|begin_of_text|>`, and the tokenizer adds another BOS, so training saw **two**. Evaluation sends the prompt as text to `llama-server`, which does the same and reproduces the run's samples; a single BOS degrades the output. The Swift `LlamaModel` tokenizes the same way (both BOS kept, fixed 16 Oct 2026); `FineTunedParityTests` checks the two BOS tokens and that it reproduces the run's own training-time sample exactly.
 
 ## The download step (one step, when Moustafa says go)
 

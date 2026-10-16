@@ -170,7 +170,11 @@ public final class LlamaModel: @unchecked Sendable {  // all mutable state is be
                           promptTokens: promptTokens, generatedTokens: generated, elapsed: elapsed())
     }
 
-    private func tokenize(_ text: String) throws -> [llama_token] {
+    /// The prompt's tokens exactly as llama-server's /completion makes them from text, and as training did: special
+    /// tokens in the text are parsed and the model's BOS is added. A Llama 3 prompt that starts with the text
+    /// `<|begin_of_text|>` therefore gets two BOS tokens, and that is right: the fine-tune was trained that way, and
+    /// removing one degrades its output (MODELS.md, "Fine-tuned models").
+    func tokenize(_ text: String) throws -> [llama_token] {
         let length = Int32(text.utf8.count)
         var tokens = [llama_token](repeating: 0, count: Int(length) + 8)
         var count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), true, true)
@@ -180,13 +184,11 @@ public final class LlamaModel: @unchecked Sendable {  // all mutable state is be
         }
         guard count > 0 else { throw LlamaError.tokenizeFailed }
         tokens.removeLast(tokens.count - Int(count))
-        // A template that already starts with the BOS text (Llama 3) plus the BOS llama.cpp adds would give two.
-        let bos = llama_vocab_bos(vocab)
-        if tokens.count >= 2 && tokens[0] == bos && tokens[1] == bos {
-            tokens.removeFirst()
-        }
         return tokens
     }
+
+    /// The model's beginning-of-sequence token.
+    var bosToken: llama_token { llama_vocab_bos(vocab) }
 
     private func piece(_ token: llama_token) -> [UInt8] {
         var buffer = [CChar](repeating: 0, count: 32)
