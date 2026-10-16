@@ -21,6 +21,7 @@ import json
 import math
 import os
 import platform
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -77,6 +78,18 @@ def prompt_template(tokenizer, examples: list[dict]) -> dict:
     return {"prefix": prefix, "suffix": suffix}
 
 
+# Optional packages this script never uses, hidden before torch/transformers/peft load. Kaggle's image ships torchao
+# 0.10, and current peft refuses to start when an older torchao than 0.16 is installed, even if it is not used.
+UNUSED_PACKAGES = ("torchao",)
+
+
+def hide_unused_packages() -> None:
+    """Make the libraries see UNUSED_PACKAGES as not installed (importlib.util.find_spec returns None)."""
+    for name in UNUSED_PACKAGES:
+        if name not in sys.modules:
+            sys.modules[name] = None
+
+
 def warmup_steps(examples: int, batch: int, grad_accum: int, epochs: float, ratio: float) -> int:
     """Warm-up as a whole number of optimizer steps. transformers 5 dropped `warmup_ratio` (a float `warmup_steps`
     means a ratio there, but not in 4.x), so the step count is computed here and works with both."""
@@ -107,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     # One GPU, so the effective batch is --batch x --grad-accum (32, ADR 0015) on Kaggle's T4 x2 as well.
     os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+    hide_unused_packages()
     import torch
     from datasets import Dataset
     from peft import LoraConfig

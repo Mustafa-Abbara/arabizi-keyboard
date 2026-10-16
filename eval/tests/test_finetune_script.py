@@ -96,3 +96,15 @@ def test_warmup_is_a_whole_number_of_steps():
     assert finetune.warmup_steps(200, 8, 4, 1, 0.03) == 1  # smoke run: at least one step
     assert finetune.parse_args(["--base", "qwen3-1.7b", "--data", "d", "--out", "o"]).warmup == 0.03
     assert "warmup_ratio=" not in (P.ROOT / "train" / "finetune_lora.py").read_text()  # removed in transformers 5
+
+
+def test_unused_packages_look_uninstalled(monkeypatch):
+    import importlib.util
+    import sys
+
+    monkeypatch.delitem(sys.modules, "torchao", raising=False)
+    finetune.hide_unused_packages()
+    try:
+        assert importlib.util.find_spec("torchao") is None  # what peft and transformers check
+    finally:
+        sys.modules.pop("torchao", None)
