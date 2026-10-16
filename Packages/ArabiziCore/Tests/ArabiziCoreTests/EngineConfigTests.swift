@@ -21,7 +21,9 @@ let modelsWithFineTuned = try! JSONSerialization.data(withJSONObject: [  // swif
 
 @Test func committedConfigLoads() throws {
     let config = try EngineConfig(configDirectory: configDirectory)
-    #expect(config.model == nil)  // no fine-tuned model yet: rule fallback only
+    let model = try #require(config.model)  // the fine-tuned Llama is switched on (ADR 0005)
+    #expect(model.id == "arabizi-llama3.2-1b-v1" && model.file == "arabizi-llama3.2-1b-v1-Q4_K_M.gguf")
+    #expect(model.promptPrefix.hasPrefix("<|begin_of_text|>") && model.promptSuffix.hasSuffix("assistant<|end_header_id|>\n\n"))
     #expect(config.deadlineMs == 1500 && config.contextLength > config.maxOutputTokens)
     #expect(config.outputChecks == OutputChecks(minWordRatio: 0.5, maxWordRatio: 2.0, wordSlack: 1))
 }
@@ -35,10 +37,12 @@ let modelsWithFineTuned = try! JSONSerialization.data(withJSONObject: [  // swif
 }
 
 @Test func modelSwitchedOffIsNotUsedButStillChecked() throws {
-    let off = try EngineConfig(engine: engine(["model": "arabizi-test-v1"]), models: modelsWithFineTuned)
+    let off = try EngineConfig(engine: engine(["model": "arabizi-test-v1", "features": ["use_model": false]]),
+                               models: modelsWithFineTuned)
     #expect(off.model == nil)
     #expect(throws: EngineConfig.InvalidError.self) {
-        try EngineConfig(engine: engine(["model": "arabizi-typo-v1"]), models: modelsWithFineTuned)
+        try EngineConfig(engine: engine(["model": "arabizi-typo-v1", "features": ["use_model": false]]),
+                         models: modelsWithFineTuned)
     }
 }
 
@@ -50,7 +54,7 @@ let modelsWithFineTuned = try! JSONSerialization.data(withJSONObject: [  // swif
     #"{"max_output_tokens": 600}"#,  // more than context_length
     #"{"output_checks": {"min_word_ratio": 1.5, "max_word_ratio": 2.0, "word_slack": 1}}"#,
     #"{"output_checks": {"min_word_ratio": 0.5, "max_word_ratio": 2.0, "word_slack": -1}}"#,
-    #"{"features": {"use_model": true}}"#,  // on, but no model
+    #"{"model": null, "features": {"use_model": true}}"#,  // on, but no model
     #"{"model": "qwen3-0.6b", "features": {"use_model": true}}"#,  // a base model: no prompt
     #"{"model": "not-in-the-manifest", "features": {"use_model": true}}"#,
 ])

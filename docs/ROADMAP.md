@@ -286,6 +286,7 @@ arabizi-keyboard/
 4. **(Moustafa) `ArabiziLLM`:** llama.cpp XCFramework as a Swift Package `binaryTarget`; load the GGUF once and keep it warm; greedy decoding; stop at end of turn; hard deadline from config (default 1,500 ms) → rule fallback with `outcome = fallbackTimeout`.
    Checked 15 Oct 2026 ([ADR 0017](decisions/0017-llama-cpp-from-swift.md)): the XCFramework of release b11429 matches the export commit; prompts are pre-rendered because the framework has no Jinja templates; a Swift prototype ran Llama 3.2 1B and Qwen3-1.7B within the memory budget.
 5. **(Moustafa) `ArabiziEngineXPC`:** sandboxed XPC service with **no** `com.apple.security.network.client` entitlement. The IME talks to it over a small XPC protocol (`convert`, `status`). If the service crashes, the IME restarts it and uses the rules meanwhile.
+   Built ([ADR 0020](decisions/0020-engine-xpc-service.md)): `Apps/ArabiziEngineXPC` inside the app, sandbox only, model and config in its own bundle, loads in the background; the keyboard falls back to its rules; `arabizi-engine-check` verifies it. The fine-tuned model is switched on.
 6. **(Moustafa) `arabizi-cli`:** reads `ConvertRequest` JSON lines on stdin, writes `ConvertResponse` lines. `eval/run.py` uses it, so the eval measures the **real Swift engine**, not only Python.
    Built with the engine (`Packages/ArabiziEngine`, [ADR 0019](decisions/0019-engine-and-cli.md)); evalrun's `engine-<id>` systems drive it. Dev: 0.770 vs the Python model's 0.768.
 7. **(Moustafa) CI** `.github/workflows/ci.yml` (see v1 S4 step 3 for the full YAML): `lint` (SwiftLint, ruff), `build-test` (`swift test` for the packages, `xcodebuild` build for the apps with `CODE_SIGNING_ALLOWED=NO`), `eval-smoke` (`pytest eval/tests` + the test-set freeze check + a 20-sentence regression run with the rule fallback only, since CI has no model), `secrets` (gitleaks). Add CodeQL and Dependabot as in v1 S4 steps 4–5. Then require these checks on `main` with `bootstrap.py protect --checks lint,build-test,eval-smoke`.
@@ -295,9 +296,9 @@ arabizi-keyboard/
 **Deliverables:** packages + XPC service + CLI compiling, `docs/API_CONTRACTS.md`, schemas, CI green and required, CodeQL first scan, Dependabot.
 
 **Gate:**
-- [ ] `arabizi-cli` reproduces the P4 test accuracy within 1 point (Swift engine = Python numbers).
-- [ ] Unit tests: placeholders survive round trips (URLs, emoji, `100$`, `2pm`); `3am` is not protected; a forced timeout and a forced bad output both return the rule fallback.
-- [ ] The XPC service has no network entitlement (`codesign -d --entitlements -` output saved in the PR), and a test request to the network from inside it fails.
+- [ ] `arabizi-cli` reproduces the P4 test accuracy within 1 point (Swift engine = Python numbers). *On dev: 0.770 vs 0.768 (ADR 0019); the test check needs one engine run on test.*
+- [x] Unit tests: placeholders survive round trips (URLs, emoji, `100$`, `2pm`); `3am` is not protected; a forced timeout and a forced bad output both return the rule fallback. *`ProtectedSpansTests`, `EngineTests` (ADR 0016, 0019).*
+- [x] The XPC service has no network entitlement (`codesign -d --entitlements -` output saved in the PR), and a test request to the network from inside it fails. *Sandbox only; kernel log `deny(1) network-outbound` (ADR 0020).*
 - [ ] CI is required on `main`; a PR with a failing test cannot merge (prove it once).
 
 **Rubric mapping:** Software engineering 10% (modular, contracts, config); Reliability & security 15% (sandbox, fallback); Bonus (CI/CD, CodeQL, Dependabot).

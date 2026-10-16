@@ -42,6 +42,17 @@ System Settings → Keyboard → Input Sources → **Edit…** → **+** → **A
 
 Run `scripts/install_ime.sh` again. It stops the running copy; macOS starts the new one the next time you type with it. If the old behaviour remains, switch to another input source and back.
 
+## 4b. The engine service (P5)
+
+Since P5 the keyboard converts with the **fine-tuned model**, which runs in a separate, sandboxed service inside the app (`Contents/XPCServices/ArabiziEngineXPC.xpc`, no network access; [ADR 0020](decisions/0020-engine-xpc-service.md)). Build the app with the model in `models/` (docs/MODELS.md) and it is bundled automatically; without it, the keyboard uses the rules.
+
+- The first time after a login or install, the service loads the model in the background (up to about 30 s); Enter meanwhile gives the rule conversion, then the model's.
+- Check it from the terminal (status, a network probe that must say `blocked`, one test sentence):
+
+```bash
+build/ArabiziIME.app/Contents/MacOS/arabizi-engine-check
+```
+
 ## 5. Logs
 
 The keyboard never logs what you type, only key types, actions and lengths. Enter, Esc, ⌘Z and ⌥Enter are logged at a level macOS keeps, so they can be read afterwards:
