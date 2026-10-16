@@ -69,6 +69,7 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 - Only messages Moustafa wrote himself, with his own Arabic; imported with `pairs import-chats FILE --held-out 300` (diacritics/tatweel removed, nothing else changed; no message text is printed).
 - Variants of these rows are written to `data/private/pairs/train-rule_variant.jsonl`; the public B0 dictionary ignores private rows.
 - Limitation: held-out and training messages come from the same chats, so they share people, topics and habits.
+- **Publishing some of them (before the freeze):** `pairs publish --sheet` writes `data/private/publish_review.xlsx` (never committed) to mark `y`/`n` in Numbers or Excel, which lay out Arabic correctly, and `pairs publish --apply data/private/publish_review.xlsx` applies it (plain `pairs publish` asks in the terminal instead, but many terminals cannot display Arabic). Rows Moustafa approves (nothing personal: no names, places, other people or private details) move to the public `test.jsonl`/`dev.jsonl` with the same id, split, text, date and check, and `source: own-chat-published` (the chat label is never published). Declined rows are remembered in `data/private/publish_review.json` (never committed). Only held-out rows can be published; private training rows stay private. Why: 35 public test rows are too few for others to check results ([ADR 0014](decisions/0014-private-own-chat-data.md), amendment).
 
 ### Rule-made spelling variants
 
@@ -92,7 +93,8 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 Before any fine-tuning, the held-out data is frozen so no later change can make results look better.
 
 ```bash
-uv run --project eval pairs check     # delayed self-check of the held-out rows first (ADR 0011)
+uv run --project eval pairs check --sheet   # delayed self-check of the held-out rows first (ADR 0011), in a spreadsheet
+uv run --project eval pairs check --apply data/private/check_review.xlsx
 uv run --project eval pairs freeze    # writes data/pairs/manifest.json (testset-v1.0)
 ```
 
@@ -118,7 +120,7 @@ uv sync --project eval                 # once
 uv run --project eval pairs add        # type pairs: Arabizi, then Arabic, then optional variants
 uv run --project eval pairs import list.txt   # add a list: one 'arabizi | arabic' per line
 uv run --project eval pairs import-batch F.jsonl --method ai_checked --writer W --checked-by C --source S
-uv run --project eval pairs check      # delayed self-check of rows written before yesterday (>= 24 h)
+uv run --project eval pairs check --sheet   # delayed self-check (>= 24 h) in a spreadsheet; then --apply FILE
 uv run --project eval pairs stats      # counts, progress towards the P2 targets, coverage
 uv run --project eval pairs validate   # all checks above
 ```
@@ -128,4 +130,6 @@ uv run --project eval pairs validate   # all checks above
 - `import` reads one pair per line: `arabizi | arabic`, optionally `| primary=variant; ...` (spaces around `|`; blank lines and `#` comments are skipped). Valid lines are saved in order with the same automatic ids and splits as `add`; lines that break a rule, repeat a sentence or leave `?` `,` `;` in Latin are **rejected and listed, never changed**. `--dry-run` checks without saving. Both sides must be written by a person: test and dev data are human-written (ADR 0010).
 - `import-batch` adds **training** rows from a JSONL file with `arabizi` and `arabic` keys (other keys are ignored). It records `--method` (`ai_checked` or `public`), `--writer`, `--checked-by` and `--source`, removes diacritics and tatweel from the Arabic, and rejects anything else that breaks a rule. Add the source to the table above.
 - Variants are typed as `primary=variant` separated by `;`, with `|` between several variants: `هلق=هلأ; إمتى=إيمتى`.
-- Typing Arabic: add the **Arabic** input source in System Settings → Keyboard → Input Sources and switch with Ctrl+Space. The terminal may show Arabic right-to-left oddly; the saved text is still correct (check with `pairs check`).
+- Typing Arabic: add the **Arabic** input source in System Settings → Keyboard → Input Sources and switch with Ctrl+Space. The terminal may show Arabic right-to-left oddly (the app's terminal panel shows it unjoined and reversed); the saved text is still correct.
+- **Self-check in a spreadsheet** (recommended, because terminals often cannot display Arabic): `pairs check --sheet` writes `data/private/check_review.xlsx` (never committed; it can hold private rows) with the unchecked test/dev rows written at least a day ago (`--train` adds hand-written training rows; generated variants are never offered). In Numbers or Excel, fix the `arabic` (and `accepted`, as `primary=variant; ...`) where needed and type `y` in `ok`; leave `ok` blank to check later; do not change the `arabizi`. Export as .xlsx and run `pairs check --apply data/private/check_review.xlsx`: rows that would break a rule, have a changed Arabizi or are too new are listed and not checked. The terminal check (`pairs check`) still works where Arabic displays properly.
+- The 49 checks made on 15 Oct in the app's terminal (unreadable Arabic) were set aside unsaved and are redone with the spreadsheet.

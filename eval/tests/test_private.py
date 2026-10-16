@@ -92,3 +92,123 @@ def test_import_chats_with_nothing_importable_reports_instead_of_crashing(folder
                      encoding="utf-8")  # repeats the public training row
     assert main(["import-chats", str(empty)]) == 1
     assert "every row was skipped" in capsys.readouterr().out
+
+
+def test_publish_moves_chosen_rows_and_hides_the_chat_label(folders, monkeypatch, capsys):
+    from arabizi_eval import pairs_cli
+
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    monkeypatch.setattr(parity, "write", lambda: None)  # the fixture is tested on its own
+    held_out_before = [r for r in pairs_cli.private_rows() if r["split"] in ("test", "dev")]
+    answers = iter(["y", "n", "y", "q"])
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    assert main(["publish"]) == 0
+
+    moved = [r for name in ("test.jsonl", "dev.jsonl") if (public / name).exists()
+             for _, r, _ in P.read_jsonl(public / name)]
+    assert len(moved) == 2
+    assert all(r["source"] == pairs_cli.PUBLISHED_SOURCE for r in moved)  # no chat label in the public files
+    still_private = {r["id"] for r in pairs_cli.private_rows()}
+    assert not still_private & {r["id"] for r in moved}
+    assert len(still_private & {r["id"] for r in held_out_before}) == len(held_out_before) - 2
+    assert P.validate().ok  # ids unique, splits and methods still valid
+
+    declined = json.loads(pairs_cli.publish_review_path().read_text(encoding="utf-8"))["declined"]
+    assert len(declined) == 1 and pairs_cli.publish_review_path().is_relative_to(tmp)  # remembered, kept private
+    capsys.readouterr()
+    monkeypatch.setattr("builtins.input", lambda _prompt: "q")
+    main(["publish"])
+    # The next run offers what is left: neither the 2 published rows nor the declined one.
+    assert f"{len(held_out_before) - 3} private test/dev rows to review" in capsys.readouterr().out
+
+
+def test_publish_refuses_after_the_freeze(folders, capsys):
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    P.MANIFEST_PATH.write_text("{}", encoding="utf-8")
+    assert main(["publish"]) == 1
+    assert "frozen" in capsys.readouterr().out
+
+
+def test_publish_through_a_spreadsheet(folders, monkeypatch):
+    import openpyxl
+
+    from arabizi_eval import pairs_cli
+
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    monkeypatch.setattr(parity, "write", lambda: None)
+    assert main(["publish", "--sheet"]) == 0
+    sheet_path = pairs_cli.publish_sheet_path()
+    assert sheet_path.is_relative_to(tmp)  # written next to the private data, never in the public folder
+
+    book = openpyxl.load_workbook(sheet_path)
+    sheet = book.active
+    assert [c.value for c in sheet[1]] == ["arabizi", "arabic", "publish", "split", "id"]
+    marked = {sheet.cell(2, 5).value, sheet.cell(3, 5).value}
+    sheet.cell(2, 3, "y")
+    sheet.cell(3, 3, "Y")
+    sheet.cell(4, 3, "n")
+    sheet.cell(5, 3, "y")
+    sheet.cell(5, 2, sheet.cell(5, 2).value + " edited")  # text changed in the sheet: not published
+    book.save(sheet_path)
+
+    assert main(["publish", "--apply", str(sheet_path)]) == 1  # 1: one row was refused
+    moved = {r["id"] for name in ("test.jsonl", "dev.jsonl") if (public / name).exists()
+             for _, r, _ in P.read_jsonl(public / name)}
+    assert moved == marked
+    declined = json.loads(pairs_cli.publish_review_path().read_text(encoding="utf-8"))["declined"]
+    assert declined == [sheet.cell(4, 5).value]
+    assert P.validate().ok
+
+
+def _age_private_rows(private_dir, when="2026-01-01"):
+    """Rows imported today are too new to check; give them an old date."""
+    for path in private_dir.glob("*.jsonl"):
+        rows = [r for _, r, _ in P.read_jsonl(path)]
+        path.write_text("".join(json.dumps(r | {"date": when}, ensure_ascii=False) + "\n" for r in rows),
+                        encoding="utf-8")
+
+
+def test_check_through_a_spreadsheet(folders):
+    import openpyxl
+
+    from arabizi_eval import pairs_cli
+
+    tmp, public, private, chats = folders
+    main(["import-chats", str(chats), "--held-out", "10"])
+    assert main(["check", "--sheet"]) == 0
+    assert not pairs_cli.check_sheet_path().exists()  # rows written today are not offered (>= 24 h rule)
+
+    _age_private_rows(private)
+    assert main(["check", "--sheet"]) == 0
+    path = pairs_cli.check_sheet_path()
+    assert path.is_relative_to(tmp)
+    book = openpyxl.load_workbook(path)
+    sheet = book.active
+    assert [c.value for c in sheet[1]] == ["arabizi", "arabic", "ok", "accepted", "split", "id"]
+    assert {sheet.cell(r, 5).value for r in range(2, sheet.max_row + 1)} <= {"test", "dev"}  # no training rows
+    ids = {r: sheet.cell(r, 6).value for r in range(2, 8)}
+    sheet.cell(2, 3, "y")  # correct as it is
+    sheet.cell(3, 3, "Y")
+    sheet.cell(3, 2, "\u200f" + sheet.cell(3, 2).value + "ك")  # fixed in the sheet, with a stray direction mark
+    sheet.cell(4, 3, "y")
+    sheet.cell(4, 1, sheet.cell(4, 1).value + " x")  # Arabizi changed: refused
+    sheet.cell(5, 3, "y")
+    sheet.cell(5, 2, sheet.cell(5, 2).value + "ً")  # a diacritic breaks a rule: refused
+    sheet.cell(7, 4, "y")  # typed one column off, in accepted: taken as ok
+    book.save(path)  # row 6 left blank: checked later
+
+    assert main(["check", "--apply", str(path)]) == 1
+    rows = {r["id"]: r for r in pairs_cli.private_rows()}
+    assert {i for i, r in rows.items() if r.get("checked_by") == pairs_cli.CHECKER} == {ids[2], ids[3], ids[7]}
+    assert rows[ids[3]]["arabic"].endswith("كيفك") and "\u200f" not in rows[ids[3]]["arabic"]
+    assert rows[ids[7]]["accepted"] == {}  # the stray y did not become a variant
+    assert rows[ids[5]]["arabic"] == sheet.cell(5, 2).value[:-1]  # the bad edit was not saved
+    assert P.validate().ok
+
+    assert main(["check", "--sheet", "--train"]) == 0
+    sheet = openpyxl.load_workbook(path).active
+    splits = [sheet.cell(r, 5).value for r in range(2, sheet.max_row + 1)]
+    assert "train" in splits and ids[2] not in {sheet.cell(r, 6).value for r in range(2, sheet.max_row + 1)}

@@ -8,6 +8,7 @@
   uv run --project eval pairs lexicon  # rebuild the B0 word dictionary from the train split
   uv run --project eval pairs check    # delayed self-check of rows written >= 24 h ago
   uv run --project eval pairs stats    # counts and progress towards the P2 targets
+  uv run --project eval pairs publish  # choose private chat test/dev rows to make public (before the freeze)
   uv run --project eval pairs freeze   # freeze the test and dev sets (roadmap P2 step 4)
   uv run --project eval pairs export-train  # training files for Kaggle (P4, ADR 0015)
   uv run --project eval pairs validate # same checks as the test suite
@@ -30,6 +31,7 @@ WRITER = "moustafa"
 CHECKER = "moustafa-delayed"
 DEV_SLOTS = {2, 5, 8}  # of every 10 hand-written held-out rows, 3 go to dev: 70/30 (roadmap P2 step 3)
 TARGETS = {"held_out": 300, "held_out_goal": 350, "train": 2000, "train_hand_or_public": 400}  # ADR 0011
+PUBLISHED_SOURCE = "own-chat-published"  # replaces the private chat label, which may name a person (ADR 0014)
 SMALL_WORDS = re.compile(r"(?<![a-z0-9])(la|ma|3a|3al|w|b|bi|bel|bil)(?![a-z0-9])", re.IGNORECASE)
 
 
@@ -429,6 +431,158 @@ def cmd_freeze(args: argparse.Namespace) -> int:
     return 0
 
 
+def publish_review_path() -> Path:
+    """Ids already declined by `pairs publish`; in data/private, so never committed."""
+    return P.PRIVATE_DIR.parent / "publish_review.json"
+
+
+def publish_sheet_path() -> Path:
+    """The spreadsheet for choosing rows to publish; in data/private, so never committed."""
+    return P.PRIVATE_DIR.parent / "publish_review.xlsx"
+
+
+YES = {"y", "yes", "x", "1", "true", "✓", "✔"}
+NO = {"n", "no", "0", "false"}
+
+
+def _declined() -> set[str]:
+    review = publish_review_path()
+    return set(json.loads(review.read_text(encoding="utf-8"))["declined"]) if review.exists() else set()
+
+
+def _save_declined(declined: set[str]) -> None:
+    publish_review_path().write_text(json.dumps({"declined": sorted(declined)}, indent=1) + "\n", encoding="utf-8")
+
+
+def _private_held_out() -> list[dict]:
+    if not P.PRIVATE_DIR.exists():
+        return []
+    return [row for split in ("test", "dev") for _, row, err in P.read_jsonl(path_for(split, private=True)) if not err]
+
+
+def _publish_row(row: dict) -> None:
+    """Move one private held-out row to the public file of its split, with the chat label replaced."""
+    private_path = path_for(row["split"], private=True)
+    rewrite(private_path, [r for _, r, err in P.read_jsonl(private_path) if not err and r["id"] != row["id"]])
+    append(path_for(row["split"]), row | {"source": PUBLISHED_SOURCE})
+
+
+def _publish_summary(published: Counter) -> None:
+    from arabizi_eval import parity
+
+    if published:
+        parity.write()  # public dev rows are part of the Swift parity fixture
+    public = Counter(r["split"] for r in all_rows(include_private=False) if r.get("split") in ("test", "dev"))
+    print(f"published {sum(published.values())} rows ({published['test']} test, {published['dev']} dev); public "
+          f"held-out now {public['test']} test + {public['dev']} dev. Commit data/pairs/test.jsonl, dev.jsonl and "
+          "the parity fixture in a PR; freeze only after `pairs check` has covered every row.")
+
+
+def _write_publish_sheet(rows: list[dict]) -> Path:
+    import openpyxl
+    from openpyxl.styles import Alignment, Font
+
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "publish"
+    sheet.append(["arabizi", "arabic", "publish", "split", "id"])  # the choice sits right after the Arabic
+    for row in rows:
+        sheet.append([row["arabizi"], row["arabic"], "", row["split"], row["id"]])
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for cell in sheet["B"][1:]:
+        cell.alignment = Alignment(horizontal="right", readingOrder=2)  # right to left
+    for column, width in zip("ABCDE", (60, 60, 9, 6, 10), strict=True):
+        sheet.column_dimensions[column].width = width
+    sheet.freeze_panes = "A2"
+    path = publish_sheet_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    book.save(path)
+    return path
+
+
+def _apply_publish_sheet(path: Path) -> int:
+    """Publish the rows marked y in the sheet, remember the rows marked n, leave the blank ones for later."""
+    by_id = {row["id"]: row for row in _private_held_out()}
+    declined = _declined()
+    published, changed, gone = Counter(), [], 0
+    for line in read_sheet(path):
+        row = by_id.get(str(line.get("id") or "").strip())
+        answer = str(line.get("publish") or "").strip().lower()
+        if row is None:
+            gone += answer in YES  # already published, or not a private held-out id
+            continue
+        if answer in YES:
+            if (str(line.get("arabizi") or ""), str(line.get("arabic") or "")) != (row["arabizi"], row["arabic"]):
+                changed.append(row["id"])  # the sheet is for choosing, not editing: edits go through `pairs check`
+                continue
+            _publish_row(row)
+            published[row["split"]] += 1
+        elif answer in NO:
+            declined.add(row["id"])
+    _save_declined(declined)
+    if changed:
+        print(f"Not published, the text was changed in the sheet: {', '.join(changed)}. Fix spelling with "
+              "`pairs check`, then mark them again.")
+    if gone:
+        print(f"{gone} rows marked y were already public or unknown; skipped.")
+    _publish_summary(published)
+    return 1 if changed else 0
+
+
+def cmd_publish(args: argparse.Namespace) -> int:
+    """Move private test/dev rows that Moustafa chooses into the public files, before the freeze (ADR 0014).
+
+    Two ways to choose: one row at a time in the terminal, or (better for Arabic, which many terminals cannot lay
+    out) `--sheet` writes data/private/publish_review.xlsx to mark with y/n in Numbers or Excel and `--apply` reads
+    it back. A published row keeps its id, split, text, date and check; its source becomes PUBLISHED_SOURCE, so the
+    private chat label is never published. Declined rows are remembered in data/private/publish_review.json.
+    """
+    if P.MANIFEST_PATH.exists():
+        print("The test set is frozen: publishing rows would change it. Publish before `pairs freeze`, or plan a new "
+              "freeze version with a reason (docs/DATA.md).")
+        return 1
+    if args.apply:
+        return _apply_publish_sheet(Path(args.apply))
+    declined = _declined()
+    candidates = [row for row in _private_held_out() if row["id"] not in declined]
+    random.Random(args.seed).shuffle(candidates)  # test and dev mixed, so the published share stays near 70/30
+    if not candidates:
+        print("No private test/dev rows left to review.")
+        return 0
+    if args.sheet:
+        path = _write_publish_sheet(candidates)
+        print(f"wrote {path.relative_to(P.ROOT) if path.is_relative_to(P.ROOT) else path} ({len(candidates)} rows; "
+              "never committed). Open it in Numbers or Excel (not Google Sheets: it holds private text), type y in "
+              "the publish column for each row with nothing personal (no names, places, other people or private "
+              "details), n to keep it private, or leave it blank to decide later. Export it as .xlsx into "
+              "data/private, not iCloud Drive (Numbers: File > Export To > Excel, then choose this folder; close the "
+              "Numbers copy "
+              "without saving it to iCloud, which would upload private text), then run:\n"
+              f"  uv run --project eval pairs publish --apply {path}")
+        return 0
+    print(f"{len(candidates)} private test/dev rows to review. Publish a row only if it holds nothing personal: no "
+          "names, places, other people, plans or details you would not post publicly.\n"
+          "y = publish, Enter or n = keep private, q = stop (choices so far are saved)")
+    published = Counter()
+    for row in candidates:
+        if args.target and sum(published.values()) >= args.target:
+            break
+        print(f"\n[{row['split']}] {row['arabizi']}\n       {row['arabic']}")
+        answer = ask("  publish? [y/N/q] ").lower()
+        if answer == "q":
+            break
+        if answer != "y":
+            declined.add(row["id"])
+            _save_declined(declined)
+            continue
+        _publish_row(row)
+        published[row["split"]] += 1
+    print()
+    _publish_summary(published)
+    return 0
+
+
 def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     keys = P._dedupe_keys(row)
     for other in rows:
@@ -437,13 +591,152 @@ def _duplicate_of(row: dict, rows: list[dict]) -> str | None:
     return None
 
 
+BIDI_MARKS = re.compile("[\u200e\u200f\u202a-\u202e\u2066-\u2069]")  # spreadsheets may add these around Arabic
+
+
+def check_sheet_path() -> Path:
+    """The spreadsheet for the self-check; in data/private (it can hold private rows), so never committed."""
+    return P.PRIVATE_DIR.parent / "check_review.xlsx"
+
+
+def format_accepted(accepted: dict[str, list[str]]) -> str:
+    """{'هلق': ['هلأ']} -> 'هلق=هلأ', the form parse_accepted reads back."""
+    return "; ".join(f"{primary}={'|'.join(variants)}" for primary, variants in accepted.items())
+
+
+def _sheet_text(value: object) -> str:
+    return BIDI_MARKS.sub("", str(value if value is not None else "")).strip()
+
+
+def _write_check_sheet(rows: list[dict]) -> Path:
+    import openpyxl
+    from openpyxl.styles import Alignment, Font
+
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "check"
+    # ok sits right after the Arabic, where the eye ends up (a first-column ok was missed: y went into accepted).
+    sheet.append(["arabizi", "arabic", "ok", "accepted", "split", "id"])
+    for row in rows:
+        sheet.append([row["arabizi"], row["arabic"], "", format_accepted(row["accepted"]), row["split"], row["id"]])
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for column in ("B", "D"):
+        for cell in sheet[column][1:]:
+            cell.alignment = Alignment(horizontal="right", readingOrder=2)  # right to left
+    for column, width in zip("ABCDEF", (60, 60, 8, 30, 6, 10), strict=True):
+        sheet.column_dimensions[column].width = width
+    sheet.freeze_panes = "A2"
+    path = check_sheet_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    book.save(path)
+    return path
+
+
+def _check_candidates(cutoff: date, include_train: bool) -> list[dict]:
+    """Unchecked rows old enough to check: test and dev, plus hand-written training rows if asked (never variants)."""
+    out = []
+    for path in P.pair_files():
+        lines = P.read_jsonl(path)
+        if any(err for _, _, err in lines):
+            print(f"Skipping {path.name}: it has broken lines. Run `pairs validate` and fix them first.")
+            continue
+        for _, row, _ in lines:
+            if row.get("checked_by") or date.fromisoformat(row["date"]) >= cutoff:
+                continue
+            if row["split"] in ("test", "dev") or (include_train and row["method"] in ("hand", "ai_checked")):
+                out.append(row)
+    return out
+
+
+def _apply_check_sheet(sheet_path: Path, cutoff: date) -> int:
+    """Mark the rows with ok = y as checked, taking the Arabic and accepted variants as fixed in the sheet."""
+    marks, keep_accepted = {}, set()
+    for line in read_sheet(sheet_path):
+        row_id = _sheet_text(line.get("id"))
+        ok, accepted = _sheet_text(line.get("ok")).lower(), _sheet_text(line.get("accepted"))
+        if not ok and accepted.lower() in YES:
+            # A check mark typed one column off (accepted instead of ok). "y" can never be a variant, so it is
+            # read as ok and the row keeps the accepted variants it had.
+            ok = "y"
+            keep_accepted.add(row_id)
+        if ok in YES:
+            marks[row_id] = line
+    if keep_accepted:
+        print(f"{len(keep_accepted)} row(s) had the y in the accepted column; taken as ok.")
+    checked, refused = 0, []
+    for path in P.pair_files():
+        lines = P.read_jsonl(path)
+        if any(err for _, _, err in lines):
+            print(f"Skipping {path.name}: it has broken lines. Run `pairs validate` and fix them first.")
+            continue
+        rows = [row for _, row, _ in lines]
+        changed = False
+        for row in rows:
+            line = marks.pop(row["id"], None)
+            if line is None or row.get("checked_by"):
+                continue
+            if date.fromisoformat(row["date"]) >= cutoff:
+                refused.append(f"{row['id']}: written less than {(date.today() - cutoff).days} day(s) ago")
+                continue
+            if _sheet_text(line.get("arabizi")) != row["arabizi"].strip():
+                refused.append(f"{row['id']}: the Arabizi was changed (the self-check only fixes the Arabic)")
+                continue
+            original = dict(row)
+            row["arabic"] = _sheet_text(line.get("arabic")) or row["arabic"]
+            try:
+                if row["id"] not in keep_accepted:
+                    row["accepted"] = parse_accepted(_sheet_text(line.get("accepted")))
+            except ValueError as exc:
+                refused.append(f"{row['id']}: {exc}")
+                row.clear()
+                row.update(original)
+                continue
+            errors = P.row_errors(row)
+            if errors:
+                refused.append(f"{row['id']}: " + "; ".join(errors))
+                row.clear()
+                row.update(original)
+                continue
+            row["checked_by"] = CHECKER
+            changed = True
+            checked += 1
+        if changed:
+            rewrite(path, rows)
+    for row_id in marks:
+        refused.append(f"{row_id}: no unchecked row with this id")
+    for message in refused:
+        print(f"  not checked: {message}")
+    rest = f", {len(refused)} not (fix them in the sheet and apply again)" if refused else ""
+    print(f"{checked} row(s) checked{rest}.")
+    return 1 if refused else 0
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     """Delayed self-check (ADR 0011) of unchecked rows.
 
     Rows only carry a date, so "at least N days" means written before the date N days ago: with --days 1, a row
     from yesterday waits until tomorrow, which guarantees >= 24 hours whatever time it was written.
+    `--sheet` writes data/private/check_review.xlsx to check in Numbers or Excel, which lay out Arabic correctly
+    (many terminals do not); `--apply` reads it back.
     """
     cutoff = date.today() - timedelta(days=args.days)
+    if args.apply:
+        return _apply_check_sheet(Path(args.apply), cutoff)
+    if args.sheet:
+        rows = _check_candidates(cutoff, args.train)
+        if not rows:
+            print(f"No unchecked rows written before {cutoff}.")
+            return 0
+        path = _write_check_sheet(rows)
+        print(f"wrote {path.relative_to(P.ROOT) if path.is_relative_to(P.ROOT) else path}: {len(rows)} unchecked rows "
+              f"written before {cutoff} (never committed). Re-read docs/SPELLING.md, then open it in Numbers or Excel "
+              "(not Google Sheets: it can hold private text). For each row: fix the arabic (and accepted, as "
+              "primary=variant; ...) if needed, then type y in ok. Leave ok blank to check it later. Do not change "
+              "the arabizi. Export as .xlsx into data/private, not iCloud Drive (Numbers: File > Export To > Excel, "
+              "then choose this folder in the save dialog; close the Numbers copy without saving it to iCloud), then "
+              f"run:\n  uv run --project eval pairs check --apply {path}")
+        return 0
     print(f"Self-check of rows written before {cutoff}. Re-read docs/SPELLING.md first.")
     print("Enter = correct, e = edit Arabic, a = edit accepted, s = skip, q = quit\n")
     checked = 0
@@ -571,7 +864,16 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("check", help="delayed self-check")
     check.add_argument("--days", type=int, default=1,
                        help="only rows written before the date this many days ago (default 1: >= 24 h)")
+    check.add_argument("--sheet", action="store_true", help="write a spreadsheet to check in, instead of the terminal")
+    check.add_argument("--apply", metavar="FILE", help="mark the rows with ok = y in that spreadsheet as checked")
+    check.add_argument("--train", action="store_true",
+                       help="with --sheet: include hand-written training rows too (never generated variants)")
     sub.add_parser("stats", help="counts and progress")
+    pub = sub.add_parser("publish", help="choose private chat test/dev rows to make public (before the freeze)")
+    pub.add_argument("--target", type=int, help="stop after publishing this many rows")
+    pub.add_argument("--sheet", action="store_true", help="write a spreadsheet to choose in, instead of the terminal")
+    pub.add_argument("--apply", metavar="FILE", help="publish the rows marked y in that spreadsheet")
+    pub.add_argument("--seed", type=int, default=2026, help="order in which rows are shown")
     freeze = sub.add_parser("freeze", help="freeze the test and dev sets (roadmap P2 step 4)")
     freeze.add_argument("--version", default="testset-v1.0")
     freeze.add_argument("--reason", help="required when re-freezing: why the held-out data changed")
@@ -580,7 +882,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
                 "import-chats": cmd_import_chats, "variants": cmd_variants, "lexicon": cmd_lexicon,
-                "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze,
+                "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze, "publish": cmd_publish,
                 "export-train": cmd_export_train, "validate": cmd_validate}
     return commands[args.command](args)
 
