@@ -1,0 +1,292 @@
+{
+  "run_id": "20261016-084514-qwen3-1.7b-lora",
+  "base": "qwen3-1.7b",
+  "hf_id": "Qwen/Qwen3-1.7B",
+  "hf_revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+  "method": "LoRA, completion-only loss",
+  "hyperparameters": {
+    "base": "qwen3-1.7b",
+    "data": "/kaggle/input/datasets/mustafaabbara2003/arabizi-train",
+    "out": "/kaggle/working/out",
+    "epochs": 3,
+    "lr": 0.0002,
+    "rank": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+    "batch": 8,
+    "grad_accum": 4,
+    "warmup": 0.03,
+    "max_length": 256,
+    "seed": 2026,
+    "limit": null
+  },
+  "data": {
+    "export_files": {
+      "train-public.jsonl": {
+        "rows": 3832,
+        "sha256": "dd5bba98c16b17090451f9c1b73ae1266d49aa5ec04ed39460678b8ec8502ec0"
+      },
+      "train-private.jsonl": {
+        "rows": 4125,
+        "sha256": "61c8e3a55aa0325b5b699b21c64948e3b6ba10128c8ddca6bba540c42bc2c05f"
+      },
+      "val-public.jsonl": {
+        "rows": 164,
+        "sha256": "0c16e24ae91b3eefa244061387ebd3e8d445e383a3905d271392b7e7aa12a458"
+      },
+      "val-private.jsonl": {
+        "rows": 264,
+        "sha256": "92990a9767fe62b9604b2c0f783d35af994f18100454e98aaf1be8616836cf3a"
+      }
+    },
+    "rows_total": 8385,
+    "ai_share": 0.477,
+    "prompt_version": 1,
+    "export_sha256_16": "534522f2defbdf88"
+  },
+  "best_eval_loss": 0.3786013126373291,
+  "best_checkpoint": "/kaggle/working/out/20261016-084514-qwen3-1.7b-lora/checkpoints/checkpoint-498",
+  "history": [
+    {
+      "loss": 3.3494869232177735,
+      "learning_rate": 0.00017272727272727275,
+      "epoch": 0.08040201005025126
+    },
+    {
+      "loss": 1.6700323104858399,
+      "learning_rate": 0.0001997287965698893,
+      "epoch": 0.16080402010050251
+    },
+    {
+      "loss": 1.14051513671875,
+      "learning_rate": 0.00019871747254774673,
+      "epoch": 0.24120603015075376
+    },
+    {
+      "loss": 0.8185057640075684,
+      "learning_rate": 0.00019696516950689404,
+      "epoch": 0.32160804020100503
+    },
+    {
+      "loss": 0.6901063442230224,
+      "learning_rate": 0.00019448504033459818,
+      "epoch": 0.4020100502512563
+    },
+    {
+      "loss": 0.57865309715271,
+      "learning_rate": 0.00019129570102287082,
+      "epoch": 0.4824120603015075
+    },
+    {
+      "loss": 0.5366468906402588,
+      "learning_rate": 0.00018742109093576313,
+      "epoch": 0.5628140703517588
+    },
+    {
+      "loss": 0.4863284587860107,
+      "learning_rate": 0.0001828902931191244,
+      "epoch": 0.6432160804020101
+    },
+    {
+      "loss": 0.44712276458740235,
+      "learning_rate": 0.00017773731600158947,
+      "epoch": 0.7236180904522613
+    },
+    {
+      "loss": 0.3955236434936523,
+      "learning_rate": 0.00017200083812536,
+      "epoch": 0.8040201005025126
+    },
+    {
+      "loss": 0.38852572441101074,
+      "learning_rate": 0.00016572391782284547,
+      "epoch": 0.8844221105527639
+    },
+    {
+      "loss": 0.35324175357818605,
+      "learning_rate": 0.00015895367001834694,
+      "epoch": 0.964824120603015
+    },
+    {
+      "eval_loss": 0.45719367265701294,
+      "epoch": 1.0
+    },
+    {
+      "loss": 0.2650724411010742,
+      "learning_rate": 0.00015174091258072925,
+      "epoch": 1.0442211055276382
+    },
+    {
+      "loss": 0.20801053047180176,
+      "learning_rate": 0.00014413978488157867,
+      "epoch": 1.1246231155778894
+    },
+    {
+      "loss": 0.19915523529052734,
+      "learning_rate": 0.00013620734142197032,
+      "epoch": 1.2050251256281408
+    },
+    {
+      "loss": 0.19861023426055907,
+      "learning_rate": 0.00012800312357810615,
+      "epoch": 1.285427135678392
+    },
+    {
+      "loss": 0.18168249130249023,
+      "learning_rate": 0.00011958871268032554,
+      "epoch": 1.3658291457286431
+    },
+    {
+      "loss": 0.17561312913894653,
+      "learning_rate": 0.00011102726778010288,
+      "epoch": 1.4462311557788945
+    },
+    {
+      "loss": 0.15634508132934571,
+      "learning_rate": 0.0001023830515745796,
+      "epoch": 1.5266331658291459
+    },
+    {
+      "loss": 0.14617010354995727,
+      "learning_rate": 9.372094804706867e-05,
+      "epoch": 1.607035175879397
+    },
+    {
+      "loss": 0.13473178148269654,
+      "learning_rate": 8.510597544414927e-05,
+      "epoch": 1.6874371859296482
+    },
+    {
+      "loss": 0.1330286145210266,
+      "learning_rate": 7.660279824497359e-05,
+      "epoch": 1.7678391959798994
+    },
+    {
+      "loss": 0.11184439659118653,
+      "learning_rate": 6.827524178597257e-05,
+      "epoch": 1.8482412060301507
+    },
+    {
+      "loss": 0.11790708303451539,
+      "learning_rate": 6.0185813184214546e-05,
+      "epoch": 1.9286432160804021
+    },
+    {
+      "eval_loss": 0.3786013126373291,
+      "epoch": 2.0
+    },
+    {
+      "loss": 0.09858578443527222,
+      "learning_rate": 5.239523215539491e-05,
+      "epoch": 2.0080402010050253
+    },
+    {
+      "loss": 0.0497135728597641,
+      "learning_rate": 4.496197524816229e-05,
+      "epoch": 2.0884422110552765
+    },
+    {
+      "loss": 0.04826445281505585,
+      "learning_rate": 3.794183691578618e-05,
+      "epoch": 2.1688442211055277
+    },
+    {
+      "loss": 0.04558246433734894,
+      "learning_rate": 3.138751071978591e-05,
+      "epoch": 2.249246231155779
+    },
+    {
+      "loss": 0.04097146689891815,
+      "learning_rate": 2.5348193809031695e-05,
+      "epoch": 2.32964824120603
+    },
+    {
+      "loss": 0.0398743599653244,
+      "learning_rate": 1.986921764311941e-05,
+      "epoch": 2.4100502512562816
+    },
+    {
+      "loss": 0.04137330949306488,
+      "learning_rate": 1.4991707731831494e-05,
+      "epoch": 2.4904522613065327
+    },
+    {
+      "loss": 0.036257651448249814,
+      "learning_rate": 1.075227494469826e-05,
+      "epoch": 2.570854271356784
+    },
+    {
+      "loss": 0.03319905400276184,
+      "learning_rate": 7.182740707708757e-06,
+      "epoch": 2.651256281407035
+    },
+    {
+      "loss": 0.03248506188392639,
+      "learning_rate": 4.309898149859393e-06,
+      "epoch": 2.7316582914572862
+    },
+    {
+      "loss": 0.03528963923454285,
+      "learning_rate": 2.15531099238907e-06,
+      "epoch": 2.812060301507538
+    },
+    {
+      "loss": 0.03455747663974762,
+      "learning_rate": 7.351516902488698e-07,
+      "epoch": 2.892462311557789
+    },
+    {
+      "loss": 0.035628384351730345,
+      "learning_rate": 6.008004072650674e-08,
+      "epoch": 2.97286432160804
+    },
+    {
+      "eval_loss": 0.3808754086494446,
+      "epoch": 3.0
+    },
+    {
+      "epoch": 3.0
+    }
+  ],
+  "public_samples": [
+    {
+      "arabizi": "khayye l zghir sarlo se3tein 3am yel3ab PlayStation w ma 3am yesma3 la 7ada.",
+      "reference": "خيي الزغير صارلو ساعتين عم يلعب PlayStation وما عم يسمع لحدا.",
+      "output": "خيي الزغير صرلو ساعتين عم يلعب PlayStation وما عم يسمع لحدا."
+    },
+    {
+      "arabizi": "bel madrase kenu y3a2bouna iza 7kina 3arabe b saff el frensewe.",
+      "reference": "بالمدرسة كانوا يعاقبونا إذا حكينا عربي بصف الفرنساوي.",
+      "output": "بالمسجدية كانوا يعQBونا إذا حكينا عربي بصف الفرنساوي."
+    },
+    {
+      "arabizi": "kifik ya sabiyye? shu hal jamal el yom?",
+      "reference": "كيفك يا صبية؟ شو هالجمال اليوم؟",
+      "output": "كفيك يا صبيعي؟ شو هالجمال اليوم؟"
+    },
+    {
+      "arabizi": "el mudir talab menne khalles el report 2abl el deadline b yomein.",
+      "reference": "المدير طلب مني خلص ال report قبل ال deadline بيومين.",
+      "output": "المدير طلب مني خلص ال report قبل ال deadline بيومين."
+    },
+    {
+      "arabizi": "iza btkhalles el shoghl bakkir, fik tfell 2abl el 5.",
+      "reference": "إذا بتخلص الشغل بكير، فيك تفل قبل ال 5.",
+      "output": "إذا بتخلص الشغل بكير، فيك تفل قبل ال 5."
+    }
+  ],
+  "prompt": {
+    "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+    "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+  },
+  "gpu": "Tesla T4",
+  "precision": "fp16",
+  "minutes": 40.9,
+  "python": "3.13.15",
+  "versions": {
+    "torch": "2.11.0+cu128",
+    "transformers": "5.16.1",
+    "peft": "0.20.0",
+    "trl": "1.16.0"
+  }
+}

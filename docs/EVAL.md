@@ -89,6 +89,7 @@ Same harness, llama.cpp b11429, greedy decoding; the fine-tuned model is zero-sh
 | System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. | Peak RSS | p50 / p95 ms |
 |---|---|---|---|---|---|---|---|---|
 | **Llama 3.2 1B fine-tuned** (`ft-arabizi-llama3.2-1b-v1`) | **0.768** | [0.73, 0.80] | 0.097 | 0.86 | 0.93 | 0.06 | 956 MB | 421 / 853 |
+| Qwen3-1.7B fine-tuned (`ft-arabizi-qwen3-1.7b-v1`) | 0.723 | [0.68, 0.76] | 0.111 | 0.85 | 1.00 | 0.05 | 1,333 MB | 576 / 1,481 |
 | B0 rules | 0.543 | [0.51, 0.58] | 0.189 | 0.17 | 1.00 | 0.00 | — | < 1 |
 | Llama 3.2 1B, 5-shot (best B1) | 0.166 | [0.14, 0.19] | 0.529 | 0.17 | 0.71 | 0.48 | 971 MB | 583 / 1,110 |
 
@@ -97,16 +98,17 @@ Public dev rows only (48; reproducible from the repo: `eval/results/20261016-112
 | System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. |
 |---|---|---|---|---|---|---|
 | **Llama 3.2 1B fine-tuned** | **0.733** | [0.68, 0.78] | 0.124 | 0.70 | 0.88 | 0.10 |
+| Qwen3-1.7B fine-tuned (`eval/results/20261016-124744-ft-arabizi-qwen3-1.7b-v1-dev-public`) | 0.680 | [0.62, 0.74] | 0.129 | 0.79 | 1.00 | 0.06 |
 | B0 rules | 0.555 | [0.50, 0.61] | 0.179 | 0.27 | 1.00 | 0.00 |
 | Llama 3.2 1B, 5-shot | 0.143 | [0.11, 0.17] | 0.531 | 0.10 | 0.50 | 0.50 |
 
-**Paired bootstrap** (word accuracy, 10,000 resamples): fine-tuned − B0 = **+0.225 [+0.179, +0.270]** on all dev rows and **+0.178 [+0.113, +0.245]** on the public rows; fine-tuned − best B1 = **+0.602 [+0.560, +0.643]**. Both intervals are above 0, on dev; the P4 gate is decided on the frozen test set, once, for the final model (ADR 0005).
+**Paired bootstrap** (word accuracy, 10,000 resamples): fine-tuned − B0 = **+0.225 [+0.179, +0.270]** on all dev rows and **+0.178 [+0.113, +0.245]** on the public rows; fine-tuned − best B1 = **+0.602 [+0.560, +0.643]**; Llama − Qwen (both fine-tuned) = **+0.045 [+0.017, +0.075]** (public rows +0.053 [+0.006, +0.103]); Qwen − B0 = +0.180 [+0.130, +0.229]. Both intervals are above 0, on dev; the P4 gate is decided on the frozen test set, once, for the final model (ADR 0005).
 
 - **What fine-tuning fixed:** Lebanese spelling and joined clitics (CER halves against B0), and English kept in Latin (keep-Latin F1 0.17 → 0.86: the rules miss most English in real chats).
 - **What still needs the engine:** standalone numbers come out unchanged only 93% of the time (the P4 gate asks ≥ 99% on test) and 6% of answers are flagged as hallucinations. Both are what P5's protected spans (numbers become `⟦0⟧`) and output checks are for; the raw model is measured here, the engine (`arabizi-cli`) will be measured in P5.
 - **Speed and memory** fit the budgets on the 8 GB Air: p50 421 ms (≤ 600), p95 853 ms (≤ 1,200), 956 MB (≤ 1.5 GB), load 1.5 s.
 - **Prompt detail found while wiring this up:** the Llama run trained with **two BOS tokens** (the chat template's `<|begin_of_text|>` text plus the one the tokenizer adds). Sending the saved prompt as text lets `llama-server` do the same, and reproduces the run's own samples exactly; with a single BOS the output degrades (`سبيقة` became `سبquina`). See MODELS.md.
-- Qwen3-1.7B fine-tuned is scored the same way once its file is downloaded; then ADR 0005 picks the final model.
+- **Llama or Qwen:** Llama is more accurate (interval above 0), faster and lighter; Qwen keeps every number (1.00 vs 0.93) but its p95 (1,481 ms) is over the 1.2 s budget and it uses 1,333 MB. [ADR 0005](decisions/0005-final-model.md) proposes Llama; the frozen test set is then run once for it.
 
 ## Metrics
 

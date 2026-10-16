@@ -63,6 +63,24 @@
             "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
             "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
       }
+    },
+    {
+      "id": "arabizi-qwen3-1.7b-v1",
+      "base": "qwen3-1.7b",
+      "run": "train/runs/20261016-084514-qwen3-1.7b-lora.json",
+      "file": "arabizi-qwen3-1.7b-v1-Q4_K_M.gguf",
+      "size": 1107408608,
+      "sha256": "6da6b60ce924f65ca09c6c4312dfbfa3aa37694274d58478c1e4cc17f163b6eb",
+      "params": "1.7B",
+      "quant": "Q4_K_M",
+      "licence": "Apache-2.0",
+      "licence_acceptance": null,
+      "publisher": "this project: LoRA fine-tune of Qwen3-1.7B on Kaggle (ADR 0015); weights stay private",
+      "source": "P4 fine-tuning",
+      "prompt": {
+            "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+            "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+      }
     }
   ]
 }
