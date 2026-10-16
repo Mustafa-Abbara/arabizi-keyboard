@@ -32,7 +32,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 | P2 | SPELLING.md v1.2. **Frozen: `testset-v1.0`** (16 Oct): 347 held-out rows, public 113 test + 48 dev, private 130 test + 56 dev (111 chat rows published, ADR 0014 amendment); every row self-checked in a spreadsheet. Training: 2,000 Claude-drafted rows revised by Moustafa (ADR 0012) + 1,687 private chat rows + generated variants. |
 | P3 | Harness `evalrun` (docs/EVAL.md). B0 rules **0.547** on 105 dev rows; B1 best **0.169** (Llama 3.2 1B, 5-shot). ADR 0004: fine-tune Llama 3.2 1B + Qwen3-1.7B (fallback Qwen3-0.6B). Gate open: re-run one baseline from a fresh clone. |
 | P4 | Trained 16 Oct (ADR 0015); **ADR 0005: ship the Llama 3.2 1B fine-tune.** **Frozen test (once): 0.783** vs B0 0.594 (+0.189 [0.16, 0.22]) and best B1 0.147; numbers 24/24; p50/p95 487/1,013 ms, 830 MB (numbers protected, `-protect`). Gate: 3 of 4 pass; open: re-run training in a fresh Kaggle session (dev within 2 points). |
-| P5 | Started (ADR 0016): Swift rule fallback `RuleConverter` (B0 port, exact parity with Python via `b0_parity.json`) and `ProtectedSpans`; the keyboard now uses the rule converter. `ArabiziLLM` (ADR 0017): llama.cpp XCFramework b11429 (= export commit) as a SwiftPM binary target, `LlamaModel` with deadline. Contracts, output checks and `config/engine.json` (ADR 0018, docs/API_CONTRACTS.md). Next: XPC service, `arabizi-cli`. |
+| P5 | Rule fallback + protected spans (ADR 0016), `ArabiziLLM` (ADR 0017), contracts/checks/config (ADR 0018), **engine + `arabizi-cli`** (ADR 0019): Swift engine on dev 0.770 (Python 0.768), numbers 100%, `engine-<id>` eval systems. Next: XPC service, keyboard switch-on. |
 | P6–P7 | Not started. |
 
 **Next steps, in order:**

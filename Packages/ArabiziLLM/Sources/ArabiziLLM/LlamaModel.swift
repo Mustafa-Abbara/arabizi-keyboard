@@ -34,6 +34,19 @@ public struct Generation: Equatable, Sendable {
     public let promptTokens: Int
     public let generatedTokens: Int
     public let elapsed: Duration
+
+    public init(text: String, stop: Stop, promptTokens: Int, generatedTokens: Int, elapsed: Duration) {
+        self.text = text
+        self.stop = stop
+        self.promptTokens = promptTokens
+        self.generatedTokens = generatedTokens
+        self.elapsed = elapsed
+    }
+}
+
+/// Something that turns a rendered prompt into text: the real `LlamaModel`, or a stand-in in tests of the engine.
+public protocol TextGenerator: Sendable {
+    func generate(_ prompt: String, maxTokens: Int, timeout: Duration) throws -> Generation
 }
 
 public enum LlamaError: Error, Equatable {
@@ -50,7 +63,7 @@ public enum LlamaError: Error, Equatable {
 /// One GGUF model loaded once and kept in memory ("warm"), generating greedily with a hard deadline
 /// (roadmap P5 step 4, ADR 0017). Uses only llama.cpp's C API. One generation runs at a time; other calls wait.
 /// Never logs prompt or output text, and llama.cpp's own logging is switched off.
-public final class LlamaModel: @unchecked Sendable {  // all mutable state is behind `lock`
+public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all mutable state is behind `lock`
     public struct Settings: Sendable {
         /// Prompt plus answer, in tokens. A keyboard message is short; 512 keeps the KV cache small on 8 GB.
         public var contextLength: Int32 = 512

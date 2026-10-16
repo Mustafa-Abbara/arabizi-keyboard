@@ -43,6 +43,7 @@ jobs:
           path: ~/Library/Caches/org.swift.swiftpm
           key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/ArabiziLLM/Package.swift') }}
       - run: swift test --package-path Packages/ArabiziLLM
+      - run: swift test --package-path Packages/ArabiziEngine  # the real-model test is skipped (no weights on CI)
       - run: scripts/build_ime.sh
 
   hygiene:

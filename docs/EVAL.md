@@ -32,6 +32,8 @@ uv run --project eval pairs variants && uv run --project eval pairs lexicon
 | **`ft-<model id>`** | A fine-tuned model (P4): zero-shot, with the exact prompt saved by its training run (`prompt` in `config/models.json`), sent as text to `llama-server`'s `/completion` so no chat template is re-rendered. | `b1.py` (`FineTuned`), `config/models.json`, `train/runs/` |
 | **`ft-<model id>-protect`** | The same, with standalone numbers replaced by `⟦0⟧`, `⟦1⟧`… before the model and restored after, as the P5 engine's `ProtectedSpans` does; a broken placeholder sends the sentence to B0. | `b1.py` (`ProtectedFineTuned`) |
 
+| **`engine-<model id>`**, `engine-rules` | The Swift engine through `arabizi-cli` (P5): protected spans, saved prompt, model with deadline, output checks, rules on fallback; outcomes and fallback reasons recorded. Dev: `engine-arabizi-llama3.2-1b-v1` 0.770, numbers 100%, 98 model answers and 6 fallbacks ([ADR 0019](decisions/0019-engine-and-cli.md)). | `engine.py`, `Packages/ArabiziEngine` |
+
 Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a long vowel (`8ali` → غلي, not غالي) and final `-e` can be ي or ة (`2alle` → قلة, not قلي). Words in the dictionary avoid both.
 
 ## Results so far (dev)
