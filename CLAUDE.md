@@ -36,6 +36,7 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 | P6–P7 | Not started. |
 
 **Next steps, in order:**
+0. **Moustafa, accuracy plan step 2:** run `train/sweep_lora.ipynb` on Kaggle (Save & Run All; 4 Llama runs: base, rank32, lr1e-4, ep2; same dataset), download the 12 files; Claude scores each on dev against the shipped model (TRAINING.md, "Sweep"). The `base` run also closes the P4 reproducibility gate item.
 1. **Moustafa:** `scripts/install_ime.sh` (with the model in `models/`), switch to the keyboard, and type: Enter now uses the fine-tuned model (rules for the first ~30 s while it loads). Then fill the P1 app matrix (`docs/spikes/ime_app_matrix.md`), still the biggest unverified risk.
 2. **Open P5 gate items:** one engine run on test (`evalrun run --system engine-arabizi-llama3.2-1b-v1 --split test --final`, needs Moustafa's OK: within 1 point of 0.783); CI required on `main` (`bootstrap.py protect --checks …`, prove a failing PR cannot merge).
 3. **Open P4 gate item (Moustafa):** re-run the Llama training once in a fresh Kaggle session (dev within 2 points of 0.768).

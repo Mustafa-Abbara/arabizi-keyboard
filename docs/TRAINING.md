@@ -42,6 +42,21 @@ From the notebook's **Output**, download per model:
 
 Then tell Claude: the models get entries in `config/models.json` (with their SHA-256 and the `prompt` prefix and suffix from `run.json`, which the engine uses verbatim, ADR 0017/0018) and are scored on dev with the same harness as B0 and B1, without examples (the fine-tuned model has learnt the task).
 
+## Sweep: one setting at a time (accuracy plan, step 2)
+
+`train/sweep_lora.ipynb` trains Llama 3.2 1B four times on the **same export** (the existing private Kaggle dataset; no new upload), each run changing **one** setting against the shipped model's (rank 16, alpha 32, lr 2e-4, 3 epochs):
+
+| Run (`--tag`) | Change | Why |
+|---|---|---|
+| `base` | none | reproducibility (P4 gate: dev within 2 points of 0.768) and the noise floor of a rerun |
+| `rank32` | `--rank 32 --alpha 64` | more adapter capacity |
+| `lr1e-4` | `--lr 1e-4` | smaller steps: validation loss rose after epoch 2 |
+| `ep2` | `--epochs 2` | the schedule ends where the shipped run's best checkpoint was (epoch 2) |
+
+Import it like the main notebook, set **GPU T4**, **Internet on**, add the `arabizi-train` dataset, then **Save Version → Save & Run All (Commit)**: it runs in the background (about 2 hours of GPU) and keeps the outputs on the version page. Download the three files per run (`arabizi-llama3.2-1b-<tag>-Q4_K_M.gguf`, `.sha256`, `run.json`).
+
+**How the runs are judged** (on the Mac, dev only; the test set is not touched): each run is scored with the same harness and compared with the shipped model by paired bootstrap on the same 104 dev rows. A setting is kept only if the 95% interval of the gain is above 0, and only if it beats `base` by more than `base` differs from the shipped model (the rerun noise). The winners are combined in one more run; a clear overall gain makes a new final candidate (one test run, new ADR).
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.
