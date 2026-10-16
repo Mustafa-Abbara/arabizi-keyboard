@@ -105,6 +105,12 @@ uv run --project eval pairs freeze    # writes data/pairs/manifest.json (testset
 
 Design: **Claude's recommendation** (14 Oct 2026), from roadmap P2 step 4.
 
+### Freeze log
+
+| Version | Date | Held-out rows | What happened before it |
+|---|---|---|---|
+| `testset-v1.0` | 16 Oct 2026 | 347: public 113 test + 48 dev, private 130 test + 56 dev; 0 unchecked | First freeze, before any fine-tuning. 111 of Moustafa's chat test/dev rows were made public with `pairs publish` (public test 35 → 113, ADR 0014 amendment); 3 private held-out rows he judged unfit were removed (350 → 347); every row had the delayed self-check in a spreadsheet (`pairs check --sheet`), because the terminal could not display Arabic, which also corrected the Arabic of 3 public rows; the terminal checks of 15 Oct were discarded. |
+
 ## Writing pairs: the `pairs` tool
 
 ```bash
