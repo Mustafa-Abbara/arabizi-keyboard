@@ -129,6 +129,12 @@ class LlamaServer:
                 "cache_prompt": True, "chat_template_kwargs": {"enable_thinking": False}}
         return self._request("/v1/chat/completions", body)["choices"][0]["message"].get("content") or ""
 
+    def complete(self, prompt: str, limit: int) -> str:
+        """Raw completion of an already rendered prompt (no chat template applied by the server)."""
+        body = {"prompt": prompt, "temperature": 0, "seed": 0, "n_predict": limit, "stream": False,
+                "cache_prompt": True}
+        return self._request("/completion", body).get("content") or ""
+
 
 class ManagedServer:
     """A llama-server process started and stopped by the harness, with load time and peak RSS."""
@@ -238,3 +244,34 @@ class B1(System):
             self.describe["load_seconds"] = round(self.managed.load_seconds, 2)
             self.describe["peak_rss_mb"] = round(self.managed.peak_rss_mb, 1)
             self.managed.stop()
+
+
+class FineTuned(B1):
+    """A fine-tuned model (P4): zero-shot with the exact prompt saved by its training run (`prompt` in
+    config/models.json), sent as text to llama-server's /completion, so no chat template is re-rendered (Llama 3.2's
+    would put today's date in it). The server tokenizes the text as training did, BOS included: Llama 3.2 training
+    saw two BOS tokens (the template's and the tokenizer's), and only that reproduces the run's samples."""
+
+    def __init__(self, model_id: str, url: str | None = None) -> None:
+        super().__init__(model_id, "zero", url)
+        self.prompt = self.entry["prompt"]
+        self.name = f"ft-{model_id}"
+        self.describe.update({
+            "kind": "llm-finetuned", "base": self.entry["base"], "run": self.entry["run"], "shots": "zero",
+            "prompt": "saved by the training run (config/models.json), sent to /completion",
+            "prompt_sha256_16": hashlib.sha256(json.dumps(self.prompt, ensure_ascii=False, sort_keys=True)
+                                               .encode("utf-8")).hexdigest()[:16],
+            "postprocess": "first non-empty line; wrapping quotes stripped",
+        })
+        self.describe.pop("shot_ids", None)
+        self.describe.pop("shots_sha256_16", None)
+        self.describe.pop("prompt_version", None)
+
+    def convert(self, row: dict) -> str:
+        if self.server is None:
+            raise RuntimeError("call start() first")
+        text = row["arabizi"]
+        reply = self.server.complete(self.prompt["prefix"] + text + self.prompt["suffix"], max_tokens(text))
+        if self.managed is not None:
+            self.managed.sample_memory()
+        return clean(reply)

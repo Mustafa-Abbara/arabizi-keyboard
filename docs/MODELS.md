@@ -21,6 +21,19 @@ Total: 3.11 GB for the four Qwen files, 4.73 GB with Gemma and Llama.
 - **Memory budget** (≤ 1.5 GB engine RSS on the 8 GB Air): all Q4_K_M files above are ≤ 1.12 GB on disk; the run also needs a context buffer, so the 1.5–1.7B models will be close and P3 measures it.
 - **Fine-tuning (P4)** uses the original Hugging Face weights of the chosen base model **on Kaggle**, not these GGUF files; the fine-tuned model is converted to GGUF there and fetched like the others (its entry is added to `config/models.json` then).
 
+## Fine-tuned models (P4)
+
+Trained on Kaggle with `train/finetune_lora.py` (ADR 0015) from the frozen data (`testset-v1.0`, export of 8,385 training examples, 48% AI-derived). The weights stay private (`models/`, never committed); `config/models.json` pins each file's size and SHA-256 and holds the **exact prompt** its run saved (`prompt.prefix` / `prompt.suffix`), and `train/runs/<run_id>.json` records the run (hyperparameters, losses, versions, public samples).
+
+| Id | Base | Run | File | Size | Best val. loss | Dev word acc. |
+|---|---|---|---|---|---|---|
+| `arabizi-llama3.2-1b-v1` | Llama 3.2 1B Instruct | `20261016-051159-llama3.2-1b-lora` (T4, fp16, 25 min) | `arabizi-llama3.2-1b-v1-Q4_K_M.gguf` | 0.81 GB | 0.401 | 0.768 (EVAL.md) |
+| `arabizi-qwen3-1.7b-v1` | Qwen3-1.7B | `20261016-054238-qwen3-1.7b-lora` (T4, fp16, 36 min) | `arabizi-qwen3-1.7b-v1-Q4_K_M.gguf` | 1.11 GB | 0.370 | not yet: file to download |
+
+- **Getting the files:** they are not on Hugging Face; download them from the Kaggle run's output (docs/TRAINING.md) and check them against the `.sha256` files. `scripts/fetch_models.py` lists them as skipped.
+- **Licence:** the Llama 3.2 Community License applies to the fine-tune (accepted 14 Oct 2026); "Built with Llama" if it is ever distributed.
+- **BOS tokens (Llama):** the saved prompt starts with the text `<|begin_of_text|>`, and the tokenizer adds another BOS, so training saw **two**. Evaluation sends the prompt as text to `llama-server`, which does the same and reproduces the run's samples; a single BOS degrades the output. The Swift `LlamaModel` currently removes a duplicate BOS (ADR 0017) and must keep it for this model before the engine uses it (P5).
+
 ## The download step (one step, when Moustafa says go)
 
 Everything that has to be downloaded to this Mac for P3, in one go:

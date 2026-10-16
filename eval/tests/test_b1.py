@@ -46,6 +46,10 @@ class FakeLlamaServer(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])).decode("utf-8"))
         type(self).requests.append(body)
+        if self.path == "/completion":  # raw prompt (fine-tuned models): answer the Arabizi found inside it
+            answer = next((a for q, a in ANSWERS.items() if q in body["prompt"]), "؟")
+            self._send({"content": f"{answer}\n"})
+            return
         answer = ANSWERS.get(body["messages"][-1]["content"], "؟")
         self._send({"choices": [{"message": {"role": "assistant", "content": f"<think>\n\n</think>\n\n{answer}\n"}}]})
 
@@ -66,9 +70,27 @@ def server(monkeypatch):
 
 
 def test_two_systems_per_pinned_model():
-    ids = [m["id"] for m in b1.load_manifest()]
+    ids = [m["id"] for m in b1.load_manifest() if "prompt" not in m]  # base models only
     names = [name for name in systems.REGISTRY if name.startswith("b1-")]
     assert sorted(names) == sorted(f"b1-{i}-{s}" for i in ids for s in ("zero", "5shot"))
+
+
+def test_one_system_per_fine_tuned_model():
+    fine_tuned = [m["id"] for m in b1.load_manifest() if "prompt" in m]
+    assert fine_tuned  # P4 added at least one
+    assert sorted(n for n in systems.REGISTRY if n.startswith("ft-")) == sorted(f"ft-{i}" for i in fine_tuned)
+
+
+def test_fine_tuned_sends_the_saved_prompt_unchanged(server, monkeypatch):
+    entry = next(m for m in b1.load_manifest() if "prompt" in m)
+    monkeypatch.setattr(FakeLlamaServer, "model_path", f"/x/models/{entry['file']}")
+    system = b1.FineTuned(entry["id"])
+    system.start()
+    assert system.convert({"arabizi": "b3at 100$ la mohammad"}) == "بعت 100$ لمحمد"
+    request = FakeLlamaServer.requests[-1]
+    assert request["prompt"] == entry["prompt"]["prefix"] + "b3at 100$ la mohammad" + entry["prompt"]["suffix"]
+    assert request["temperature"] == 0 and "messages" not in request  # no chat template re-rendered
+    assert system.name == f"ft-{entry['id']}" and system.describe["kind"] == "llm-finetuned"
 
 
 def test_shots_are_public_training_rows_never_held_out():
