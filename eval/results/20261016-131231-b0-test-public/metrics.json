@@ -1,0 +1,35 @@
+{
+  "run_id": "20261016-131231-b0-test-public",
+  "system": "b0",
+  "describe": {
+    "kind": "external",
+    "predictions_file": "predictions.jsonl"
+  },
+  "split": "test",
+  "subset": "public",
+  "private_sentences": 0,
+  "sentences": 113,
+  "data_sha256": "f1feb063a0a28758f2b7fd3923296fad8c45ec37c9bbe6e30a7c2062e3918d3f",
+  "git_sha": "f31503b",
+  "created": "2026-10-16T13:12:31",
+  "metrics": {
+    "sentences": 113,
+    "word_accuracy": 0.5723192019950125,
+    "word_accuracy_lenient": 0.5765877957658779,
+    "exact_match": 0.035398230088495575,
+    "punctuation_match": 1.0,
+    "cer": 0.16599839615076184,
+    "keep_latin_precision": 1.0,
+    "keep_latin_recall": 0.14634146341463414,
+    "keep_latin_f1": 0.2553191489361702,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.008849557522123894,
+    "hallucination_rate": 0.0,
+    "latency_ms_p50": 0.02787500125123188,
+    "latency_ms_p95": 0.047375000576721504,
+    "word_accuracy_ci95": [
+      0.5364963503649635,
+      0.6071896385599852
+    ]
+  }
+}

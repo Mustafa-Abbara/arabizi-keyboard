@@ -115,6 +115,32 @@ Public dev rows only (48; reproducible from the repo: `eval/results/20261016-112
 - **Why Qwen scored lower** (measured symptoms; the cause is not proven): both tokenizers split Arabic and Arabizi almost identically (≈ 2.0 tokens per Arabic word, 2.2 per Arabizi word), so the validation losses are comparable and Qwen's is really lower (0.163 vs 0.170 per character). Yet on dev Qwen gets 187 words wrong against Llama's 156; Llama is better on 29 sentences, Qwen on 11 (64 ties). The difference is in unfamiliar words: Llama writes what the letters sound like (`بسعت` for `بصوت`), Qwen tends to put in a real but different Arabic word (`عضوية` for `عيد زواجن`, `القلامة` for `القلم`, `جرة` for `جرافة`). Lower validation loss with worse held-out accuracy points to Qwen fitting the training sentences' style more closely and transferring less to new real typing; Qwen3's mostly-MSA pretraining may also pull it towards standard words. One run per model, so run-to-run variation is not measured.
 - **Llama or Qwen:** Llama is more accurate (interval above 0), faster and lighter; Qwen keeps every number (1.00 vs 0.93) but its p95 (1,481 ms) is over the 1.2 s budget and it uses 1,333 MB. [ADR 0005](decisions/0005-final-model.md) (accepted) ships Llama; the frozen test set is run once for it.
 
+### P4 final: the frozen test set, run once (16 Oct 2026)
+
+`testset-v1.0` test split, **243 rows** (113 public + 130 private), each system run **once** (`evalrun run --split test --final`); the public numbers re-score those same outputs (`evalrun score --subset public`), so no model saw the test set twice. Model chosen beforehand on dev ([ADR 0005](decisions/0005-final-model.md)).
+
+| System (all 243 rows) | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. | Peak RSS | p50 / p95 ms |
+|---|---|---|---|---|---|---|---|---|
+| **Llama 3.2 1B fine-tuned, numbers protected** (`-protect`, as the engine runs it) | **0.783** | [0.76, 0.81] | 0.091 | 0.81 | 24/24 | 0.070 | 830 MB | **487 / 1,013** |
+| Llama 3.2 1B fine-tuned, raw | 0.783 | [0.76, 0.81] | 0.090 | 0.81 | 24/24 | 0.070 | 988 MB | 755 / 2,618 * |
+| B0 rules | 0.594 | [0.57, 0.62] | 0.167 | 0.33 | 24/24 | 0.000 | — | < 1 |
+| Llama 3.2 1B, 5-shot (best B1) | 0.147 | [0.13, 0.16] | 0.527 | 0.22 | 16/24 | 0.374 | — | 629 / 1,170 |
+
+Public rows only (113; `eval/results/20261016-1312*-test-public`): fine-tuned raw 0.757 [0.72, 0.80], protected 0.756 [0.72, 0.79], B0 0.572 [0.54, 0.61], best B1 0.151 [0.13, 0.18].
+
+**Paired bootstrap** (word accuracy): fine-tuned − B0 = **+0.189 [+0.159, +0.219]** (public **+0.185 [+0.142, +0.229]**); fine-tuned − best B1 = **+0.636 [+0.607, +0.665]** (public +0.606 [+0.563, +0.649]); protected − B0 = +0.188 [+0.158, +0.219]; protected − raw = −0.000 [−0.004, +0.003] (the raw model kept all 24 test numbers here; protection fell back to B0 on 2 sentences whose placeholder the model broke).
+
+\* The raw run hit a temporary slowdown of the Mac in the middle (25-sentence block medians rose from about 0.5–0.9 s to 1.3–1.8 s for sentences 100–175, then fell back), so its latency is not representative; the protected run of the same model just after was steady (blocks about 0.42–0.44 s after warm-up), as was the raw model on dev (421 / 853 ms).
+
+**P4 gate** (roadmap):
+
+- [x] The fine-tuned model beats B0 **and** the best B1 on test word accuracy with the 95% CI of the difference above 0: +0.189 [+0.159, +0.219] and +0.636 [+0.607, +0.665].
+- [x] Number preservation ≥ 99%: 24/24 (100%) raw and protected (dev: raw 13/14, protected 14/14). Keep-Latin F1 0.81 and hallucination rate 7.0% reported.
+- [x] The quantized model meets the budgets on the 8 GB Air: 830–988 MB (≤ 1.5 GB); p50 487 ms (≤ 600), p95 1,013 ms (≤ 1,200) in the protected run; dev raw 421 / 853 ms.
+- [ ] Re-running training in a fresh Kaggle session at the same data SHA gives dev accuracy within 2 points: **not done** for Llama. (Qwen was trained twice, but the first run's file was lost before it was scored.)
+
+Not done from P4 step 4–5 (optional in the solo plan, roadmap §5): the data ablations (with/without AI rows, with/without variants), Q4_K_M vs unquantized, and the local AladdinBench check on other people's typing.
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
