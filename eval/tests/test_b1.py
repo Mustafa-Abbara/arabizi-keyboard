@@ -78,7 +78,8 @@ def test_two_systems_per_pinned_model():
 def test_one_system_per_fine_tuned_model():
     fine_tuned = [m["id"] for m in b1.load_manifest() if "prompt" in m]
     assert fine_tuned  # P4 added at least one
-    assert sorted(n for n in systems.REGISTRY if n.startswith("ft-")) == sorted(f"ft-{i}" for i in fine_tuned)
+    assert sorted(n for n in systems.REGISTRY if n.startswith("ft-")) == \
+        sorted([f"ft-{i}" for i in fine_tuned] + [f"ft-{i}-protect" for i in fine_tuned])
 
 
 def test_fine_tuned_sends_the_saved_prompt_unchanged(server, monkeypatch):
@@ -204,3 +205,28 @@ def test_managed_mode_refuses_a_missing_or_wrong_model_file(monkeypatch, tmp_pat
 def test_convert_before_start_is_an_error():
     with pytest.raises(RuntimeError, match="start"):
         b1.B1("qwen2.5-0.5b", "zero").convert({"arabizi": "shu"})
+
+
+@pytest.mark.parametrize(("text", "masked", "spans"), [
+    ("w baddak 2 recom letters", "w baddak ⟦0⟧ recom letters", ["2"]),  # the dev row the raw model got wrong
+    ("b3at 100$ 3al 7:30", "b3at ⟦0⟧ 3al ⟦1⟧", ["100$", "7:30"]),
+    ("3am ta3mel 2alb", "3am ta3mel 2alb", []),  # digits inside words are letters
+])
+def test_protect_numbers(text, masked, spans):
+    assert b1.protect_numbers(text) == (masked, spans)
+    assert b1.restore_numbers(masked, spans) == text
+
+
+@pytest.mark.parametrize("output", ["بعت", "بعت ⟦0⟧ ⟦0⟧", "بعت ⟦1⟧", "بعت ⟦0⟧ ⟧"])
+def test_restore_refuses_broken_placeholders(output):
+    assert b1.restore_numbers(output, ["100$"]) is None
+
+
+def test_protected_system_falls_back_to_rules_when_a_placeholder_breaks(server, monkeypatch):
+    entry = next(m for m in b1.load_manifest() if "prompt" in m)
+    monkeypatch.setattr(FakeLlamaServer, "model_path", f"/x/models/{entry['file']}")
+    system = b1.ProtectedFineTuned(entry["id"])
+    system.start()
+    # The fake server answers "؟" to an unknown prompt, losing the placeholder: the rules answer, numbers intact.
+    assert "100$" in system.convert({"arabizi": "b3at 100$ la rami"})
+    assert system.fallbacks == 1 and system.name.endswith("-protect")

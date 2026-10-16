@@ -28,7 +28,10 @@ Trained on Kaggle with `train/finetune_lora.py` (ADR 0015) from the frozen data 
 | Id | Base | Run | File | Size | Best val. loss | Dev word acc. |
 |---|---|---|---|---|---|---|
 | `arabizi-llama3.2-1b-v1` | Llama 3.2 1B Instruct | `20261016-051159-llama3.2-1b-lora` (T4, fp16, 25 min) | `arabizi-llama3.2-1b-v1-Q4_K_M.gguf` | 0.81 GB | 0.401 | 0.768 (EVAL.md) |
-| `arabizi-qwen3-1.7b-v1` | Qwen3-1.7B | `20261016-054238-qwen3-1.7b-lora` (T4, fp16, 36 min) | `arabizi-qwen3-1.7b-v1-Q4_K_M.gguf` | 1.11 GB | 0.370 | not yet: file to download |
+| `arabizi-qwen3-1.7b-v1` | Qwen3-1.7B | `20261016-084514-qwen3-1.7b-lora` (T4, fp16, 41 min) | `arabizi-qwen3-1.7b-v1-Q4_K_M.gguf` | 1.11 GB | 0.379 | 0.723 (EVAL.md) |
+
+- **Qwen was trained twice:** the first run (`20261016-054238`, validation loss 0.370) finished, but its file was lost when the Kaggle session ended before the download; its run file stays in `train/runs/` as a record. The run above (`20261016-084514`) is the one in `models/` and `config/models.json`. Training is not bit-for-bit repeatable, so the two are different models.
+- **Chosen model:** the Llama fine-tune ([ADR 0005](decisions/0005-final-model.md), accepted 16 Oct 2026).
 
 - **Getting the files:** they are not on Hugging Face; download them from the Kaggle run's output (docs/TRAINING.md) and check them against the `.sha256` files. `scripts/fetch_models.py` lists them as skipped.
 - **Licence:** the Llama 3.2 Community License applies to the fine-tune (accepted 14 Oct 2026); "Built with Llama" if it is ever distributed.
