@@ -120,6 +120,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--limit", type=int, help="only the first N training examples (smoke run)")
+    parser.add_argument("--tag", help="short name added to the run id, e.g. rank32 in a sweep (train/sweep_lora.ipynb)")
     return parser.parse_args(argv)
 
 
@@ -138,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("no GPU: in Kaggle, Settings -> Accelerator -> GPU")
     started = time.time()
     hf_id, revision = BASES[args.base]
-    run_id = f"{datetime.now(UTC):%Y%m%d-%H%M%S}-{args.base}-lora"
+    run_id = f"{datetime.now(UTC):%Y%m%d-%H%M%S}-{args.base}-lora" + (f"-{args.tag}" if args.tag else "")
     out = args.out / run_id
     out.mkdir(parents=True, exist_ok=True)
 

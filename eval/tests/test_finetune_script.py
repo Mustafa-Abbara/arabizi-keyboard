@@ -115,3 +115,10 @@ def test_bf16_only_where_the_gpu_does_it_natively():
     assert finetune.use_bf16((6, 0)) is False  # P100
     assert finetune.use_bf16((8, 0)) is True and finetune.use_bf16((8, 9)) is True  # A100, L4
     assert "is_bf16_supported" not in (P.ROOT / "train" / "finetune_lora.py").read_text().split("def main")[1]
+
+
+def test_tag_names_a_sweep_run():
+    args = finetune.parse_args(["--base", "llama3.2-1b", "--data", "d", "--out", "o",
+                                "--tag", "rank32", "--rank", "32"])
+    assert args.tag == "rank32" and args.rank == 32
+    assert finetune.parse_args(["--base", "llama3.2-1b", "--data", "d", "--out", "o"]).tag is None
