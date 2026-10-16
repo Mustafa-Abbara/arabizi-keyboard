@@ -88,3 +88,11 @@ def test_prompt_template_refuses_what_the_engine_could_not_reproduce():
         finetune.prompt_template(TrimmingTokenizer(), [example(" kifak ", "كيفك")])
     with pytest.raises(SystemExit, match="system prompts"):
         finetune.prompt_template(FakeTokenizer(), [example("a", "ا"), example("b", "ب", system="Other.")])
+
+
+def test_warmup_is_a_whole_number_of_steps():
+    # 7957 examples, effective batch 32, 3 epochs: 249 steps per epoch, 747 in all; 3% is 22 steps.
+    assert finetune.warmup_steps(7957, 8, 4, 3, 0.03) == 22
+    assert finetune.warmup_steps(200, 8, 4, 1, 0.03) == 1  # smoke run: at least one step
+    assert finetune.parse_args(["--base", "qwen3-1.7b", "--data", "d", "--out", "o"]).warmup == 0.03
+    assert "warmup_ratio=" not in (P.ROOT / "train" / "finetune_lora.py").read_text()  # removed in transformers 5

@@ -18,6 +18,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import os
 import platform
 import time
 from datetime import UTC, datetime
@@ -75,6 +77,13 @@ def prompt_template(tokenizer, examples: list[dict]) -> dict:
     return {"prefix": prefix, "suffix": suffix}
 
 
+def warmup_steps(examples: int, batch: int, grad_accum: int, epochs: float, ratio: float) -> int:
+    """Warm-up as a whole number of optimizer steps. transformers 5 dropped `warmup_ratio` (a float `warmup_steps`
+    means a ratio there, but not in 4.x), so the step count is computed here and works with both."""
+    total = math.ceil(examples / (batch * grad_accum)) * epochs
+    return max(1, round(ratio * total))
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base", required=True, choices=sorted(BASES))
@@ -87,6 +96,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dropout", type=float, default=0.05)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--grad-accum", type=int, default=4)
+    parser.add_argument("--warmup", type=float, default=0.03, help="share of optimizer steps used for warm-up")
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--limit", type=int, help="only the first N training examples (smoke run)")
@@ -95,6 +105,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    # One GPU, so the effective batch is --batch x --grad-accum (32, ADR 0015) on Kaggle's T4 x2 as well.
+    os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
     import torch
     from datasets import Dataset
     from peft import LoraConfig
@@ -125,7 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     config = SFTConfig(
         output_dir=str(out / "checkpoints"), num_train_epochs=args.epochs, learning_rate=args.lr,
         per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
-        gradient_accumulation_steps=args.grad_accum, lr_scheduler_type="cosine", warmup_ratio=0.03,
+        gradient_accumulation_steps=args.grad_accum, lr_scheduler_type="cosine",
+        warmup_steps=warmup_steps(len(train_ds), args.batch, args.grad_accum, args.epochs, args.warmup),
         logging_steps=20, eval_strategy="epoch", save_strategy="epoch", load_best_model_at_end=True,
         metric_for_best_model="eval_loss", greater_is_better=False, save_total_limit=1,
         bf16=bf16, fp16=not bf16, max_length=args.max_length, completion_only_loss=True,
