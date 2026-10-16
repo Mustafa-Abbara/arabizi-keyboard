@@ -32,13 +32,15 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 | P2 | SPELLING.md v1.2. **Frozen: `testset-v1.0`** (16 Oct): 347 held-out rows, public 113 test + 48 dev, private 130 test + 56 dev (111 chat rows published, ADR 0014 amendment); every row self-checked in a spreadsheet. Training: 2,000 Claude-drafted rows revised by Moustafa (ADR 0012) + 1,687 private chat rows + generated variants. |
 | P3 | Harness `evalrun` (docs/EVAL.md). B0 rules **0.547** on 105 dev rows; B1 best **0.169** (Llama 3.2 1B, 5-shot). ADR 0004: fine-tune Llama 3.2 1B + Qwen3-1.7B (fallback Qwen3-0.6B). Gate open: re-run one baseline from a fresh clone. |
 | P4 | Trained 16 Oct (ADR 0015); **ADR 0005: ship the Llama 3.2 1B fine-tune.** **Frozen test (once): 0.783** vs B0 0.594 (+0.189 [0.16, 0.22]) and best B1 0.147; numbers 24/24; p50/p95 487/1,013 ms, 830 MB (numbers protected, `-protect`). Gate: 3 of 4 pass; open: re-run training in a fresh Kaggle session (dev within 2 points). |
-| P5 | Rule fallback + protected spans (ADR 0016), `ArabiziLLM` (ADR 0017), contracts/checks/config (ADR 0018), **engine + `arabizi-cli`** (ADR 0019): Swift engine on dev 0.770 (Python 0.768), numbers 100%, `engine-<id>` eval systems. Next: XPC service, keyboard switch-on. |
+| P5 | Rule fallback + protected spans (ADR 0016), `ArabiziLLM` (ADR 0017), contracts/checks/config (ADR 0018), engine + `arabizi-cli` (ADR 0019; dev 0.770), **sandboxed XPC service in the app, keyboard uses it, fine-tuned model switched on** (ADR 0020; network denied by the kernel sandbox; `arabizi-engine-check`). Gate open: engine accuracy on test; CI required on main. |
 | P6–P7 | Not started. |
 
 **Next steps, in order:**
-1. **Claude:** rest of P5: the XPC service (copies `llama.framework` and the model into the bundle, ADR 0017; no network entitlement) and `arabizi-cli` (both on the ADR 0018 contracts); measure the engine with protected spans and output checks; switch the model on in `config/engine.json` (ADR 0005 #3).
-2. **Moustafa (open P4 gate item):** re-run the Llama training once in a fresh Kaggle session (same export) so Claude can check dev accuracy is within 2 points of 0.768.
-3. **Optional (roadmap §5):** P4 ablations (no AI rows, no variants), and the AladdinBench check on other people's typing (references written locally).
+1. **Moustafa:** `scripts/install_ime.sh` (with the model in `models/`), switch to the keyboard, and type: Enter now uses the fine-tuned model (rules for the first ~30 s while it loads). Then fill the P1 app matrix (`docs/spikes/ime_app_matrix.md`), still the biggest unverified risk.
+2. **Open P5 gate items:** one engine run on test (`evalrun run --system engine-arabizi-llama3.2-1b-v1 --split test --final`, needs Moustafa's OK: within 1 point of 0.783); CI required on `main` (`bootstrap.py protect --checks …`, prove a failing PR cannot merge).
+3. **Open P4 gate item (Moustafa):** re-run the Llama training once in a fresh Kaggle session (dev within 2 points of 0.768).
+4. **Then P6:** asynchronous Enter with a "…" while converting, per-app profiles, menu-bar settings, warm start, 2 weeks of dogfooding.
+5. **Optional:** P4 ablations (no AI rows, no variants), AladdinBench check, accuracy work (ceiling measurement, training tweaks, more real data).
 
 **Practical notes:**
 - GitHub release downloads are slow and stall here; SwiftPM's own download of the llama.cpp XCFramework timed out. Fetch it with a resuming `curl` and place it in SwiftPM's cache (`~/Library/Caches/org.swift.swiftpm/artifacts/`, file name from `swift package resolve -vv`); SwiftPM still checks the checksum.

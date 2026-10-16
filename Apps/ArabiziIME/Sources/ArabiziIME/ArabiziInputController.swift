@@ -8,18 +8,25 @@ import os
 /// Never log what the user types: only key kinds and lengths.
 @objc(ArabiziInputController)
 final class ArabiziInputController: IMKInputController {
-    /// The rule converter (P5 rule fallback), loaded once for all text fields from the rule files that
-    /// scripts/build_ime.sh copies into Resources. Without them the P1 toy converter keeps the keyboard usable.
+    /// Conversion for all text fields: the sandboxed engine service (the fine-tuned model with protected spans,
+    /// output checks and its own rule fallback, ADR 0020), and the rule converter here if the service cannot answer
+    /// in time. The rule files and config come from Resources (scripts/build_ime.sh); without them the P1 toy
+    /// converter keeps the keyboard usable.
     private static let convert: @Sendable (String) -> String = {
         let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
+        let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
+        let rules: @Sendable (String) -> String
         do {
-            let converter = try RuleConverter(rulesDirectory: Bundle.main.resourceURL ?? Bundle.main.bundleURL)
+            let converter = try RuleConverter(rulesDirectory: resources)
             log.info("Rule converter loaded")
-            return { converter.convert($0) }
+            rules = { converter.convert($0) }
         } catch {
             log.error("Rule files not loaded (\(String(describing: error), privacy: .public)): using the toy converter")
-            return ToyTransliterator.convert
+            rules = ToyTransliterator.convert
         }
+        guard let engine = EngineClient(resources: resources) else { return rules }
+        engine.warmUp()
+        return { text in engine.convert(text) ?? rules(text) }
     }()
     private var composer = Composer(convert: ArabiziInputController.convert)
     /// Where the cursor was right after the last conversion, so ⌘Z can tell whether it moved since.
