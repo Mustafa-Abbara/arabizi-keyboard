@@ -30,6 +30,7 @@ uv run --project eval pairs variants && uv run --project eval pairs lexicon
 ```
 
 | **`ft-<model id>`** | A fine-tuned model (P4): zero-shot, with the exact prompt saved by its training run (`prompt` in `config/models.json`), sent as text to `llama-server`'s `/completion` so no chat template is re-rendered. | `b1.py` (`FineTuned`), `config/models.json`, `train/runs/` |
+| **`ft-<model id>-protect`** | The same, with standalone numbers replaced by `⟦0⟧`, `⟦1⟧`… before the model and restored after, as the P5 engine's `ProtectedSpans` does; a broken placeholder sends the sentence to B0. | `b1.py` (`ProtectedFineTuned`) |
 
 | **`engine-<model id>`**, `engine-rules` | The Swift engine through `arabizi-cli` (P5): protected spans, saved prompt, model with deadline, output checks, rules on fallback; outcomes and fallback reasons recorded. Dev: `engine-arabizi-llama3.2-1b-v1` 0.770, numbers 100%, 98 model answers and 6 fallbacks ([ADR 0019](decisions/0019-engine-and-cli.md)). | `engine.py`, `Packages/ArabiziEngine` |
 
@@ -91,6 +92,7 @@ Same harness, llama.cpp b11429, greedy decoding; the fine-tuned model is zero-sh
 | System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. | Peak RSS | p50 / p95 ms |
 |---|---|---|---|---|---|---|---|---|
 | **Llama 3.2 1B fine-tuned** (`ft-arabizi-llama3.2-1b-v1`) | **0.768** | [0.73, 0.80] | 0.097 | 0.86 | 0.93 | 0.06 | 956 MB | 421 / 853 |
+| Qwen3-1.7B fine-tuned (`ft-arabizi-qwen3-1.7b-v1`) | 0.723 | [0.68, 0.76] | 0.111 | 0.85 | 1.00 | 0.05 | 1,333 MB | 576 / 1,481 |
 | B0 rules | 0.543 | [0.51, 0.58] | 0.189 | 0.17 | 1.00 | 0.00 | — | < 1 |
 | Llama 3.2 1B, 5-shot (best B1) | 0.166 | [0.14, 0.19] | 0.529 | 0.17 | 0.71 | 0.48 | 971 MB | 583 / 1,110 |
 
@@ -99,16 +101,19 @@ Public dev rows only (48; reproducible from the repo: `eval/results/20261016-112
 | System | Word acc. | 95% CI | CER | Keep-Latin F1 | Numbers | Halluc. |
 |---|---|---|---|---|---|---|
 | **Llama 3.2 1B fine-tuned** | **0.733** | [0.68, 0.78] | 0.124 | 0.70 | 0.88 | 0.10 |
+| Qwen3-1.7B fine-tuned (`eval/results/20261016-124744-ft-arabizi-qwen3-1.7b-v1-dev-public`) | 0.680 | [0.62, 0.74] | 0.129 | 0.79 | 1.00 | 0.06 |
 | B0 rules | 0.555 | [0.50, 0.61] | 0.179 | 0.27 | 1.00 | 0.00 |
 | Llama 3.2 1B, 5-shot | 0.143 | [0.11, 0.17] | 0.531 | 0.10 | 0.50 | 0.50 |
 
-**Paired bootstrap** (word accuracy, 10,000 resamples): fine-tuned − B0 = **+0.225 [+0.179, +0.270]** on all dev rows and **+0.178 [+0.113, +0.245]** on the public rows; fine-tuned − best B1 = **+0.602 [+0.560, +0.643]**. Both intervals are above 0, on dev; the P4 gate is decided on the frozen test set, once, for the final model (ADR 0005).
+**Paired bootstrap** (word accuracy, 10,000 resamples): fine-tuned − B0 = **+0.225 [+0.179, +0.270]** on all dev rows and **+0.178 [+0.113, +0.245]** on the public rows; fine-tuned − best B1 = **+0.602 [+0.560, +0.643]**; Llama − Qwen (both fine-tuned) = **+0.045 [+0.017, +0.075]** (public rows +0.053 [+0.006, +0.103]); Qwen − B0 = +0.180 [+0.130, +0.229]. Both intervals are above 0, on dev; the P4 gate is decided on the frozen test set, once, for the final model (ADR 0005).
 
 - **What fine-tuning fixed:** Lebanese spelling and joined clitics (CER halves against B0), and English kept in Latin (keep-Latin F1 0.17 → 0.86: the rules miss most English in real chats).
 - **What still needs the engine:** standalone numbers come out unchanged only 93% of the time (the P4 gate asks ≥ 99% on test) and 6% of answers are flagged as hallucinations. Both are what P5's protected spans (numbers become `⟦0⟧`) and output checks are for; the raw model is measured here, the engine (`arabizi-cli`) will be measured in P5.
 - **Speed and memory** fit the budgets on the 8 GB Air: p50 421 ms (≤ 600), p95 853 ms (≤ 1,200), 956 MB (≤ 1.5 GB), load 1.5 s.
 - **Prompt detail found while wiring this up:** the Llama run trained with **two BOS tokens** (the chat template's `<|begin_of_text|>` text plus the one the tokenizer adds). Sending the saved prompt as text lets `llama-server` do the same, and reproduces the run's own samples exactly; with a single BOS the output degrades (`سبيقة` became `سبquina`). See MODELS.md.
-- Qwen3-1.7B fine-tuned is scored the same way once its file is downloaded; then ADR 0005 picks the final model.
+- **Numbers to 100%:** the raw Llama lost 1 of the 14 standalone numbers in dev (`w baddak 2 recom letters` → `و بدك قيم ال letters`: it read the number 2 as the letter ق, which Arabizi also uses). Protecting numbers (`ft-arabizi-llama3.2-1b-v1-protect`) keeps **all 14** and scores **0.774 [0.74, 0.81]** (public 0.745 [0.70, 0.80]): +0.006 [0.000, +0.014] over the raw model, no placeholder broken (0 fallbacks), although training never showed placeholders. The alternative, falling back to B0 whenever a number is lost, also reaches 100% but loses 0.3 points. The gain is small because numbers are rare (13 of 104 sentences). P5's engine protects numbers this way (ADR 0016).
+- **Why Qwen scored lower** (measured symptoms; the cause is not proven): both tokenizers split Arabic and Arabizi almost identically (≈ 2.0 tokens per Arabic word, 2.2 per Arabizi word), so the validation losses are comparable and Qwen's is really lower (0.163 vs 0.170 per character). Yet on dev Qwen gets 187 words wrong against Llama's 156; Llama is better on 29 sentences, Qwen on 11 (64 ties). The difference is in unfamiliar words: Llama writes what the letters sound like (`بسعت` for `بصوت`), Qwen tends to put in a real but different Arabic word (`عضوية` for `عيد زواجن`, `القلامة` for `القلم`, `جرة` for `جرافة`). Lower validation loss with worse held-out accuracy points to Qwen fitting the training sentences' style more closely and transferring less to new real typing; Qwen3's mostly-MSA pretraining may also pull it towards standard words. One run per model, so run-to-run variation is not measured.
+- **Llama or Qwen:** Llama is more accurate (interval above 0), faster and lighter; Qwen keeps every number (1.00 vs 0.93) but its p95 (1,481 ms) is over the 1.2 s budget and it uses 1,333 MB. [ADR 0005](decisions/0005-final-model.md) (accepted) ships Llama; the frozen test set is run once for it.
 
 ## Metrics
 

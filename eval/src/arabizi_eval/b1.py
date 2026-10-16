@@ -275,3 +275,56 @@ class FineTuned(B1):
         if self.managed is not None:
             self.managed.sample_memory()
         return clean(reply)
+
+
+PLACEHOLDER = re.compile(r"⟦(\d+)⟧")
+
+
+def protect_numbers(text: str) -> tuple[str, list[str]]:
+    """Standalone numbers (pairs.NUMBER: 100$, 2pm, 7:30, not the 3 of 3am) become ⟦0⟧, ⟦1⟧… as in the engine's
+    ProtectedSpans (ADR 0016), so the model cannot read a number as a letter (`2` is also ق in Arabizi)."""
+    spans: list[str] = []
+
+    def placeholder(match: re.Match) -> str:
+        spans.append(match.group())
+        return f"⟦{len(spans) - 1}⟧"
+
+    return P.NUMBER.sub(placeholder, text), spans
+
+
+def restore_numbers(output: str, spans: list[str]) -> str | None:
+    """Put the numbers back; None if a placeholder was lost, repeated or invented (the engine then uses the rules)."""
+    found = PLACEHOLDER.findall(output)
+    if sorted(found, key=int) != [str(i) for i in range(len(spans))] or output.count("⟦") != len(spans) \
+            or output.count("⟧") != len(spans):
+        return None
+    return PLACEHOLDER.sub(lambda m: spans[int(m.group(1))], output)
+
+
+class ProtectedFineTuned(FineTuned):
+    """`ft-<id>-protect`: the fine-tuned model with standalone numbers protected as the P5 engine does; if the
+    model breaks a placeholder, the sentence gets the rule baseline (B0), as the engine's fallback would."""
+
+    def __init__(self, model_id: str, url: str | None = None) -> None:
+        super().__init__(model_id, url)
+        from arabizi_eval import b0
+
+        self.rules = b0.RuleConverter()
+        self.name = f"ft-{model_id}-protect"
+        self.fallbacks = 0
+        self.describe.update({"protect": "standalone numbers -> placeholders, restored after; B0 if broken"})
+
+    def convert(self, row: dict) -> str:
+        masked, spans = protect_numbers(row["arabizi"])
+        output = super().convert({"arabizi": masked})
+        if not spans:
+            return output
+        restored = restore_numbers(output, spans)
+        if restored is None:
+            self.fallbacks += 1
+            return self.rules.convert(row["arabizi"])
+        return restored
+
+    def close(self) -> None:
+        self.describe["fallbacks_to_rules"] = self.fallbacks
+        super().close()
