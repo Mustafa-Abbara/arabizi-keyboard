@@ -43,6 +43,8 @@ data/**/*[Mm][Aa][Dd][Aa][Rr]*
 research/consent/signed/
 research/**/raw/
 eval/results/private/
+# Error sheets (`evalrun errors`) quote every sentence; report counts in docs/EVAL.md instead
+eval/results/**/errors.xlsx
 
 # --- Local traces (may contain eval-mode text) ---
 traces/

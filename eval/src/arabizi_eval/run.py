@@ -3,6 +3,7 @@
   uv run --project eval evalrun run --system identity --split dev
   uv run --project eval evalrun score predictions.jsonl --split dev --name qwen-0.5b-kaggle
   uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B
+  uv run --project eval evalrun errors eval/results/RUN
 
 Tune on dev; the test split needs --final and should be run once per final candidate (roadmap §4).
 Each run writes eval/results/<run_id>/predictions.jsonl (per sentence: output + scores) and metrics.json.
@@ -19,7 +20,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from arabizi_eval import bootstrap, metrics, systems
+from arabizi_eval import bootstrap, errors, metrics, systems
 from arabizi_eval import pairs as P
 
 RESULTS_DIR = P.ROOT / "eval" / "results"
@@ -168,6 +169,19 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_errors(args: argparse.Namespace) -> int:
+    """Every wrong word of a run in a spreadsheet, to group by cause (docs/EVAL.md, "Error analysis")."""
+    meta, records = load_run(args.run)
+    if meta["split"] == "test" and not args.final:
+        sys.exit("Reading test errors and then changing the system tunes it to the test set: analyse a dev run, "
+                 "or pass --final for the final report (roadmap P7).")
+    rows, _ = split_rows(meta["split"])
+    out = args.out or args.run / "errors.xlsx"
+    n_words, n_sentences = errors.write_sheet(meta, list(records.values()), {r["id"]: r for r in rows}, out)
+    print(f"{n_words} wrong words in {n_sentences} of {len(records)} sentences: {out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="evalrun", description=__doc__,
@@ -195,8 +209,12 @@ def main(argv: list[str] | None = None) -> int:
     compare = sub.add_parser("compare", help="paired bootstrap on word accuracy between two runs")
     compare.add_argument("run_a", type=Path)
     compare.add_argument("run_b", type=Path)
+    errors_parser = sub.add_parser("errors", help="spreadsheet of a run's wrong words, to group by cause")
+    errors_parser.add_argument("run", type=Path)
+    errors_parser.add_argument("--out", type=Path, help="default: errors.xlsx in the run folder (not committed)")
+    errors_parser.add_argument("--final", action="store_true", help="allow a test-split run (final report only)")
     args = parser.parse_args(argv)
-    return {"run": cmd_run, "score": cmd_score, "compare": cmd_compare}[args.command](args)
+    return {"run": cmd_run, "score": cmd_score, "compare": cmd_compare, "errors": cmd_errors}[args.command](args)
 
 
 if __name__ == "__main__":

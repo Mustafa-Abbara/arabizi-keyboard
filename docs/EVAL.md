@@ -158,6 +158,14 @@ Full tables and the decision: [ADR 0022](decisions/0022-model-v2-real-rows.md) (
 
 `v2` − `v1` (paired): **+0.037 [+0.015, +0.059]** on frozen test and **+0.144 [+0.125, +0.163]** on others test. Raw `v2`: 0.826 frozen, 0.802 others. Public frozen-test rows: `v2` 0.803 raw, 0.794 protected. Others-set runs are public and committed (`eval/results/20261017-*-others`).
 
+## Error analysis
+
+`uv run --project eval evalrun errors eval/results/<run_id>` writes `errors.xlsx` in the run folder (git-ignored, since it quotes every sentence). The `words` sheet has one row per wrong word, aligned with the same LCS as word accuracy: reference word, output word, a suggested **type**, a note, and the whole sentence. The `sentences` sheet lists the sentences with errors, and `summary` counts the types with formulas, so it updates as types are corrected by hand. Test-split runs need `--final`: reading test errors and then changing the system would tune it to the test set.
+
+Suggested types come from the words alone: English converted, left in Latin, number, MSA word, spelling convention (same word under the lenient rules), one letter off, joined/split, dropped word, added word, and "different word" for the rest. Only a person can sort "different word" (and check "one letter off"): rare word, ambiguous word (`la`), reference wrong, other. The type list and the test-split guard are **Claude's recommendation** (17 Oct 2026); the four causes named in roadmap P7 are all in it.
+
+First pass, fine-tuned Llama on the public dev rows (`20261016-112354-…-dev-public`), suggested types before any hand sorting: 86 wrong words in 38 of 48 sentences; different word 38, one letter off 23, dropped 6, added 5, left in Latin 4, English converted 3, joined/split 3, spelling convention 2, number 2.
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
