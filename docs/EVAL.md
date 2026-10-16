@@ -108,7 +108,7 @@ Public dev rows only (48; reproducible from the repo: `eval/results/20261016-112
 - **What still needs the engine:** standalone numbers come out unchanged only 93% of the time (the P4 gate asks ≥ 99% on test) and 6% of answers are flagged as hallucinations. Both are what P5's protected spans (numbers become `⟦0⟧`) and output checks are for; the raw model is measured here, the engine (`arabizi-cli`) will be measured in P5.
 - **Speed and memory** fit the budgets on the 8 GB Air: p50 421 ms (≤ 600), p95 853 ms (≤ 1,200), 956 MB (≤ 1.5 GB), load 1.5 s.
 - **Prompt detail found while wiring this up:** the Llama run trained with **two BOS tokens** (the chat template's `<|begin_of_text|>` text plus the one the tokenizer adds). Sending the saved prompt as text lets `llama-server` do the same, and reproduces the run's own samples exactly; with a single BOS the output degrades (`سبيقة` became `سبquina`). See MODELS.md.
-- **Llama or Qwen:** Llama is more accurate (interval above 0), faster and lighter; Qwen keeps every number (1.00 vs 0.93) but its p95 (1,481 ms) is over the 1.2 s budget and it uses 1,333 MB. [ADR 0005](decisions/0005-final-model.md) proposes Llama; the frozen test set is then run once for it.
+- **Llama or Qwen:** Llama is more accurate (interval above 0), faster and lighter; Qwen keeps every number (1.00 vs 0.93) but its p95 (1,481 ms) is over the 1.2 s budget and it uses 1,333 MB. [ADR 0005](decisions/0005-final-model.md) (accepted) ships Llama; the frozen test set is run once for it.
 
 ## Metrics
 

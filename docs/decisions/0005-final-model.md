@@ -1,8 +1,8 @@
 # ADR 0005: The model the keyboard ships (P4)
 
-- **Status:** proposed (Claude's recommendation; Moustafa decides, then the one test run follows)
+- **Status:** accepted (Moustafa, 16 Oct 2026: "i accept llama")
 - **Date:** 2026-10-16
-- **Deciders:** Moustafa Abbara (Claude's recommendation)
+- **Deciders:** Moustafa Abbara (on Claude's recommendation)
 - **Stage:** P4
 
 ## Context
@@ -19,7 +19,7 @@ ADR 0004 carried two base models into fine-tuning, Llama 3.2 1B and Qwen3-1.7B (
 
 Paired bootstrap on word accuracy: Llama − Qwen = **+0.045 [+0.017, +0.075]** (public rows: +0.053 [+0.006, +0.103]); Llama − B0 = +0.225 [+0.179, +0.270]; Qwen − B0 = +0.180 [+0.130, +0.229]. Qwen had the lower validation loss in training (0.379 vs 0.401), but validation loss is measured on training-style rows; dev word accuracy on held-out real typing decides.
 
-## Decision (proposed)
+## Decision
 
 | # | Decision | Source |
 |---|---|---|

@@ -31,13 +31,12 @@ This repo is a course project (EECE 503N/798S, Fall 2026): a local, private macO
 | P1 | Keyboard spike works (Enter converts, ⌘Z restores, ⌥Enter converts a selection, password fields safe). Gate open: `docs/spikes/ime_app_matrix.md` not filled app by app. |
 | P2 | SPELLING.md v1.2. **Frozen: `testset-v1.0`** (16 Oct): 347 held-out rows, public 113 test + 48 dev, private 130 test + 56 dev (111 chat rows published, ADR 0014 amendment); every row self-checked in a spreadsheet. Training: 2,000 Claude-drafted rows revised by Moustafa (ADR 0012) + 1,687 private chat rows + generated variants. |
 | P3 | Harness `evalrun` (docs/EVAL.md). B0 rules **0.547** on 105 dev rows; B1 best **0.169** (Llama 3.2 1B, 5-shot). ADR 0004: fine-tune Llama 3.2 1B + Qwen3-1.7B (fallback Qwen3-0.6B). Gate open: re-run one baseline from a fresh clone. |
-| P4 | **Trained** on Kaggle 16 Oct (ADR 0015). Dev (104 rows): fine-tuned **Llama 3.2 1B 0.768**, fine-tuned Qwen3-1.7B 0.723, B0 0.543, best B1 0.166; Llama − Qwen +0.045 [0.02, 0.08]; Llama p50/p95 421/853 ms, 956 MB (docs/EVAL.md). **ADR 0005 proposes Llama** (awaiting Moustafa). Next: the one test run. |
+| P4 | **Trained** on Kaggle 16 Oct (ADR 0015). Dev (104 rows): fine-tuned **Llama 3.2 1B 0.768**, fine-tuned Qwen3-1.7B 0.723, B0 0.543, best B1 0.166; Llama − Qwen +0.045 [0.02, 0.08]; Llama p50/p95 421/853 ms, 956 MB (docs/EVAL.md). **ADR 0005 accepted: ship the Llama fine-tune.** Next: the one test run. |
 | P5 | Started (ADR 0016): Swift rule fallback `RuleConverter` (B0 port, exact parity with Python via `b0_parity.json`) and `ProtectedSpans`; the keyboard now uses the rule converter. `ArabiziLLM` (ADR 0017): llama.cpp XCFramework b11429 (= export commit) as a SwiftPM binary target, `LlamaModel` with deadline. Contracts, output checks and `config/engine.json` (ADR 0018, docs/API_CONTRACTS.md). Next: XPC service, `arabizi-cli`. |
 | P6–P7 | Not started. |
 
 **Next steps, in order:**
-1. **Moustafa:** accept or change ADR 0005 (proposed: ship the Llama fine-tune).
-2. **Claude, after that:** the frozen test run, once: `evalrun run --system ft-arabizi-llama3.2-1b-v1 --split test --final` (all rows and `--subset public`) plus B0 and the best B1, paired bootstrap, P4 gate in EVAL.md.
+1. **Claude:** the frozen test run, once: `evalrun run --system ft-arabizi-llama3.2-1b-v1 --split test --final` (all rows and `--subset public`) plus B0 and the best B1, paired bootstrap, P4 gate in EVAL.md.
 3. **Claude, then:** rest of P5: the XPC service (copies `llama.framework` and the model into the bundle, ADR 0017; no network entitlement) and `arabizi-cli` (both on the ADR 0018 contracts); P5 measures the engine with protected spans and output checks (raw model numbers: 93%, 6% hallucinations); switch on the model in `config/engine.json` (ADR 0005 #3).
 
 **Practical notes:**
