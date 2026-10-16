@@ -90,12 +90,25 @@ def ft_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], Syste
     return {f"ft-{m['id']}": partial(_ft, m["id"]) for m in models}
 
 
+def _engine(model_id: str | None) -> System:
+    from arabizi_eval import engine
+
+    return engine.EngineSystem(model_id)
+
+
+def engine_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], System]]:
+    """P5: the Swift engine through arabizi-cli: engine-rules, and engine-<id> for every fine-tuned model."""
+    models = [m for m in json.loads(manifest.read_text(encoding="utf-8"))["models"] if "prompt" in m]
+    return {"engine-rules": partial(_engine, None), **{f"engine-{m['id']}": partial(_engine, m["id"]) for m in models}}
+
+
 REGISTRY: dict[str, Callable[[], System]] = {
     "b0": B0,
     "identity": lambda: Identity("identity", {"kind": "sanity", "note": "input returned unchanged"}),
     "reference": lambda: Reference("reference", {"kind": "sanity", "note": "oracle: returns the reference"}),
     **b1_systems(),
     **ft_systems(),
+    **engine_systems(),
 }
 
 
