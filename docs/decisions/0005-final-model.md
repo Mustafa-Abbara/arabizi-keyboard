@@ -30,6 +30,8 @@ Paired bootstrap on word accuracy: Llama − Qwen = **+0.045 [+0.017, +0.075]** 
 
 ## Consequences
 
+- **Test result (run once, 16 Oct 2026):** 0.783 [0.76, 0.81] on the 243 test rows (B0 0.594, best B1 0.147; +0.189 [+0.159, +0.219] over B0), numbers 24/24, p50/p95 487/1,013 ms with numbers protected. Three of the four P4 gate items pass; the training re-run check is still open (EVAL.md, "P4 final").
+
 - The Llama 3.2 Community License applies to the shipped model ("Built with Llama" if distributed; acceptable-use policy), already accepted (14 Oct 2026). The weights stay private: they were trained partly on private messages (ADR 0014).
 - The P4 gate's number-preservation target (≥ 99%) is not met by the raw model on dev (13/14 numbers) but is met with numbers protected (14/14, `-protect`), which is how the engine runs it; the report states both.
 - The engine must feed the exact saved prompt with both BOS tokens (fixed in #195); `FineTunedParityTests` guards it.
