@@ -41,6 +41,7 @@ def test_latin_types():
 def test_spelling_convention_msa_and_different_word():
     assert found("أنا بالبيت", "انا بالبيت") == [("أنا", "انا", "spelling convention")]
     assert found("هلق جاي", "الآن جاي") == [("هلق", "الآن", "MSA word")]
+    assert found("أين انت", "اين انت") == [("أين", "اين", "spelling convention")]  # MSA list word, spelling only
     assert found("القلم هون", "القلامة هون") == [("القلم", "القلامة", "different word")]
 
 
@@ -79,7 +80,9 @@ def scored_run(monkeypatch, tmp_path):
 
 def test_errors_sheet_lists_wrong_words_and_counts_types(scored_run, capsys):
     assert R.main(["errors", str(scored_run["dev"])]) == 0
-    assert "1 wrong words in 1 of 2 sentences" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "1 error rows in 1 of 2 sentences" in out
+    assert "Warning" not in out
     book = openpyxl.load_workbook(scored_run["dev"] / "errors.xlsx")
     assert book.sheetnames == ["summary", "words", "sentences"]
     words = list(book["words"].iter_rows(values_only=True))
@@ -92,8 +95,52 @@ def test_errors_sheet_lists_wrong_words_and_counts_types(scored_run, capsys):
         assert book["summary"][cell].value == name
 
 
+def test_rows_and_word_accuracy_errors_are_both_reported(tmp_path):
+    # one dropped and one added word in the same gap: two rows, one wrong word in the score (1/2)
+    record = {"id": "hw-0001", "arabizi": "x", "reference": "شو عم", "prediction": "عم كيفك",
+              "words_correct": 1, "words_total": 2}
+    out = tmp_path / "e.xlsx"
+    assert E.write_sheet({"metrics": {}}, [record], {}, out) == (2, 1)
+    summary = {r[0]: r[1] for r in openpyxl.load_workbook(out)["summary"].iter_rows(values_only=True) if r}
+    assert summary["wrong words (word accuracy)"] == 1
+    assert summary["error rows in this sheet"] == 2
+
+
+def test_text_is_never_a_formula_and_control_characters_are_dropped(tmp_path):
+    record = {"id": "hw-0001", "arabizi": "=) ok", "reference": "شو", "prediction": "=D\x1bشي",
+              "words_correct": 0, "words_total": 1}
+    out = tmp_path / "e.xlsx"
+    E.write_sheet({"metrics": {}}, [record], {}, out)
+    cells = list(openpyxl.load_workbook(out)["sentences"].iter_rows(min_row=2))[0]
+    assert [(c.value, c.data_type) for c in cells[3:]] == [("=) ok", "s"), ("شو", "s"), ("=Dشي", "s")]
+
+
+def test_warns_when_the_data_changed_or_a_row_is_gone(scored_run, capsys):
+    dev = P.PAIRS_DIR / "dev.jsonl"
+    lines = dev.read_text(encoding="utf-8").splitlines()
+    dev.write_text(lines[0] + "\n", encoding="utf-8")  # hw-0002 removed after the run
+    assert R.main(["errors", str(scored_run["dev"])]) == 0
+    out = capsys.readouterr().out
+    assert "Warning: the data changed since this run" in out
+    assert "not in the dev split any more (no accepted variants): hw-0002" in out
+    summary = [r for r in openpyxl.load_workbook(scored_run["dev"] / "errors.xlsx")["summary"].iter_rows(
+        values_only=True) if r and r[0] == "warning"]
+    assert len(summary) == 2
+
+
+def test_private_run_sheet_stays_in_a_private_folder(scored_run, tmp_path):
+    meta_path = scored_run["dev"] / "metrics.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta_path.write_text(json.dumps({**meta, "private_sentences": 1}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="private"):
+        R.main(["errors", str(scored_run["dev"]), "--out", str(tmp_path / "anywhere.xlsx")])
+    inside = R.PRIVATE_RESULTS_DIR / "errors.xlsx"
+    assert R.main(["errors", str(scored_run["dev"]), "--out", str(inside)]) == 0
+    assert inside.exists()
+
+
 def test_errors_on_a_test_run_needs_final(scored_run, tmp_path):
-    with pytest.raises(SystemExit, match="dev run"):
+    with pytest.raises(SystemExit, match="--final"):
         R.main(["errors", str(scored_run["test"])])
     out = tmp_path / "final.xlsx"
     assert R.main(["errors", str(scored_run["test"]), "--final", "--out", str(out)]) == 0

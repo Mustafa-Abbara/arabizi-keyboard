@@ -172,13 +172,25 @@ def cmd_compare(args: argparse.Namespace) -> int:
 def cmd_errors(args: argparse.Namespace) -> int:
     """Every wrong word of a run in a spreadsheet, to group by cause (docs/EVAL.md, "Error analysis")."""
     meta, records = load_run(args.run)
-    if meta["split"] == "test" and not args.final:
-        sys.exit("Reading test errors and then changing the system tunes it to the test set: analyse a dev run, "
-                 "or pass --final for the final report (roadmap P7).")
-    rows, _ = split_rows(meta["split"])
+    guard_split(meta["split"], args.final)  # reading test errors and then changing the system tunes it to test
     out = args.out or args.run / "errors.xlsx"
-    n_words, n_sentences = errors.write_sheet(meta, list(records.values()), {r["id"]: r for r in rows}, out)
-    print(f"{n_words} wrong words in {n_sentences} of {len(records)} sentences: {out}")
+    private_dirs = (PRIVATE_RESULTS_DIR, P.PRIVATE_DIR.parent)
+    if meta.get("private_sentences") and not any(out.resolve().is_relative_to(d.resolve()) for d in private_dirs):
+        sys.exit("This run has private rows, so its error sheet must stay in eval/results/private or data/private "
+                 "(never committed, ADR 0014).")
+    rows, data_sha = split_rows(meta["split"], subset=meta.get("subset", "all"))
+    by_id = {r["id"]: r for r in rows}
+    warnings = []
+    if data_sha != meta["data_sha256"]:
+        warnings.append("the data changed since this run: wrong words are found against today's references and "
+                        "accepted variants, the scores are the run's")
+    missing = sorted(records.keys() - by_id.keys())
+    if missing:
+        warnings.append(f"not in the {meta['split']} split any more (no accepted variants): {', '.join(missing)}")
+    for warning in warnings:
+        print(f"Warning: {warning}.")
+    n_rows, n_sentences = errors.write_sheet(meta, list(records.values()), by_id, out, warnings)
+    print(f"{n_rows} error rows in {n_sentences} of {len(records)} sentences: {out}")
     return 0
 
 

@@ -59,10 +59,10 @@ def suggest_type(reference: str, output: str) -> str:
         return "left in Latin"
     if any(c.isdigit() for c in reference + output):
         return "number"
+    if metrics.norm(output, True) == metrics.norm(reference, True):  # before MSA: اين for أين is spelling only
+        return "spelling convention"
     if metrics.norm(output, True) in metrics.msa_words():
         return "MSA word"
-    if metrics.norm(output, True) == metrics.norm(reference, True):
-        return "spelling convention"
     if metrics.edit_distance(metrics.norm(output, False), metrics.norm(reference, False)) <= 1:
         return "one letter off"
     return "different word"
@@ -98,8 +98,23 @@ def sentence_errors(row: dict, prediction: str) -> list[WordError]:
     return errors
 
 
-def write_sheet(meta: dict, records: list[dict], rows: dict[str, dict], path: Path) -> tuple[int, int]:
-    """Write the error sheet; returns (wrong words, sentences with errors)."""
+def _append_text(sheet, values: list) -> None:
+    """Append a row of data as plain text: no formulas (`=)` in a chat) and no control characters."""
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+
+    sheet.append([ILLEGAL_CHARACTERS_RE.sub("", v) if isinstance(v, str) else v for v in values])
+    for cell in sheet[sheet.max_row]:
+        if cell.data_type == "f":
+            cell.data_type = "s"
+
+
+def write_sheet(meta: dict, records: list[dict], rows: dict[str, dict], path: Path,
+                warnings: list[str] | None = None) -> tuple[int, int]:
+    """Write the error sheet; returns (error rows, sentences with errors).
+
+    Rows are not the word-accuracy error count: a gap with one dropped and one added word is two rows but one
+    wrong word in the score, and a joined/split error is one row for several words. Both are in the summary.
+    """
     import openpyxl
     from openpyxl.styles import Alignment, Font
     from openpyxl.worksheet.datavalidation import DataValidation
@@ -110,24 +125,24 @@ def write_sheet(meta: dict, records: list[dict], rows: dict[str, dict], path: Pa
     words.append(["id", "reference word", "output word", "type", "note", "arabizi", "reference", "output"])
     sentences = book.create_sheet("sentences")
     sentences.append(["id", "words right", "words total", "arabizi", "reference", "output"])
-    n_words = n_sentences = 0
+    n_rows = n_sentences = 0
     for record in records:
         row = rows.get(record["id"], {"arabic": record["reference"]})
         found = sentence_errors(row, record["prediction"])
         if not found:
             continue
         n_sentences += 1
-        sentences.append([record["id"], record["words_correct"], record["words_total"], record["arabizi"],
-                          record["reference"], record["prediction"]])
+        _append_text(sentences, [record["id"], record["words_correct"], record["words_total"], record["arabizi"],
+                                 record["reference"], record["prediction"]])
         for error in found:
-            n_words += 1
-            words.append([record["id"], error.reference, error.output, error.type, "", record["arabizi"],
-                          record["reference"], record["prediction"]])
+            n_rows += 1
+            _append_text(words, [record["id"], error.reference, error.output, error.type, "", record["arabizi"],
+                                 record["reference"], record["prediction"]])
 
     choice = DataValidation(type="list", formula1='"' + ",".join(TYPES) + '"', allow_blank=True,
                             errorStyle="warning", error="Not one of the listed types; keep it anyway?")
     words.add_data_validation(choice)
-    choice.add(f"D2:D{max(n_words + 1, 2)}")
+    choice.add(f"D2:D{max(n_rows + 1, 2)}")
     right_to_left = Alignment(horizontal="right", readingOrder=2)
     for sheet, arabic, widths in ((words, "BCGH", (10, 18, 18, 20, 30, 50, 50, 50)),
                                   (sentences, "EF", (10, 7, 7, 50, 50, 50))):
@@ -142,10 +157,15 @@ def write_sheet(meta: dict, records: list[dict], rows: dict[str, dict], path: Pa
 
     summary = book.create_sheet("summary", 0)
     m = meta.get("metrics", {})
-    for label, value in (("run", meta.get("run_id")), ("split", f"{meta.get('split')} ({meta.get('subset')})"),
-                         ("sentences", m.get("sentences")), ("word accuracy", m.get("word_accuracy")),
-                         ("sentences with errors", n_sentences), ("wrong words (rows)", n_words)):
+    wrong = sum(r["words_total"] - r["words_correct"] for r in records)
+    labels = (("run", meta.get("run_id")), ("split", f"{meta.get('split')} ({meta.get('subset')})"),
+              ("sentences", m.get("sentences")), ("word accuracy", m.get("word_accuracy")),
+              ("sentences with errors", n_sentences), ("wrong words (word accuracy)", wrong),
+              ("error rows in this sheet", n_rows))
+    for label, value in labels:
         summary.append([label, value])
+    for warning in warnings or []:
+        summary.append(["warning", warning])
     summary.append([])
     summary.append(["type", "rows", "share"])
     header = summary.max_row
@@ -154,7 +174,7 @@ def write_sheet(meta: dict, records: list[dict], rows: dict[str, dict], path: Pa
                         f"=IF($B${len(TYPES) + header + 1}=0,0,B{row_number}/$B${len(TYPES) + header + 1})"])
     total_row = summary.max_row + 1
     summary.append(["total", f"=SUM(B{header + 1}:B{total_row - 1})", ""])
-    for cell in (*summary["A"][:6], *summary[header], *summary[total_row]):
+    for cell in (*summary["A"][:header - 2], *summary[header], *summary[total_row]):
         cell.font = Font(bold=True)
     for cell in summary["C"][header:]:
         cell.number_format = "0%"
@@ -162,4 +182,4 @@ def write_sheet(meta: dict, records: list[dict], rows: dict[str, dict], path: Pa
     summary.column_dimensions["B"].width = 50
     path.parent.mkdir(parents=True, exist_ok=True)
     book.save(path)
-    return n_words, n_sentences
+    return n_rows, n_sentences
