@@ -83,6 +83,60 @@
       }
     },
     {
+      "id": "arabizi-llama3.2-1b-rank32",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261016-152120-llama3.2-1b-lora-rank32.json",
+      "file": "arabizi-llama3.2-1b-rank32-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "88f917fd34c40328be258470df63b1ee1ff05410f94eb0dacf5bcb2971c139d1",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA sweep run of Llama 3.2 1B Instruct on Kaggle (TRAINING.md, Sweep); weights stay private",
+      "source": "P4 sweep",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-lr1e-4",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261016-154840-llama3.2-1b-lora-lr1e-4.json",
+      "file": "arabizi-llama3.2-1b-lr1e-4-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "bfe7f0cf7e39bb46e51238d45f136427ae5649b9f5ccadc37d7d99212d8bd5da",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA sweep run of Llama 3.2 1B Instruct on Kaggle (TRAINING.md, Sweep); weights stay private",
+      "source": "P4 sweep",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-ep2",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261016-161550-llama3.2-1b-lora-ep2.json",
+      "file": "arabizi-llama3.2-1b-ep2-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "c3ae5e544a09406f665310aa39d656c43cdfa40424df73dacdfa236465453e1d",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA sweep run of Llama 3.2 1B Instruct on Kaggle (TRAINING.md, Sweep); weights stay private",
+      "source": "P4 sweep",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
       "id": "arabizi-llama3.2-1b-v2",
       "base": "llama3.2-1b",
       "run": "train/runs/20261017-052446-llama3.2-1b-lora-v2.json",
