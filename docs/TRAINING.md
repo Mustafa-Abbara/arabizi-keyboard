@@ -57,6 +57,23 @@ Import it like the main notebook, set **GPU T4**, **Internet on**, add the `arab
 
 **How the runs are judged** (on the Mac, dev only; the test set is not touched): each run is scored with the same harness and compared with the shipped model by paired bootstrap on the same 104 dev rows. A setting is kept only if the 95% interval of the gain is above 0, and only if it beats `base` by more than `base` differs from the shipped model (the rerun noise). The winners are combined in one more run; a clear overall gain makes a new final candidate (one test run, new ADR).
 
+## Sweep results (17 Oct 2026)
+
+All four runs on a Kaggle T4, same data export and package versions as the shipped run; scored on dev (104 rows, numbers protected as the engine does, `ft-<id>-protect`) and compared with the shipped model by paired bootstrap. Private rows: aggregates only; runs in `eval/results/private/` (not committed).
+
+| Run | Best val. loss | Dev word acc. [95% CI] | CER | Keep-Latin F1 | p50 / p95 ms | vs shipped (paired) |
+|---|---|---|---|---|---|---|
+| shipped `v1` | 0.401 | 0.774 | 0.093 | 0.87 | — | — |
+| `base` | 0.401 | = shipped | = | = | = | **bit-identical GGUF** (same SHA-256) |
+| `rank32` | **0.380** | **0.784** [0.75, 0.82] | **0.084** | **0.88** | 419 / 811 | +0.009 [−0.012, +0.031]: no clear difference |
+| `lr1e-4` | 0.474 | 0.742 [0.70, 0.78] | 0.107 | 0.81 | 446 / 913 | −0.032 [−0.057, −0.008]: worse |
+| `ep2` | 0.431 | 0.770 [0.73, 0.81] | 0.088 | 0.86 | 417 / 778 | −0.004 [−0.028, +0.022]: no clear difference |
+
+- **Reproducibility:** with seed 2026 the training is deterministic on the T4, so a rerun's noise is 0; this says nothing about the spread across seeds.
+- **No setting passes the keep rule** (gain interval above 0): the shipped model stays. A smaller learning rate is clearly worse; two epochs is no better than three.
+- `rank32` is the best on every dev metric but within noise. **Claude's recommendation:** use rank 32 (`--rank 32 --alpha 64`) for the next run, which adds the new real rows (more data can use more adapter capacity), and judge that run as a whole against the shipped model, rather than spending another Kaggle run on rank alone.
+- The three sweep models are registered in `config/models.json` (`arabizi-llama3.2-1b-rank32`, `-lr1e-4`, `-ep2`; weights in `models/`, never committed).
+
 ## Training with the real rows (ADR 0021)
 
 `train/finetune_v2.ipynb` trains Llama 3.2 1B twice on the new export (4,994 real training rows added; 22,712 examples, AI-derived share 18%):
