@@ -3,6 +3,7 @@
   uv run --project eval evalrun run --system identity --split dev
   uv run --project eval evalrun score predictions.jsonl --split dev --name qwen-0.5b-kaggle
   uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B
+  uv run --project eval evalrun errors eval/results/RUN
 
 Tune on dev; the test split needs --final and should be run once per final candidate (roadmap §4).
 Each run writes eval/results/<run_id>/predictions.jsonl (per sentence: output + scores) and metrics.json.
@@ -19,7 +20,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from arabizi_eval import bootstrap, metrics, systems
+from arabizi_eval import bootstrap, errors, metrics, systems
 from arabizi_eval import pairs as P
 
 RESULTS_DIR = P.ROOT / "eval" / "results"
@@ -168,6 +169,31 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_errors(args: argparse.Namespace) -> int:
+    """Every wrong word of a run in a spreadsheet, to group by cause (docs/EVAL.md, "Error analysis")."""
+    meta, records = load_run(args.run)
+    guard_split(meta["split"], args.final)  # reading test errors and then changing the system tunes it to test
+    out = args.out or args.run / "errors.xlsx"
+    private_dirs = (PRIVATE_RESULTS_DIR, P.PRIVATE_DIR.parent)
+    if meta.get("private_sentences") and not any(out.resolve().is_relative_to(d.resolve()) for d in private_dirs):
+        sys.exit("This run has private rows, so its error sheet must stay in eval/results/private or data/private "
+                 "(never committed, ADR 0014).")
+    rows, data_sha = split_rows(meta["split"], subset=meta.get("subset", "all"), others=meta.get("set") == "others")
+    by_id = {r["id"]: r for r in rows}
+    warnings = []
+    if data_sha != meta["data_sha256"]:
+        warnings.append("the data changed since this run: wrong words are found against today's references and "
+                        "accepted variants, the scores are the run's")
+    missing = sorted(records.keys() - by_id.keys())
+    if missing:
+        warnings.append(f"not in the {meta['split']} split any more (no accepted variants): {', '.join(missing)}")
+    for warning in warnings:
+        print(f"Warning: {warning}.")
+    n_rows, n_sentences = errors.write_sheet(meta, list(records.values()), by_id, out, warnings)
+    print(f"{n_rows} error rows in {n_sentences} of {len(records)} sentences: {out}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="evalrun", description=__doc__,
@@ -195,8 +221,12 @@ def main(argv: list[str] | None = None) -> int:
     compare = sub.add_parser("compare", help="paired bootstrap on word accuracy between two runs")
     compare.add_argument("run_a", type=Path)
     compare.add_argument("run_b", type=Path)
+    errors_parser = sub.add_parser("errors", help="spreadsheet of a run's wrong words, to group by cause")
+    errors_parser.add_argument("run", type=Path)
+    errors_parser.add_argument("--out", type=Path, help="default: errors.xlsx in the run folder (not committed)")
+    errors_parser.add_argument("--final", action="store_true", help="allow a test-split run (final report only)")
     args = parser.parse_args(argv)
-    return {"run": cmd_run, "score": cmd_score, "compare": cmd_compare}[args.command](args)
+    return {"run": cmd_run, "score": cmd_score, "compare": cmd_compare, "errors": cmd_errors}[args.command](args)
 
 
 if __name__ == "__main__":
