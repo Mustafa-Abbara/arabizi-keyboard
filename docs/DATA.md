@@ -34,7 +34,8 @@ Every Arabizi → Arabic pair is one JSON object on one line in `data/pairs/*.js
 |---|---|
 | `data/pairs/test.jsonl` | Held-out test rows. Hand-written only. Frozen at the end of W3 (P2 step 4). |
 | `data/pairs/dev.jsonl` | Held-out dev rows for tuning. Hand-written only. |
-| `data/pairs/train-hand.jsonl` | Hand-written training rows (after the freeze). |
+| `data/pairs/train-hand.jsonl` | Hand-written training rows (after the freeze), including 4,994 real messages by friends and family (ADR 0021). |
+| `data/pairs/others/test.jsonl`, `dev.jsonl`, `manifest.json` | The **"others" held-out set** (ADR 0021): 299 test + 200 dev real messages by other people, frozen as `others-v1.0`. Its own folder: training, variants and the main splits never read it; scored with `evalrun ... --others`. |
 | `data/pairs/train-ai_checked.jsonl`, `train-public.jsonl` | Training rows from AI-drafted batches and licensed datasets. |
 | `data/pairs/train-rule_variant.jsonl` | **Generated, not committed** (`.gitignore`): rule-made spelling variants of the training rows. Rebuild with `pairs variants`; the same seed gives the same file. |
 
@@ -47,7 +48,7 @@ Every Arabizi → Arabic pair is one JSON object on one line in `data/pairs/*.js
 - the Arabic has no diacritics, tatweel or Arabic-Indic digits, has Arabic letters, and the Arabizi has none;
 - **every standalone number** in the Arabizi (`100$`, `2pm`, `10:30`, `2`) appears unchanged in the Arabic; digits inside words (`3am`, `7elo`, `la2`) are letters and are not checked;
 - links, emails, `@mentions` and `#hashtags` are unchanged;
-- ids are unique, no two held-out rows are the same sentence, and **no train row repeats a test or dev sentence** (compared after normalising: Arabic with the lenient rules of SPELLING.md §10, Arabizi lowercased without punctuation).
+- ids are unique, no two held-out rows are the same sentence (the others set included), and **no train row repeats a test or dev sentence** (compared after normalising: Arabic with the lenient rules of SPELLING.md §10, Arabizi lowercased without punctuation).
 
 ## Sources and terms of service
 
@@ -59,6 +60,10 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 | `claude-draft-revised-2026-10-batch02` | 500 | `train-ai_checked.jsonl` (ai-0501 – ai-1000) | `ai_checked`, train only | Same process as above (Claude draft, revised by Moustafa, prompt not kept). Diacritics/tatweel removed from 247 rows. |
 | `claude-draft-revised-2026-10-batch03` | 500 | `train-ai_checked.jsonl` (ai-1001 – ai-1500) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 279 rows. |
 | `claude-draft-revised-2026-10-batch04` | 500 | `train-ai_checked.jsonl` (ai-1501 – ai-2000) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 342 rows. |
+
+### Real messages by friends and family ([ADR 0021](decisions/0021-real-rows-others-set.md))
+
+5,500 rows (Arabizi with an Arabic-script spelling) provided by Moustafa on 17 Oct 2026: written by friends and family (the files' `source` column said "social media comments"; Moustafa says that label is wrong), all public, all checked by Moustafa. Imported with `pairs import-real`: 4,994 training rows (`writer: friends-and-family`, `source: friends-and-family (ADR 0021)`) and 499 rows for the others held-out set; 7 skipped (a number not kept as typed). Moustafa reports the writers agreed to their messages being used and published (A8 basis recorded in ADR 0021).
 
 ### Private rows: Moustafa's own chats ([ADR 0014](decisions/0014-private-own-chat-data.md))
 
@@ -112,6 +117,7 @@ Design: **Claude's recommendation** (14 Oct 2026), from roadmap P2 step 4.
 | Version | Date | Held-out rows | What happened before it |
 |---|---|---|---|
 | `testset-v1.0` | 16 Oct 2026 | 347: public 113 test + 48 dev, private 130 test + 56 dev; 0 unchecked | First freeze, before any fine-tuning. 111 of Moustafa's chat test/dev rows were made public with `pairs publish` (public test 35 → 113, ADR 0014 amendment); 3 private held-out rows he judged unfit were removed (350 → 347); every row had the delayed self-check in a spreadsheet (`pairs check --sheet`), because the terminal could not display Arabic, which also corrected the Arabic of 3 public rows; the terminal checks of 15 Oct were discarded. |
+| `others-v1.0` (separate set, `data/pairs/others/manifest.json`) | 17 Oct 2026 | 499: 299 test + 200 dev, public; 0 unchecked | First import of the others set (ADR 0021); `testset-v1.0` unchanged. |
 
 ## Writing pairs: the `pairs` tool
 

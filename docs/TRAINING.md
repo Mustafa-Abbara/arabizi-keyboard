@@ -74,6 +74,17 @@ All four runs on a Kaggle T4, same data export and package versions as the shipp
 - `rank32` is the best on every dev metric but within noise. **Claude's recommendation:** use rank 32 (`--rank 32 --alpha 64`) for the next run, which adds the new real rows (more data can use more adapter capacity), and judge that run as a whole against the shipped model, rather than spending another Kaggle run on rank alone.
 - The three sweep models are registered in `config/models.json` (`arabizi-llama3.2-1b-rank32`, `-lr1e-4`, `-ep2`; weights in `models/`, never committed).
 
+## Training with the real rows (ADR 0021)
+
+`train/finetune_v2.ipynb` trains Llama 3.2 1B twice on the new export (4,994 real training rows added; 22,712 examples, AI-derived share 18%):
+
+| Run (`--tag`) | Settings | Why |
+|---|---|---|
+| `v2` | rank 32, alpha 64 | the candidate: the sweep's best setting with more data |
+| `v2-r16` | the shipped settings | separates the data's effect from the rank's |
+
+Upload `build/train-export/` as a **new version** of the private `arabizi-train` dataset (Kaggle → your dataset → **New Version** → replace all files), import the notebook, set GPU T4 and Internet on, add the dataset, then **Save Version → Save & Run All (Commit)**. Download everything with **Download all**. Each run is scored on frozen dev and on the others dev set against the shipped model (others dev, 200 rows: B0 0.591 [0.57, 0.61], shipped model 0.636 [0.62, 0.66], +0.046 [+0.027, +0.065] over B0; hallucination 15%).
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.

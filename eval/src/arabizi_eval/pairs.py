@@ -19,6 +19,10 @@ PAIRS_DIR = ROOT / "data" / "pairs"
 PRIVATE_DIR = ROOT / "data" / "private" / "pairs"
 SCHEMA_PATH = ROOT / "data" / "schema" / "pair.schema.json"
 MANIFEST_PATH = PAIRS_DIR / "manifest.json"  # written when the test set is frozen (P2 step 4)
+# The "others" held-out set (ADR 0021): real messages written by other people, scored separately from testset-v1.0.
+# Its own folder, so training, variants and the main splits never read it; frozen with its own manifest.
+OTHERS_DIR = PAIRS_DIR / "others"
+OTHERS_MANIFEST_PATH = OTHERS_DIR / "manifest.json"
 
 ID_PREFIX = {"hand": "hw", "rule_variant": "rv", "public": "pb", "ai_checked": "ai"}
 
@@ -79,10 +83,13 @@ def expected_split(path: Path) -> tuple[str, str | None]:
     raise ValueError(f"unexpected pair file name {path.name}: use test.jsonl, dev.jsonl or train-<method>.jsonl")
 
 
-def pair_files(pairs_dir: Path | None = None, include_private: bool = True) -> list[Path]:
-    """Pair files in `pairs_dir`, or the public folder plus (if present and wanted) the private one."""
+def pair_files(pairs_dir: Path | None = None, include_private: bool = True, others: bool = False) -> list[Path]:
+    """Pair files in `pairs_dir`, or the public folder plus (if present and wanted) the private one.
+    `others=True`: the "others" held-out set instead (ADR 0021)."""
     if pairs_dir is not None:
         return sorted(pairs_dir.glob("*.jsonl"))
+    if others:
+        return sorted(OTHERS_DIR.glob("*.jsonl"))
     folders = [PAIRS_DIR] + ([PRIVATE_DIR] if include_private and PRIVATE_DIR.exists() else [])
     return [path for folder in folders for path in sorted(folder.glob("*.jsonl"))]
 
@@ -176,13 +183,18 @@ def held_out_files() -> dict[str, tuple[Path, bool]]:
     return files
 
 
-def freeze_problems(manifest_path: Path | None = None) -> list[Problem]:
+def others_files() -> dict[str, tuple[Path, bool]]:
+    """Manifest key -> (path, private) for the "others" held-out set (ADR 0021)."""
+    return {f"others/{name}": (OTHERS_DIR / name, False) for name in FROZEN_NAMES}
+
+
+def freeze_problems(manifest_path: Path | None = None, others: bool = False) -> list[Problem]:
     """Frozen held-out files that changed or disappeared. Private files are only checked where they exist."""
-    path = manifest_path or MANIFEST_PATH
+    path = manifest_path or (OTHERS_MANIFEST_PATH if others else MANIFEST_PATH)
     if not path.exists():
         return []
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    files = held_out_files()
+    files = others_files() if others else held_out_files()
     problems = []
     for key, entry in manifest["files"].items():
         file, private = files[key]
@@ -201,14 +213,16 @@ def validate(pairs_dir: Path | None = None) -> Report:
     """Validate every pair file, then check ids, duplicates and test/dev leakage across files."""
     report = Report()
     located: list[tuple[str, dict]] = []
-    for path in pair_files(pairs_dir):
+    files = pair_files(pairs_dir) + (pair_files(others=True) if pairs_dir is None else [])
+    for path in files:
         try:
             split, method = expected_split(path)
         except ValueError as exc:
             report.errors.append(Problem(path.name, str(exc)))
             continue
         for n, row, line_error in read_jsonl(path):
-            where = f"{'private/' if is_private(path) else ''}{path.name}:{n}"
+            folder = "private/" if is_private(path) else "others/" if OTHERS_DIR in path.parents else ""
+            where = f"{folder}{path.name}:{n}"
             if line_error:
                 report.errors.append(Problem(where, line_error))
                 continue
@@ -239,7 +253,7 @@ def validate(pairs_dir: Path | None = None) -> Report:
         if parent and splits.get(parent) != "train":
             report.errors.append(Problem(where, f"parent {parent} is missing or not a train row"))
     if pairs_dir is None:
-        report.errors += freeze_problems()
+        report.errors += freeze_problems() + freeze_problems(others=True)
     return report
 
 

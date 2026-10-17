@@ -64,14 +64,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: data/pairs/manifest.json may only change with the testset-change label
+      - name: the frozen manifests (data/pairs/manifest.json, data/pairs/others/manifest.json) may only change with the testset-change label
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'testset-change') }}
         run: |
-          if git diff --name-only "$BASE"...HEAD | grep -qx 'data/pairs/manifest.json'; then
+          if git diff --name-only "$BASE"...HEAD | grep -qxE 'data/pairs/(others/)?manifest\.json'; then
             if [ "$HAS_LABEL" != "true" ]; then
-              echo "::error::The frozen test set changed (data/pairs/manifest.json). Add the 'testset-change' label and give the reason in the PR (docs/DATA.md)."
+              echo "::error::A frozen held-out set changed (data/pairs/manifest.json or data/pairs/others/manifest.json). Add the 'testset-change' label and give the reason in the PR (docs/DATA.md)."
               exit 1
             fi
             echo "Frozen test set changed, with the testset-change label."
