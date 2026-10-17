@@ -55,6 +55,7 @@ The shipped model `arabizi-llama3.2-1b-v1` (ADR 0005) was trained without real m
 ## Consequences
 
 - **The others set is now used up as a test once for `v2`.** A future candidate is tuned on others dev and runs others test once, like `testset-v1.0`.
+- **In the real Swift engine** (others dev, 200 rows, 10 s deadline), `v2` scores **0.770** and `v1` 0.635: +0.134 [+0.112, +0.157], the same gain as the raw models. The engine is below the raw model (0.811) because its output checks sent 31 of 200 sentences to the rules (25 for an invented Latin word such as `program` or `video`, 6 for a broken placeholder). On those 31 sentences the model had 351 of 455 words right and the rules 262, so a word-level fallback (replace only the invented word) could recover most of the 4 points.
 - **Hallucination on other people's typing is still high (13%):** the model invents a word, usually for a name or a rare word. The engine's output checks catch invented Latin and mixed words and answer with the rules; this is the next accuracy target.
 - **Latency:** on the others set's longer sentences, p95 is about 1.1–1.2 s (the shipped model's is the same), close to the 1,500 ms engine deadline. Some long sentences may fall back to the rules; to be watched in dogfooding (P6).
 - **Limitation:** the others test rows come from the same group of writers as the 4,994 training rows (ADR 0021), so +14 points likely overstates the gain for complete strangers.
