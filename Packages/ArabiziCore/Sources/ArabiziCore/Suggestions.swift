@@ -21,23 +21,32 @@ public struct WordParts: Equatable, Sendable {
     public func with(_ newCore: String) -> String { lead + newCore + trail }
 }
 
-/// Spellings to offer for one word of a conversion (ADR 0027): the rules' spelling of the Arabizi word, then
-/// one-letter and long-vowel variants of the shown word that are real words (spellings in the rule dictionary),
-/// then the Arabizi word itself, to keep it in Latin. The shown word is never offered back.
+/// Spellings to offer for one word of a conversion (ADR 0027), at most 5, the shown word never offered back:
+/// 1. the rules' spelling of the typed Arabizi word;
+/// 2. the Arabic of dictionary words typed one letter differently (`sabiyeh`, `sabiyi` for `sabiye`), when that
+///    Arabic looks like the shown word (at least half the letters in common), closest first;
+/// 3. one-letter and long-vowel variants of the shown word that the dictionary knows as words;
+/// 4. the typed word itself, to keep it in Latin.
 public struct Suggestions: Sendable {
-    /// Arabic spellings the rule dictionary knows; a variant is offered only if it is one of them.
+    /// The rule dictionary: Arabizi word -> Arabic spelling.
+    let dictionary: [String: String]
+    /// The dictionary's Arabizi words by length, so neighbours are looked up among similar lengths only.
+    let byLength: [Int: [(key: [Character], arabic: String)]]
+    /// Arabic spellings the dictionary knows; a variant is offered only if it is one of them.
     let knownArabic: Set<String>
     let rules: @Sendable (String) -> String
 
-    public init(knownArabic: Set<String>, rules: @escaping @Sendable (String) -> String) {
-        self.knownArabic = knownArabic
+    public init(dictionary: [String: String], rules: @escaping @Sendable (String) -> String) {
+        self.dictionary = dictionary
+        self.knownArabic = Set(dictionary.values)
+        self.byLength = Dictionary(grouping: dictionary.map { (key: Array($0.key), arabic: $0.value) },
+                                   by: { $0.key.count })
         self.rules = rules
     }
 
-    /// The Arabic spellings in a rule dictionary file (data/rules/arabizi_lexicon.json).
-    public static func knownArabic(lexicon: Data) -> Set<String> {
-        guard let file = try? JSONDecoder().decode(LexiconWords.self, from: lexicon) else { return [] }
-        return Set(file.words.values)
+    /// The words of a rule dictionary file (data/rules/arabizi_lexicon.json).
+    public static func dictionary(lexicon: Data) -> [String: String] {
+        (try? JSONDecoder().decode(LexiconWords.self, from: lexicon))?.words ?? [:]
     }
 
     public func candidates(for shown: String, latin: String?, limit: Int = 5) -> [String] {
@@ -50,6 +59,16 @@ public struct Suggestions: Sendable {
         if let latinCore, !latinCore.isEmpty {
             let ruled = WordParts(rules(latinCore)).core
             if ruled.unicodeScalars.contains(where: Self.isArabicLetter) { add(ruled) }
+        }
+        if let typed = latinCore?.lowercased(), !typed.isEmpty {
+            let letters = Array(typed)
+            let candidates = (letters.count - 1...letters.count + 1).flatMap { byLength[$0] ?? [] }
+            let neighbours = candidates.compactMap { entry -> (Double, String)? in
+                guard entry.key != letters, Self.oneEditApart(entry.key, letters) else { return nil }
+                let close = WordAlignment.similarity(entry.arabic, word)
+                return close >= 0.5 ? (close, entry.arabic) : nil
+            }
+            for (_, arabic) in neighbours.sorted(by: { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1 < $1.1 }) { add(arabic) }
         }
         for variant in Self.variants(of: word) where knownArabic.contains(variant) {
             add(variant)
@@ -111,6 +130,25 @@ public struct Suggestions: Sendable {
     }
 
     static func isArabicLetter(_ scalar: Unicode.Scalar) -> Bool { (0x0621...0x064A).contains(scalar.value) }
+
+    /// Exactly one letter added, dropped or changed (linear time).
+    static func oneEditApart(_ a: [Character], _ b: [Character]) -> Bool {
+        let (short, long) = a.count <= b.count ? (a, b) : (b, a)
+        guard long.count - short.count <= 1 else { return false }
+        var i = 0, j = 0, edits = 0
+        while i < short.count && j < long.count {
+            if short[i] == long[j] {
+                i += 1
+                j += 1
+                continue
+            }
+            edits += 1
+            if edits > 1 { return false }
+            if short.count == long.count { i += 1 }
+            j += 1
+        }
+        return edits + (long.count - j) + (short.count - i) == 1
+    }
 }
 
 /// Which typed word each shown word came from, so a correction is recorded against the right Arabizi word.

@@ -36,7 +36,7 @@ final class ArabiziInputController: IMKInputController {
               let lexicon = try? Data(contentsOf: resources.appending(path: RuleConverter.lexiconFileName)) else {
             return nil
         }
-        let suggestions = Suggestions(knownArabic: Suggestions.knownArabic(lexicon: lexicon),
+        let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon),
                                       rules: { rules.convert($0) })
         let store = CorrectionStore.standard()
         let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")

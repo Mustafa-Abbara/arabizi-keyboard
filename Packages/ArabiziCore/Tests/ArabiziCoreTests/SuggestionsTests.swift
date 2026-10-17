@@ -7,8 +7,12 @@ let fakeRules: @Sendable (String) -> String = { latin in
     ["sabiye": "صبية", "kifak": "كيفك", "ya": "يا", "tawle": "طاولة", "w": "و", "el": "ال", "bet": "بيت"][latin] ?? latin
 }
 
+func dictionary(_ arabic: [String]) -> [String: String] {
+    Dictionary(uniqueKeysWithValues: arabic.enumerated().map { ("w\($0.offset)", $0.element) })
+}
+
 @Test func candidatesPutTheRulesFirstThenRealVariantsThenLatin() {
-    let suggestions = Suggestions(knownArabic: ["سبيه", "صبيه", "سابية"], rules: fakeRules)
+    let suggestions = Suggestions(dictionary: dictionary(["سبيه", "صبيه", "سابية"]), rules: fakeRules)
     let offered = suggestions.candidates(for: "سبية؟", latin: "sabiye")
     #expect(offered.first == "صبية")  // the rules' spelling of the typed word
     #expect(offered.contains("سابية") && offered.contains("سبيه"))  // a long vowel added; the ending
@@ -27,13 +31,22 @@ let fakeRules: @Sendable (String) -> String = { latin in
 }
 
 @Test func withoutALatinWordThereIsNoLatinCandidate() {
-    let suggestions = Suggestions(knownArabic: ["كيفيك"], rules: fakeRules)
+    let suggestions = Suggestions(dictionary: dictionary(["كيفيك"]), rules: fakeRules)
     #expect(suggestions.candidates(for: "كيفك", latin: nil) == ["كيفيك"])
 }
 
-@Test func knownArabicComesFromTheDictionaryValues() {
+@Test func theDictionaryIsReadFromTheLexiconFile() {
     let lexicon = Data(#"{"words": {"kifak": "كيفك", "2alb": "قلب"}, "keep_latin": []}"#.utf8)
-    #expect(Suggestions.knownArabic(lexicon: lexicon) == ["كيفك", "قلب"])
+    #expect(Suggestions.dictionary(lexicon: lexicon) == ["kifak": "كيفك", "2alb": "قلب"])
+}
+
+@Test func wordsTypedOneLetterDifferentlyOfferTheirArabicWhenItLooksAlike() {
+    let suggestions = Suggestions(dictionary: [
+        "sabiyeh": "صبيه", "sabaya": "صبايا", "sabiye2": "سابق",  // one letter off; the last looks nothing alike
+        "sabiyeteh": "صبيتها",  // three letters off: not a neighbour
+    ], rules: { _ in "" })
+    #expect(suggestions.candidates(for: "صبية", latin: "sabiye") == ["صبيه", "sabiye"])
+    #expect(!suggestions.candidates(for: "صبية", latin: "sabiye").contains("صبايا"))  // two letters off
 }
 
 @Test func alignmentIsByPositionWhenTheCountsMatch() {
@@ -155,4 +168,10 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     _ = composer.handle(.suggest, context: Context(cursorAtLastConversion: true))
     #expect(composer.handle(.text("s")) == .commitAndCompose("كيفك يا سبية؟", marked: "s"))
     #expect(composer.buffer == "s")
+}
+
+@Test func oneEditApartCountsExactlyOneChange() {
+    let one = { (a: String, b: String) in Suggestions.oneEditApart(Array(a), Array(b)) }
+    #expect(one("sabiye", "sabiyeh") && one("sabiye", "sabiy") && one("sabiye", "sabiya"))
+    #expect(!one("sabiye", "sabiye") && !one("sabiye", "sabaya") && !one("sabiye", "sabiyeteh"))
 }
