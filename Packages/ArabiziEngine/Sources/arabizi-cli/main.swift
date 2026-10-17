@@ -2,8 +2,9 @@
 // engine. One ConvertRequest per line on stdin, one ConvertResponse per line on stdout (docs/API_CONTRACTS.md).
 // The engine's status goes to stderr as one JSON line at start-up. Never prints the text it converts to stderr.
 //
-//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain]
-// --explain writes why each fallback happened to stderr (counts only, no text).
+//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--no-repair]
+// --explain writes one line per request to stderr: why a fallback happened, or how many tokens of a model answer
+// were repaired (ADR 0023); reason null otherwise. Counts only, no text.
 import ArabiziContracts
 import ArabiziCore
 import ArabiziEngine
@@ -20,7 +21,7 @@ func json(_ value: Any) -> String {
 }
 
 var configDirectory = "config", rulesDirectory = "data/rules", modelsDirectory = "models"
-var modelOverride: String?, noModel = false, verifyHash = true, explain = false
+var modelOverride: String?, noModel = false, verifyHash = true, explain = false, repair = true
 var arguments = CommandLine.arguments.dropFirst().makeIterator()
 @MainActor func value(after flag: String) -> String {
     guard let value = arguments.next() else { fail("\(flag) needs a value") }
@@ -35,6 +36,7 @@ while let argument = arguments.next() {
     case "--no-model": noModel = true
     case "--skip-hash": verifyHash = false
     case "--explain": explain = true
+    case "--no-repair": repair = false
     default: fail("unknown argument \(argument)")
     }
 }
@@ -54,7 +56,8 @@ do {
     let config = try EngineConfig(engine: JSONSerialization.data(withJSONObject: engineJSON),
                                   models: Data(contentsOf: configURL.appending(path: "models.json")))
     engine = try Engine.load(config: config, rulesDirectory: URL(filePath: rulesDirectory),
-                             modelsDirectory: URL(filePath: modelsDirectory), verifyModelHash: verifyHash)
+                             modelsDirectory: URL(filePath: modelsDirectory), verifyModelHash: verifyHash,
+                             repairTokens: repair)
 } catch {
     fail("could not start the engine: \(error)")
 }
@@ -78,8 +81,9 @@ while let line = readLine(strippingNewline: true) {
         let request = try decoder.decode(ConvertRequest.self, from: Data(line.utf8))
         let (response, reason) = engine.convertExplained(request)
         FileHandle.standardOutput.write(try encoder.encode(response) + Data("\n".utf8))
-        if explain, let reason {
-            FileHandle.standardError.write(Data((#"{"line": \#(lineNumber), "reason": "# + json(reason) + "}\n").utf8))
+        if explain {
+            let shown = reason.map(json) ?? "null"
+            FileHandle.standardError.write(Data((#"{"line": \#(lineNumber), "reason": "# + shown + "}\n").utf8))
         }
     } catch {
         // The request is not echoed: it can hold private text.

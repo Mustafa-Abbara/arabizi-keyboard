@@ -35,7 +35,7 @@ public struct OutputChecks: Equatable, Sendable {
         // Both sides still masked: links and emails are placeholders here, so they never count as Latin words.
         let allowed = Set(Self.words(input.masked).map { Token($0).core.lowercased() })
         let invented = Self.words(answer).map { Token($0).core }.filter { core in
-            core.unicodeScalars.contains { $0.isASCII && $0.properties.isAlphabetic } && !allowed.contains(core.lowercased())
+            core.unicodeScalars.contains { $0.isASCII && $0.properties.isAlphabetic } && !Self.isInputWord(core, allowed)
         }
         guard invented.isEmpty else { return .failure(.newLatin(invented)) }
         let inputWords = Self.words(input.masked).count
@@ -46,6 +46,18 @@ public struct OutputChecks: Equatable, Sendable {
             return .failure(.wordCount(output: outputWords, input: inputWords))
         }
         return .success(restored)
+    }
+
+    /// Arabizi prefixes that can be glued to an English word (`lvideo`, `bel meeting`, `3alfacebook`); the Arabic
+    /// answer writes them apart (SPELLING.md 4), so `video` counts as typed when the input has `lvideo` (ADR 0023).
+    public static let gluedPrefixes = ["l", "el", "il", "al", "b", "bi", "be", "bel", "bil", "w", "wel", "wil",
+                                       "3a", "3al", "hal", "la", "lal"]
+
+    /// Whether a Latin word of the answer was typed: an input word itself, or one glued to an Arabizi prefix.
+    /// `inputWords` are lowercased.
+    public static func isInputWord(_ word: String, _ inputWords: Set<String>) -> Bool {
+        let word = word.lowercased()
+        return inputWords.contains(word) || gluedPrefixes.contains { inputWords.contains($0 + word) }
     }
 
     static func words(_ text: String) -> [String] {

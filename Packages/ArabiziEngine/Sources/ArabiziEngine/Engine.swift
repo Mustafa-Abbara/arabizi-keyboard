@@ -14,6 +14,10 @@ import Foundation
 ///    cleaned (first line, no wrapping quotes) and checked (OutputChecks). A finished, passing answer is the result
 ///    (`model`); a deadline gives the rules (`fallbackTimeout`); a token limit or a failed check gives the rules
 ///    (`fallbackCheckFailed`).
+/// 4. When the only failure is Latin the input did not have, the answer is first repaired token by token (ADR 0023):
+///    a mixed token such as `الvideo` is split (`ال video`, SPELLING.md 4), any other is replaced by the rule
+///    conversion of the one input word it came from. A repaired answer that passes every check is the result
+///    (`model`); otherwise the rules answer.
 ///
 /// Never logs the text it converts.
 public final class Engine: @unchecked Sendable {  // immutable after init; the generator serialises its own calls
@@ -30,15 +34,18 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     private let rules: RuleConverter
     private let generator: (any TextGenerator)?
     private let template: PromptTemplate?
+    /// Step 4 (token repair, ADR 0023); off only to measure what it adds (arabizi-cli --no-repair).
+    public let repairTokens: Bool
 
     /// For tests and hosts that build the parts themselves.
     public init(config: EngineConfig, rules: RuleConverter, generator: (any TextGenerator)?,
-                template: PromptTemplate?, modelState: ModelState) {
+                template: PromptTemplate?, modelState: ModelState, repairTokens: Bool = true) {
         self.config = config
         self.rules = rules
         self.generator = generator
         self.template = template
         self.modelState = modelState
+        self.repairTokens = repairTokens
     }
 
     /// Loads config/engine.json + config/models.json, the rule files and (when switched on) the model, whose SHA-256
@@ -51,7 +58,7 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
 
     /// The same with a config already built (arabizi-cli's --model / --no-model overrides).
     public static func load(config: EngineConfig, rulesDirectory: URL, modelsDirectory: URL,
-                            verifyModelHash: Bool = true) throws -> Engine {
+                            verifyModelHash: Bool = true, repairTokens: Bool = true) throws -> Engine {
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
         guard let model = config.model else {
             return Engine(config: config, rules: rules, generator: nil, template: nil, modelState: .off)
@@ -75,7 +82,7 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
             let generator = try LlamaModel(path: path.path, settings: settings)
             return Engine(config: config, rules: rules, generator: generator,
                           template: PromptTemplate(prefix: model.promptPrefix, suffix: model.promptSuffix),
-                          modelState: .ready(id: model.id))
+                          modelState: .ready(id: model.id), repairTokens: repairTokens)
         } catch {
             return unavailable("model failed to load: \(error)")
         }
@@ -129,6 +136,15 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
             switch config.outputChecks.check(Self.clean(generation.text), for: protected) {
             case .success(let converted):
                 return respond(converted, .model)
+            case .failure(.newLatin(let invented)):
+                let answer = Self.clean(generation.text)
+                if repairTokens, let (repaired, count) = Self.repair(answer, input: protected.masked, rules: rules),
+                   case .success(let converted) = config.outputChecks.check(repaired, for: protected) {
+                    reason = "repaired: \(count) token(s)"
+                    return respond(converted, .model)
+                }
+                reason = Self.describe(.newLatin(invented))
+                return respond(rules.convert(text), .fallbackCheckFailed)
             case .failure(let failure):
                 reason = Self.describe(failure)
                 return respond(rules.convert(text), .fallbackCheckFailed)
@@ -144,6 +160,56 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty } ?? ""
         return line.trimmingCharacters(in: CharacterSet(charactersIn: "\"“”«»")).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Repairs the tokens of `answer` that hold Latin letters the input (`input`, masked) does not have as a word
+    /// (OutputChecks' "new Latin" rule). nil when a token cannot be traced to one input word.
+    ///
+    /// - Arabic letters then Latin (`الvideo`, `عالschool`), where the Latin part is an input word, alone or glued to
+    ///   an Arabizi prefix (`lvideo`): split with a space, as SPELLING.md 4 writes an English word with an Arabic prefix.
+    /// - Anything else (`program` for `programe`, `قadir`): replaced by the rule conversion of the single input word
+    ///   that contains its Latin letters.
+    static func repair(_ answer: String, input: String, rules: RuleConverter) -> (String, Int)? {
+        let inputWords = input.split(whereSeparator: \.isWhitespace).map { core(of: String($0)).core.lowercased() }
+            .filter { !$0.contains("⟦") }
+        let allowed = Set(inputWords)
+        var repaired = 0
+        var output: [String] = []
+        for word in answer.split(whereSeparator: \.isWhitespace).map(String.init) {
+            let (lead, core, trail) = core(of: word)
+            guard core.unicodeScalars.contains(where: isLatinLetter), !OutputChecks.isInputWord(core, allowed) else {
+                output.append(word)
+                continue
+            }
+            let latin = String(String.UnicodeScalarView(core.unicodeScalars.filter { $0.isASCII })).lowercased()
+            if let match = core.wholeMatch(of: /(\p{Arabic}+)([A-Za-z][A-Za-z0-9'-]*)/),
+               OutputChecks.isInputWord(String(match.2), allowed) {
+                output.append("\(lead)\(match.1) \(match.2)\(trail)")
+            } else {
+                let sources = Set(inputWords.filter { !latin.isEmpty && $0.contains(latin) })
+                guard sources.count == 1, let source = sources.first else { return nil }
+                output.append(lead + rules.convert(source) + trail)
+            }
+            repaired += 1
+        }
+        return repaired > 0 ? (output.joined(separator: " "), repaired) : nil
+    }
+
+    private static func isLatinLetter(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.isASCII && scalar.properties.isAlphabetic
+    }
+
+    /// Leading punctuation, the word, trailing punctuation or emoji.
+    private static func core(of word: String) -> (lead: String, core: String, trail: String) {
+        let isWord = { (s: Unicode.Scalar) in s.properties.isAlphabetic || s.properties.numericType != nil }
+        let scalars = Array(word.unicodeScalars)
+        guard let start = scalars.firstIndex(where: isWord), let end = scalars.lastIndex(where: isWord) else {
+            return ("", word, "")
+        }
+        func text(_ range: some RangeExpression<Int>) -> String {
+            String(String.UnicodeScalarView(scalars[range]))
+        }
+        return (text(..<start), text(start...end), text((end + 1)...))
     }
 
     /// A check failure without the words themselves.

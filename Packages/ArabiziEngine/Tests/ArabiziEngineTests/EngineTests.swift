@@ -86,6 +86,35 @@ func badAnswersGiveTheRules(answer: Generation, outcome: Outcome) throws {
     #expect(reason.map { !$0.contains("how") } ?? false)  // reasons never carry the text
 }
 
+@Test(arguments: [
+    // An Arabic prefix glued to an English word of the input is split, as SPELLING.md 4 writes it.
+    ("shefet el video 3al facebook", "شفت الvideo عالfacebook", "شفت ال video عال facebook", 2),
+    ("shefet lvideo", "شفت الvideo", "شفت ال video", 1),  // the input glued it too
+    ("b3atlak el link b 100$", "بعتلك الlink ب ⟦0⟧", "بعتلك ال link ب 100$", 1),  // placeholders survive
+])
+func mixedTokensAreSplit(input: String, answer: String, repaired: String, count: Int) throws {
+    let model = ScriptedModel { _ in finished(answer) }
+    let (response, reason) = try engine(model).convertExplained(request(input))
+    #expect(response.outcome == .model && response.text == repaired)
+    #expect(reason == "repaired: \(count) token(s)")
+}
+
+@Test func anInventedWordIsReplacedByTheRulesForItsInputWord() throws {
+    let model = ScriptedModel { _ in finished("عجبني ال program") }
+    let response = try engine(model).convert(request("3ajabne l programe"))
+    #expect(response.outcome == .model && response.text == "عجبني ال " + rules.convert("programe"))
+}
+
+@Test(arguments: [
+    ("kifak", "كيفك the"),  // no input word holds "the"
+    ("programe w programs", "برنامج و program"),  // two input words hold "program"
+])
+func untraceableLatinStillGivesTheRules(input: String, answer: String) throws {
+    let model = ScriptedModel { _ in finished(answer) }
+    let response = try engine(model).convert(request(input))
+    #expect(response.outcome == .fallbackCheckFailed && response.text == rules.convert(input))
+}
+
 @Test func aFailingModelGivesTheRules() throws {
     let model = ScriptedModel { _ in throw LlamaError.decodeFailed(-1) }
     let response = try engine(model).convert(request("kifak"))

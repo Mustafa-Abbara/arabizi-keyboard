@@ -40,3 +40,11 @@ func placeholderMistakesFail(output: String) {
     #expect(check("kifak ya", "كيفك يا حبيبي شو عم تعمل اليوم بالبيت") == .failure(.wordCount(output: 8, input: 2)))
     #expect(check("kifak ya", "كيفك يا حبيبي شو عم") == .success("كيفك يا حبيبي شو عم"))  // 2 × 2 + 1 = 5 is the most
 }
+
+@Test func anEnglishWordGluedToAnArabiziPrefixCountsAsTyped() {
+    let typed: Set<String> = ["shefet", "lvideo", "3alfacebook", "salon"]
+    #expect(OutputChecks.isInputWord("video", typed) && OutputChecks.isInputWord("Facebook", typed))
+    #expect(!OutputChecks.isInputWord("alon", typed))  // "s" is not a prefix: salon is one word
+    let checks = OutputChecks()
+    #expect(checks.check("شفت ال video", for: ProtectedSpans.protect("shefet lvideo")) == .success("شفت ال video"))
+}

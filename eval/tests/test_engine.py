@@ -17,8 +17,9 @@ for n, line in enumerate(sys.stdin, 1):
     fallback = request["text"] == "kifak how"
     print(json.dumps({"v": 1, "id": request["id"], "latencyMs": 3, "text": "كيفك",
                       "outcome": "fallbackCheckFailed" if fallback else "model"}), flush=True)
-    if fallback:
-        print(json.dumps({"line": n, "reason": "check: new Latin words (1)"}), file=sys.stderr, flush=True)
+    reason = ("check: new Latin words (1)" if fallback else
+              "repaired: 1 token(s)" if request["text"] == "el video" else None)
+    print(json.dumps({"line": n, "reason": reason}), file=sys.stderr, flush=True)  # --explain: one line per request
 '''
 
 
@@ -37,9 +38,11 @@ def test_engine_system_sends_requests_and_counts_outcomes(fake_cli):
     assert system.describe["status"]["state"] == "ready"
     assert system.convert({"arabizi": "kifak"}) == "كيفك"
     assert system.convert({"arabizi": "kifak how"}) == "كيفك"
+    assert system.convert({"arabizi": "el video"}) == "كيفك"
     system.close()
-    assert system.describe["outcomes"] == {"model": 1, "fallbackCheckFailed": 1}
+    assert system.describe["outcomes"] == {"model": 2, "fallbackCheckFailed": 1}
     assert system.describe["fallback_reasons"] == {"check: new Latin words (1)": 1}
+    assert system.describe["repairs"] == {"repaired: 1 token(s)": 1}
 
 
 def test_engine_system_refuses_a_model_that_is_not_ready(fake_cli, monkeypatch):
