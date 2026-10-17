@@ -178,7 +178,7 @@ def cmd_errors(args: argparse.Namespace) -> int:
     if meta.get("private_sentences") and not any(out.resolve().is_relative_to(d.resolve()) for d in private_dirs):
         sys.exit("This run has private rows, so its error sheet must stay in eval/results/private or data/private "
                  "(never committed, ADR 0014).")
-    rows, data_sha = split_rows(meta["split"], subset=meta.get("subset", "all"))
+    rows, data_sha = split_rows(meta["split"], subset=meta.get("subset", "all"), others=meta.get("set") == "others")
     by_id = {r["id"]: r for r in rows}
     warnings = []
     if data_sha != meta["data_sha256"]:

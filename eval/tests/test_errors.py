@@ -128,6 +128,26 @@ def test_warns_when_the_data_changed_or_a_row_is_gone(scored_run, capsys):
     assert len(summary) == 2
 
 
+def test_others_run_reads_the_others_set(monkeypatch, tmp_path, capsys):
+    others = tmp_path / "others"
+    others.mkdir()
+    monkeypatch.setattr(P, "OTHERS_DIR", others)
+    line = {"id": "hw-7001", "arabizi": "3njd 7elo", "arabic": "عنجد حلو", "accepted": {"عنجد": ["عن جد"]},
+            "method": "hand", "writer": "friend", "checked_by": None, "source": "hand-written", "split": "dev",
+            "date": "2026-10-17"}
+    (others / "dev.jsonl").write_text(json.dumps(line, ensure_ascii=False) + "\n", encoding="utf-8")
+    predictions = tmp_path / "predictions.jsonl"
+    predictions.write_text(json.dumps({"id": "hw-7001", "prediction": "عن جد حلو"}, ensure_ascii=False) + "\n",
+                           encoding="utf-8")
+    results = tmp_path / "results"
+    assert R.main(["score", str(predictions), "--name", "sys", "--split", "dev", "--others",
+                   "--results", str(results)]) == 0
+    assert R.main(["errors", str(next(results.glob("*-sys-dev-others")))]) == 0
+    out = capsys.readouterr().out
+    assert "Warning" not in out  # the row and its accepted variant come from the others set
+    assert "0 error rows in 0 of 1 sentences" in out
+
+
 def test_private_run_sheet_stays_in_a_private_folder(scored_run, tmp_path):
     meta_path = scored_run["dev"] / "metrics.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))

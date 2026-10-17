@@ -164,7 +164,15 @@ Full tables and the decision: [ADR 0022](decisions/0022-model-v2-real-rows.md) (
 
 Suggested types come from the words alone: English converted, left in Latin, number, MSA word, spelling convention (same word under the lenient rules), one letter off, joined/split, dropped word, added word, and "different word" for the rest. Only a person can sort "different word" (and check "one letter off"): rare word, ambiguous word (`la`), reference wrong, other. The type list and the test-split guard are **Claude's recommendation** (17 Oct 2026); the four causes named in roadmap P7 are all in it.
 
-First pass, fine-tuned Llama on the public dev rows (`20261016-112354-…-dev-public`), suggested types before any hand sorting: 86 error rows (89 wrong words in word accuracy) in 38 of 48 sentences; different word 38, one letter off 23, dropped 6, added 5, left in Latin 4, English converted 3, joined/split 3, spelling convention 2, number 2.
+A run on the others set (`set: others` in `metrics.json`) is checked against the others set's rows and accepted variants.
+
+First pass, fine-tuned `v1` on the public dev rows (`20261016-112354-…-dev-public`), suggested types before any hand sorting: 86 error rows (89 wrong words in word accuracy) in 38 of 48 sentences; different word 38, one letter off 23, dropped 6, added 5, left in Latin 4, English converted 3, joined/split 3, spelling convention 2, number 2.
+
+**v2 in the keyboard's engine, others dev** (`20261017-143200-engine-…-v2-kb-dev-others`, 200 rows, word accuracy 0.817), suggested types before any hand sorting: 400 error rows (404 wrong words) in 159 of 200 sentences; different word 182, one letter off 151, dropped 24, English converted 15, added 14, joined/split 6, spelling convention 5, left in Latin 3. MSA words, numbers: 0.
+
+- **Most errors are spellings, not meanings.** In "one letter off", about half the differing letters are a long vowel written or left out (ا 45, ي 19, و 14, ه 11), mostly inside the word. Of the 182 "different word" rows, 109 are still close to the reference (similarity ≥ 0.6).
+- **The training data spells many of these words both ways.** Of the 260 near misses (one letter off, or different word with similarity ≥ 0.6), 61 have both spellings in the public training rows and 22 only the model's; in 32 of the 61 the model's spelling is the more frequent one there. Private training rows were not counted.
+- Next (**Claude's recommendation**): list training words that differ only by a long vowel and agree one spelling per word with Moustafa (SPELLING.md §2.3), as ADR 0024 did for prefixes, before the next training run; sort the "different word" rows by hand to separate rare words from wrong references.
 
 ## Metrics
 
