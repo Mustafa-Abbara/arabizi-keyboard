@@ -21,8 +21,8 @@ let modelsWithFineTuned = try! JSONSerialization.data(withJSONObject: [  // swif
 
 @Test func committedConfigLoads() throws {
     let config = try EngineConfig(configDirectory: configDirectory)
-    let model = try #require(config.model)  // the fine-tuned Llama is switched on (ADR 0005)
-    #expect(model.id == "arabizi-llama3.2-1b-v1" && model.file == "arabizi-llama3.2-1b-v1-Q4_K_M.gguf")
+    let model = try #require(config.model)  // the fine-tuned Llama v2 is switched on (ADR 0022)
+    #expect(model.id == "arabizi-llama3.2-1b-v2" && model.file == "arabizi-llama3.2-1b-v2-Q4_K_M.gguf")
     #expect(model.promptPrefix.hasPrefix("<|begin_of_text|>") && model.promptSuffix.hasSuffix("assistant<|end_header_id|>\n\n"))
     #expect(config.deadlineMs == 1500 && config.contextLength > config.maxOutputTokens)
     #expect(config.outputChecks == OutputChecks(minWordRatio: 0.5, maxWordRatio: 2.0, wordSlack: 1))
