@@ -12,6 +12,8 @@ public struct OutputChecks: Equatable, Sendable {
         case newLatin([String])
         /// Too few or too many words for the input.
         case wordCount(output: Int, input: Int)
+        /// An emoji was lost, added or changed (emoji are not placeholders, ADR 0025).
+        case emoji
     }
 
     /// The output may have between `minWordRatio × n − wordSlack` and `maxWordRatio × n + wordSlack` words for
@@ -32,6 +34,7 @@ public struct OutputChecks: Equatable, Sendable {
         let answer = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else { return .failure(.empty) }
         guard let restored = ProtectedSpans.restore(answer, spans: input.spans) else { return .failure(.placeholders) }
+        guard Self.emoji(in: answer) == Self.emoji(in: input.masked) else { return .failure(.emoji) }
         // Both sides still masked: links and emails are placeholders here, so they never count as Latin words.
         let allowed = Set(Self.words(input.masked).map { Token($0).core.lowercased() })
         let invented = Self.words(answer).map { Token($0).core }.filter { core in
@@ -58,6 +61,11 @@ public struct OutputChecks: Equatable, Sendable {
     public static func isInputWord(_ word: String, _ inputWords: Set<String>) -> Bool {
         let word = word.lowercased()
         return inputWords.contains(word) || gluedPrefixes.contains { inputWords.contains($0 + word) }
+    }
+
+    /// The emoji of a text in order, as typed (skin tones and flags kept whole).
+    static func emoji(in text: String) -> [Character] {
+        text.filter(ProtectedSpans.isEmoji).map { $0 }
     }
 
     static func words(_ text: String) -> [String] {

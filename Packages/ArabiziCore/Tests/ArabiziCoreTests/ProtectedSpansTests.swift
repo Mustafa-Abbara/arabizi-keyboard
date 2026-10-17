@@ -10,9 +10,10 @@ import Testing
     ("$100 w 50%", "⟦0⟧ w ⟦1⟧", ["$100", "50%"]),
     ("ntla2a 2pm?", "ntla2a ⟦0⟧?", ["2pm"]),
     ("3al 7:30", "3al ⟦0⟧", ["7:30"]),
-    ("hahaha 😂😂 tamem 👍🏽", "hahaha ⟦0⟧ tamem ⟦1⟧", ["😂😂", "👍🏽"]),
-    ("🇱🇧❤️", "⟦0⟧", ["🇱🇧❤️"]),
-    ("1️⃣ w 2️⃣", "⟦0⟧ w ⟦1⟧", ["1️⃣", "2️⃣"]),
+    // Emoji stay in the text (ADR 0025); a keycap's digit is not a number of its own.
+    ("hahaha 😂😂 tamem 👍🏽", "hahaha 😂😂 tamem 👍🏽", []),
+    ("🇱🇧❤️", "🇱🇧❤️", []),
+    ("1️⃣ w 2️⃣", "1️⃣ w 2️⃣", []),
 ])
 func spansAreProtected(text: String, masked: String, spans: [String]) {
     let protected = ProtectedSpans.protect(text)
@@ -42,8 +43,8 @@ func roundTripGivesTheTextBack(text: String) {
 
 @Test func restoreAfterTheModelConverted() {
     let protected = ProtectedSpans.protect("b3atlak 100$ 3a www.x.com 😂")
-    #expect(protected.masked == "b3atlak ⟦0⟧ 3a ⟦1⟧ ⟦2⟧")
-    let model = "بعتلك ⟦0⟧ ع ⟦1⟧ ⟦2⟧"
+    #expect(protected.masked == "b3atlak ⟦0⟧ 3a ⟦1⟧ 😂")
+    let model = "بعتلك ⟦0⟧ ع ⟦1⟧ 😂"
     #expect(ProtectedSpans.restore(model, spans: protected.spans) == "بعتلك 100$ ع www.x.com 😂")
 }
 

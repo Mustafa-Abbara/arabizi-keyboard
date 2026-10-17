@@ -1,8 +1,9 @@
 import Foundation
 
 /// Text the model must never change (roadmap P5 step 2, Claude's recommendation): links, emails, @mentions and
-/// #hashtags, emoji and standalone numbers are swapped for placeholders ⟦0⟧, ⟦1⟧… before the model runs and put
-/// back afterwards. A digit inside a word (3am, 7elo, 2pm is a number but 3am is not) is a letter and stays.
+/// #hashtags and standalone numbers are swapped for placeholders ⟦0⟧, ⟦1⟧… before the model runs and put back
+/// afterwards. A digit inside a word (3am, 7elo, 2pm is a number but 3am is not) is a letter and stays. Emoji are
+/// left in the text (ADR 0025): the model copies them, and OutputChecks makes sure it did.
 public struct ProtectedText: Equatable, Sendable {
     /// The text with every protected span replaced by its placeholder.
     public let masked: String
@@ -34,7 +35,6 @@ public enum ProtectedSpans {
                 return trimmed(range, in: text)
             }
         }
-        ranges += emojiRuns(in: text)
         // Earliest first, the longest of those first; drop anything inside a span already taken.
         ranges.sort { $0.lowerBound != $1.lowerBound ? $0.lowerBound < $1.lowerBound : $0.upperBound > $1.upperBound }
         var masked = ""
@@ -75,24 +75,7 @@ public enum ProtectedSpans {
         return range.lowerBound..<upper
     }
 
-    /// Consecutive emoji (😂😂😂, 👍🏽, 🇱🇧, ❤️, 1️⃣) form one span.
-    private static func emojiRuns(in text: String) -> [Range<String.Index>] {
-        var runs: [Range<String.Index>] = []
-        var start: String.Index?
-        for index in text.indices {
-            if isEmoji(text[index]) {
-                start = start ?? index
-            } else if let begin = start {
-                runs.append(begin..<index)
-                start = nil
-            }
-        }
-        if let begin = start {
-            runs.append(begin..<text.endIndex)
-        }
-        return runs
-    }
-
+    /// Whether a character is an emoji (😂, 👍🏽, 🇱🇧, ❤️, 1️⃣), for OutputChecks.
     static func isEmoji(_ character: Character) -> Bool {
         let scalars = character.unicodeScalars
         // Emoji presentation selector or keycap: 1️⃣ starts with an ASCII digit but is an emoji.

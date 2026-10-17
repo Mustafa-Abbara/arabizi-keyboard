@@ -9,7 +9,7 @@ func check(_ input: String, _ output: String) -> Result<String, OutputChecks.Fai
 
 @Test(arguments: [
     ("kifak, shu 3am ta3mel?", "كيفك، شو عم تعمل؟", "كيفك، شو عم تعمل؟"),
-    ("b3at 100$ 3a www.x.com 😂", "بعت ⟦0⟧ ع ⟦1⟧ ⟦2⟧", "بعت 100$ ع www.x.com 😂"),  // spans put back
+    ("b3at 100$ 3a www.x.com 😂", "بعت ⟦0⟧ ع ⟦1⟧ 😂", "بعت 100$ ع www.x.com 😂"),  // spans put back
     ("el meeting ba3d shway", "ال meeting بعد شوي", "ال meeting بعد شوي"),  // English kept from the input
     ("bel LAU", "بال lau", "بال lau"),  // case does not matter
     ("w el bet", "والبيت", "والبيت"),  // 3 words to 1: allowed by the slack
@@ -47,4 +47,12 @@ func placeholderMistakesFail(output: String) {
     #expect(!OutputChecks.isInputWord("alon", typed))  // "s" is not a prefix: salon is one word
     let checks = OutputChecks()
     #expect(checks.check("شفت ال video", for: ProtectedSpans.protect("shefet lvideo")) == .success("شفت ال video"))
+}
+
+@Test func emojiMustComeBackAsTyped() {
+    let checks = OutputChecks()
+    let input = ProtectedSpans.protect("hahaha 😂😂 tamem 👍🏽")
+    #expect(checks.check("ههه 😂😂 تمام 👍🏽", for: input) == .success("ههه 😂😂 تمام 👍🏽"))
+    #expect(checks.check("ههه 😂 تمام 👍🏽", for: input) == .failure(.emoji))  // one lost
+    #expect(checks.check("ههه 😂😂 تمام 👍", for: input) == .failure(.emoji))  // skin tone dropped
 }

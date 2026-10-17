@@ -32,7 +32,7 @@ The Swift tests decode and re-encode the examples byte for byte; `eval/tests/tes
 | Field | Meaning |
 |---|---|
 | `v`, `id` | As in the request. |
-| `text` | What to insert: Arabic script, with links, numbers and emoji exactly as typed. |
+| `text` | What to insert: Arabic script, with links, numbers and emoji exactly as typed (links and numbers through placeholders, emoji checked; ADR 0025). |
 | `outcome` | Which path made `text` (below). |
 | `latencyMs` | From receiving the request to answering it. |
 

@@ -32,14 +32,18 @@ def cli_path() -> Path:
 
 
 class EngineSystem(System):
-    def __init__(self, model_id: str | None, deadline_ms: int = DEADLINE_MS, repair: bool = True) -> None:
-        super().__init__(f"engine-{model_id or 'rules'}" + ("" if repair else "-norepair"), {
-            "kind": "swift-engine", "cli": "arabizi-cli", "model": model_id, "deadline_ms": deadline_ms,
+    def __init__(self, model_id: str | None, deadline_ms: int = DEADLINE_MS, repair: bool = True,
+                 keyboard_deadline: bool = False) -> None:
+        super().__init__(f"engine-{model_id or 'rules'}" + ("" if repair else "-norepair")
+                         + ("-kb" if keyboard_deadline else ""), {
+            "kind": "swift-engine", "cli": "arabizi-cli", "model": model_id,
+            "deadline_ms": "keyboard (config/engine.json, ADR 0025)" if keyboard_deadline else deadline_ms,
             "pipeline": "ProtectedSpans, saved prompt, model with deadline, clean, OutputChecks"
                         + (", token repair (ADR 0023)" if repair else "") + "; rules on fallback",
         })
         self.model_id = model_id
         self.repair = repair
+        self.keyboard_deadline = keyboard_deadline
         self.deadline_ms = deadline_ms
         self.process: subprocess.Popen | None = None
         self.outcomes: Counter = Counter()
@@ -51,6 +55,7 @@ class EngineSystem(System):
                 "--models", str(P.ROOT / "models"), "--explain"]
         args += ["--model", self.model_id] if self.model_id else ["--no-model"]
         args += [] if self.repair else ["--no-repair"]
+        args += ["--keyboard-deadline"] if self.keyboard_deadline else []
         self.process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         text=True, encoding="utf-8", bufsize=1)
         status = json.loads(self.process.stderr.readline())

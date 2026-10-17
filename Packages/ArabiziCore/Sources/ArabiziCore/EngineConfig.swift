@@ -21,7 +21,12 @@ public struct EngineConfig: Equatable, Sendable {
     public static let modelsFileName = "models.json"
 
     public let model: Model?
+    /// The deadline for a short message; longer ones get `deadlinePerWordMs` more per word beyond
+    /// `deadlineFreeWords`, up to `maxDeadlineMs` (ADR 0025). `deadlineMs(for:)` gives a message's deadline.
     public let deadlineMs: Int
+    public let deadlinePerWordMs: Int
+    public let deadlineFreeWords: Int
+    public let maxDeadlineMs: Int
     public let maxInputChars: Int
     public let maxOutputTokens: Int
     public let contextLength: Int
@@ -40,6 +45,10 @@ public struct EngineConfig: Equatable, Sendable {
         }
         try require(file.version == 1, "unsupported version \(file.version)")
         try require((1...10_000).contains(file.deadlineMs), "deadline_ms must be 1–10000, not \(file.deadlineMs)")
+        let maxDeadline = file.maxDeadlineMs ?? file.deadlineMs
+        try require((file.deadlineMs...10_000).contains(maxDeadline), "max_deadline_ms must be deadline_ms–10000")
+        try require((file.deadlinePerWordMs ?? 0) >= 0 && (file.deadlineFreeWords ?? 0) >= 0,
+                    "deadline_per_word_ms and deadline_free_words cannot be negative")
         try require((1...10_000).contains(file.maxInputChars), "max_input_chars must be 1–10000")
         try require(file.maxOutputTokens >= 1, "max_output_tokens must be at least 1")
         try require(file.contextLength > file.maxOutputTokens, "context_length must be larger than max_output_tokens")
@@ -68,11 +77,22 @@ public struct EngineConfig: Equatable, Sendable {
             model = nil
         }
         deadlineMs = file.deadlineMs
+        deadlinePerWordMs = file.deadlinePerWordMs ?? 0
+        deadlineFreeWords = file.deadlineFreeWords ?? 0
+        maxDeadlineMs = maxDeadline
         maxInputChars = file.maxInputChars
         maxOutputTokens = file.maxOutputTokens
         contextLength = file.contextLength
         outputChecks = OutputChecks(minWordRatio: checks.minWordRatio, maxWordRatio: checks.maxWordRatio,
                                     wordSlack: checks.wordSlack)
+    }
+}
+
+extension EngineConfig {
+    /// The deadline for converting `text`: longer messages take longer to generate (ADR 0025).
+    public func deadlineMs(for text: String) -> Int {
+        let words = text.split(whereSeparator: \.isWhitespace).count
+        return min(maxDeadlineMs, deadlineMs + deadlinePerWordMs * max(0, words - deadlineFreeWords))
     }
 }
 
@@ -95,6 +115,9 @@ struct EngineFile: Decodable {
     let model: String?
     let features: Features
     let deadlineMs: Int
+    let deadlinePerWordMs: Int?
+    let deadlineFreeWords: Int?
+    let maxDeadlineMs: Int?
     let maxInputChars: Int
     let maxOutputTokens: Int
     let contextLength: Int
@@ -102,7 +125,9 @@ struct EngineFile: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case version, model, features
-        case deadlineMs = "deadline_ms", maxInputChars = "max_input_chars", maxOutputTokens = "max_output_tokens"
+        case deadlineMs = "deadline_ms", deadlinePerWordMs = "deadline_per_word_ms"
+        case deadlineFreeWords = "deadline_free_words", maxDeadlineMs = "max_deadline_ms"
+        case maxInputChars = "max_input_chars", maxOutputTokens = "max_output_tokens"
         case contextLength = "context_length", outputChecks = "output_checks"
     }
 }
