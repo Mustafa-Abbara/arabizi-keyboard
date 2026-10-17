@@ -35,6 +35,16 @@ ARABIC_LETTER = re.compile("[ء-ي]")
 NUMBER = re.compile(r"(?<![A-Za-z0-9])[$€£]?\d+(?:[.,:]\d+)*(?:[$€£%]|k|K|pm|PM)?(?![A-Za-z0-9])")
 UNTOUCHED = re.compile(r"https?://\S+|www\.\S+|[\w.+-]+@[\w-]+\.[\w.]+|[@#]\w+")
 TRAILING_PUNCTUATION = "?,;!.:)\"'"  # typed after a link, not part of it; SPELLING.md 7 may convert it
+# Arabic letters glued to a Latin word (`الvideo`): SPELLING.md 4 writes the Arabic prefix apart (`ال video`).
+GLUED_PREFIX = re.compile("([ء-ي]+)(?=[A-Za-z])")
+
+
+def split_glued_prefixes(text: str) -> str:
+    """`الvideo عالfacebook` -> `ال video عال facebook` (SPELLING.md 4; ADR 0024). Links and mentions are kept."""
+    kept = UNTOUCHED.findall(text)
+    parts = UNTOUCHED.split(text)
+    out = [GLUED_PREFIX.sub(r"\1 ", part) for part in parts]
+    return "".join(p + (kept[i] if i < len(kept) else "") for i, p in enumerate(out))
 
 
 @dataclass
@@ -163,6 +173,8 @@ def row_warnings(row: dict) -> list[str]:
         return NUMBER.sub(" ", UNTOUCHED.sub(" ", text))
 
     arabizi, arabic_text = outside_numbers_and_links(row["arabizi"]), outside_numbers_and_links(row["arabic"])
+    if GLUED_PREFIX.search(UNTOUCHED.sub(" ", row["arabic"])):
+        warnings.append("an Arabic prefix is glued to a Latin word; write it apart (SPELLING.md 4)")
     for latin, arabic in (("?", "؟"), (",", "،"), (";", "؛")):
         if latin in arabizi and arabic not in arabic_text and latin in arabic_text:
             warnings.append(f"{latin!r} usually becomes {arabic!r} (SPELLING.md 7)")

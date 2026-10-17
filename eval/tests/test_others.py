@@ -88,3 +88,33 @@ def test_evalrun_others_reads_only_the_others_set(data, tmp_path):
     assert run.main(["run", "--system", "identity", "--split", "dev", "--others", "--results", str(tmp_path)]) == 0
     (run_dir,) = tmp_path.glob("*-identity-dev-others")
     assert json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))["set"] == "others"
+
+
+def test_split_glued_prefixes_follows_spelling_section_4():
+    assert P.split_glued_prefixes("شفت الvideo عالfacebook وbravo") == "شفت ال video عال facebook و bravo"
+    assert P.split_glued_prefixes("ال video كيفك") == "ال video كيفك"  # already apart
+    assert P.split_glued_prefixes("شوف www.x.com/الvideo") == "شوف www.x.com/الvideo"  # links untouched
+    row = {"arabizi": "el video", "arabic": "الvideo"}
+    assert any("SPELLING.md 4" in w for w in P.row_warnings(row))
+
+
+def test_split_prefixes_rewrites_training_and_others_then_refreeze(data):
+    public, train, held = data
+    glued_train = sheet(public.parent / "glued.jsonl", [("shefet el video", "شفت الvideo")])
+    glued_held = sheet(public.parent / "glued_held.jsonl",
+                       [("3al facebook hala2 ya habibi", "عالfacebook هلق يا حبيبي")])
+    # import-real already writes new rows apart; glue them again (and freeze that) to test the rewrite
+    assert main(["import-real", "--train", glued_train, "--held-out", glued_held]) == 0
+    assert [r["arabic"] for _, r, _ in P.read_jsonl(public / "train-hand.jsonl")] == ["شفت ال video"]
+    for path in [public / "train-hand.jsonl", *P.pair_files(others=True)]:
+        path.write_text(path.read_text(encoding="utf-8").replace("ال video", "الvideo").replace(
+            "عال facebook", "عالfacebook"), encoding="utf-8")
+    assert main(["freeze", "--others", "--version", "others-v1.0b", "--reason", "glued, as imported before"]) == 0
+    assert main(["split-prefixes"]) == 0  # training only: the frozen others set is untouched
+    assert P.validate().ok
+    assert main(["split-prefixes", "--others"]) == 0
+    assert any("changed after the freeze" in p.message for p in P.validate().errors)
+    assert main(["freeze", "--others", "--version", "others-v1.1", "--reason", "SPELLING.md 4"]) == 0
+    assert P.validate().ok
+    assert [r["arabic"] for path in P.pair_files(others=True) for _, r, _ in P.read_jsonl(path)] == [
+        "عال facebook هلق يا حبيبي"]

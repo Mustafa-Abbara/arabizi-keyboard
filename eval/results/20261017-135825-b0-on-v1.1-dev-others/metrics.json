@@ -1,0 +1,36 @@
+{
+  "run_id": "20261017-135825-b0-on-v1.1-dev-others",
+  "system": "b0-on-v1.1",
+  "describe": {
+    "kind": "external",
+    "predictions_file": "predictions.jsonl"
+  },
+  "split": "dev",
+  "subset": "all",
+  "set": "others",
+  "private_sentences": 0,
+  "sentences": 200,
+  "data_sha256": "8d4dbdbf40a37b7d911ea9b66482d7b79a61913e972055234d322453a2ef5349",
+  "git_sha": "29a240b-dirty",
+  "created": "2026-10-17T13:58:25",
+  "metrics": {
+    "sentences": 200,
+    "word_accuracy": 0.5906618313689936,
+    "word_accuracy_lenient": 0.5947416137805984,
+    "exact_match": 0.02,
+    "punctuation_match": 0.26,
+    "cer": 0.15938801200735936,
+    "keep_latin_precision": 1.0,
+    "keep_latin_recall": 0.16153846153846155,
+    "keep_latin_f1": 0.2781456953642384,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.005,
+    "hallucination_rate": 0.0,
+    "latency_ms_p50": 0.04120799985685153,
+    "latency_ms_p95": 0.07954100055940216,
+    "word_accuracy_ci95": [
+      0.5671818566905962,
+      0.6139791272568531
+    ]
+  }
+}

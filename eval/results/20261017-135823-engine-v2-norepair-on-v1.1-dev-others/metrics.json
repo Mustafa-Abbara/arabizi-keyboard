@@ -1,0 +1,36 @@
+{
+  "run_id": "20261017-135823-engine-v2-norepair-on-v1.1-dev-others",
+  "system": "engine-v2-norepair-on-v1.1",
+  "describe": {
+    "kind": "external",
+    "predictions_file": "predictions.jsonl"
+  },
+  "split": "dev",
+  "subset": "all",
+  "set": "others",
+  "private_sentences": 0,
+  "sentences": 200,
+  "data_sha256": "8d4dbdbf40a37b7d911ea9b66482d7b79a61913e972055234d322453a2ef5349",
+  "git_sha": "29a240b-dirty",
+  "created": "2026-10-17T13:58:23",
+  "metrics": {
+    "sentences": 200,
+    "word_accuracy": 0.7721289151157512,
+    "word_accuracy_lenient": 0.7753064003631411,
+    "exact_match": 0.195,
+    "punctuation_match": 0.415,
+    "cer": 0.09529343404997094,
+    "keep_latin_precision": 0.9545454545454546,
+    "keep_latin_recall": 0.6461538461538462,
+    "keep_latin_f1": 0.7706422018348624,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.0,
+    "hallucination_rate": 0.005,
+    "latency_ms_p50": 923.2231870009855,
+    "latency_ms_p95": 1500.751625000703,
+    "word_accuracy_ci95": [
+      0.7462683179653254,
+      0.7974336667785591
+    ]
+  }
+}

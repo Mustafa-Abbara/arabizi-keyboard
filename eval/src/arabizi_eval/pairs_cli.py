@@ -374,7 +374,8 @@ ARTICLE_TATWEEL = re.compile(r"الـ\s*")  # "الـ X" -> "الX" (SPELLING.md
 
 
 def clean_sheet_arabic(text: str) -> str:
-    return " ".join(P.DIACRITICS.sub("", ARTICLE_TATWEEL.sub("ال", str(text))).replace(P.TATWEEL, "").split())
+    text = " ".join(P.DIACRITICS.sub("", ARTICLE_TATWEEL.sub("ال", str(text))).replace(P.TATWEEL, "").split())
+    return P.split_glued_prefixes(text)
 
 
 def _near_duplicate(arabizi: str, word_sets: list[set[str]]) -> bool:
@@ -454,6 +455,34 @@ def cmd_import_real(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_split_prefixes(args: argparse.Namespace) -> int:
+    """Write Arabic prefixes apart from Latin words (`الvideo` -> `ال video`, SPELLING.md 4) in every training file,
+    public and private, and with --others in the others held-out set (which then needs `pairs freeze --others`).
+    testset-v1.0 is never touched. Accepted variants are rewritten the same way. Prints counts only."""
+    files = [path for path in P.pair_files() if P.expected_split(path)[0] == "train"]
+    files += P.pair_files(others=True) if args.others else []
+    changed_rows = 0
+    for path in files:
+        lines, changed = [], 0
+        for _, row, err in P.read_jsonl(path):
+            if row is None:
+                raise SystemExit(f"{path.name}: {err}")
+            fixed = P.split_glued_prefixes(row["arabic"])
+            accepted = {P.split_glued_prefixes(k): [P.split_glued_prefixes(v) for v in vs]
+                        for k, vs in row["accepted"].items()}
+            if fixed != row["arabic"] or accepted != row["accepted"]:
+                changed += 1
+                row = {**row, "arabic": fixed, "accepted": accepted}
+            lines.append(json.dumps(row, ensure_ascii=False))
+        if changed and not args.dry_run:
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        where = "others/" if P.OTHERS_DIR in path.parents else "private/" if P.is_private(path) else ""
+        print(f"{where}{path.name}: {changed} rows {'would change' if args.dry_run else 'changed'}")
+        changed_rows += changed
+    print(f"total: {changed_rows} rows")
+    return 0
+
+
 def cmd_export_train(args: argparse.Namespace) -> int:
     """Write build/train-export/ for a PRIVATE Kaggle dataset: training rows only, as chat examples."""
     from arabizi_eval import export
@@ -477,23 +506,27 @@ def cmd_freeze(args: argparse.Namespace) -> int:
 
     After the freeze, `pairs validate` (and CI) fail if a frozen file changes; new hand-written rows go to training.
     Private files are recorded by hash and row count only. Refuses while held-out rows are unchecked (ADR 0011),
-    unless --allow-unchecked is given (recorded in the manifest).
+    unless --allow-unchecked is given (recorded in the manifest). `--others`: the others held-out set and its own
+    manifest (data/pairs/others/manifest.json, ADR 0021) instead.
     """
-    previous = json.loads(P.MANIFEST_PATH.read_text(encoding="utf-8")) if P.MANIFEST_PATH.exists() else None
+    manifest_path = P.OTHERS_MANIFEST_PATH if args.others else P.MANIFEST_PATH
+    previous = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else None
     if previous and not args.reason:
         print(f"Already frozen as {previous['version']}: a new freeze needs --version and --reason.")
         return 1
     if previous and args.version == previous["version"]:
         print(f"{args.version} is the current version: choose a new one (e.g. testset-v1.1).")
         return 1
-    held_out = [r for r in all_rows() if r.get("split") in ("test", "dev")]
+    rows_now = ([row for path in P.pair_files(others=True) for _, row, err in P.read_jsonl(path) if not err]
+                if args.others else all_rows())
+    held_out = [r for r in rows_now if r.get("split") in ("test", "dev")]
     unchecked = sum(not r.get("checked_by") for r in held_out)
     if unchecked and not args.allow_unchecked:
         print(f"{unchecked} test/dev rows are not checked yet (checked_by is empty). Run `pairs check` first, "
               "or freeze anyway with --allow-unchecked (recorded in the manifest).")
         return 1
     files = {}
-    for key, (path, private) in P.held_out_files().items():
+    for key, (path, private) in (P.others_files() if args.others else P.held_out_files()).items():
         if path.exists():
             rows = sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
             files[key] = {"sha256": P.sha256_file(path), "rows": rows, "private": private}
@@ -506,11 +539,16 @@ def cmd_freeze(args: argparse.Namespace) -> int:
         "previous_version": previous["version"] if previous else None,
         "unchecked_rows": unchecked, "files": files,
     }
-    P.MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.others:
+        manifest["_comment"] = ("Frozen \"others\" held-out set (ADR 0021): real messages by other people, scored with "
+                                "`evalrun ... --others`. `pairs validate` and CI fail if a listed file changes. "
+                                "Re-freeze with `pairs freeze --others --version ... --reason ...`.")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     total = sum(f["rows"] for f in files.values())
     print(f"froze {args.version}: {total} held-out rows in {len(files)} files "
           f"({sum(f['rows'] for f in files.values() if f['private'])} private, hashes only); "
-          f"{unchecked} unchecked. Commit data/pairs/manifest.json in a PR with the testset-change label, then tag "
+          f"{unchecked} unchecked. Commit data/pairs/{'others/' if args.others else ''}manifest.json in a PR with the "
+          "testset-change label, then tag "
           f"the merge commit: git tag {args.version} && git push origin {args.version}")
     return 0
 
@@ -950,6 +988,9 @@ def main(argv: list[str] | None = None) -> int:
     real.add_argument("--version", default="others-v1.0")
     real.add_argument("--seed", type=int, default=2026)
     real.add_argument("--dry-run", action="store_true")
+    split = sub.add_parser("split-prefixes", help="write Arabic prefixes apart from Latin words (SPELLING.md 4)")
+    split.add_argument("--others", action="store_true", help="also the others held-out set (re-freeze afterwards)")
+    split.add_argument("--dry-run", action="store_true")
     sub.add_parser("lexicon", help="rebuild the B0 word dictionary from the public train split")
     exp = sub.add_parser("export-train", help="training files for Kaggle fine-tuning (P4)")
     exp.add_argument("--ai-variants", type=int, default=1, help="spelling variants kept per AI-drafted row")
@@ -973,10 +1014,12 @@ def main(argv: list[str] | None = None) -> int:
     freeze.add_argument("--version", default="testset-v1.0")
     freeze.add_argument("--reason", help="required when re-freezing: why the held-out data changed")
     freeze.add_argument("--allow-unchecked", action="store_true", help="freeze although some rows are unchecked")
+    freeze.add_argument("--others", action="store_true", help="the others held-out set (ADR 0021) and its manifest")
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
-                "import-chats": cmd_import_chats, "import-real": cmd_import_real, "variants": cmd_variants,
+                "import-chats": cmd_import_chats, "import-real": cmd_import_real, "split-prefixes": cmd_split_prefixes,
+                "variants": cmd_variants,
                 "lexicon": cmd_lexicon,
                 "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze, "publish": cmd_publish,
                 "export-train": cmd_export_train, "validate": cmd_validate}

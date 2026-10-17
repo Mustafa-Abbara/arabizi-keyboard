@@ -96,6 +96,10 @@ Both runs: 85 minutes each on a T4; 22,712 examples. Validation losses (0.431 fo
 
 The data makes the difference; rank 32 adds about one point, within noise. `v2` went to the one-time test run: 0.820 frozen test and 0.800 others test (ADR 0022).
 
+## v3: one spelling for English words (ADR 0024)
+
+`train/finetune_v3.ipynb`: one run, `v3`, with v2's settings (rank 32) on the export after `pairs split-prefixes` (every Arabic prefix apart from an English word; 0 glued tokens left in the export). Upload the new export as a new version of `arabizi-train`, then Save & Run All, as for v2. It is compared with v2 on frozen dev and others dev (`others-v1.1`).
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.
