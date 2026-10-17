@@ -32,21 +32,25 @@ def cli_path() -> Path:
 
 
 class EngineSystem(System):
-    def __init__(self, model_id: str | None, deadline_ms: int = DEADLINE_MS) -> None:
-        super().__init__(f"engine-{model_id or 'rules'}", {
+    def __init__(self, model_id: str | None, deadline_ms: int = DEADLINE_MS, repair: bool = True) -> None:
+        super().__init__(f"engine-{model_id or 'rules'}" + ("" if repair else "-norepair"), {
             "kind": "swift-engine", "cli": "arabizi-cli", "model": model_id, "deadline_ms": deadline_ms,
-            "pipeline": "ProtectedSpans, saved prompt, model with deadline, clean, OutputChecks; rules on fallback",
+            "pipeline": "ProtectedSpans, saved prompt, model with deadline, clean, OutputChecks"
+                        + (", token repair (ADR 0023)" if repair else "") + "; rules on fallback",
         })
         self.model_id = model_id
+        self.repair = repair
         self.deadline_ms = deadline_ms
         self.process: subprocess.Popen | None = None
         self.outcomes: Counter = Counter()
         self.reasons: Counter = Counter()
+        self.repairs: Counter = Counter()
 
     def start(self) -> None:
         args = [str(cli_path()), "--config", str(P.ROOT / "config"), "--rules", str(P.ROOT / "data" / "rules"),
                 "--models", str(P.ROOT / "models"), "--explain"]
         args += ["--model", self.model_id] if self.model_id else ["--no-model"]
+        args += [] if self.repair else ["--no-repair"]
         self.process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         text=True, encoding="utf-8", bufsize=1)
         status = json.loads(self.process.stderr.readline())
@@ -62,9 +66,11 @@ class EngineSystem(System):
         self.process.stdin.flush()
         response = json.loads(self.process.stdout.readline())
         self.outcomes[response["outcome"]] += 1
+        reason = json.loads(self.process.stderr.readline()).get("reason")  # --explain: one line per request
         if response["outcome"] not in ("model", "passthrough"):
-            line = json.loads(self.process.stderr.readline())  # --explain: one reason line per fallback
-            self.reasons[line.get("reason", "?")] += 1
+            self.reasons[reason or "?"] += 1
+        elif reason:  # a model answer repaired token by token (ADR 0023)
+            self.repairs[reason] += 1
         return response["text"]
 
     def close(self) -> None:
@@ -74,3 +80,4 @@ class EngineSystem(System):
             self.process = None
         self.describe["outcomes"] = dict(self.outcomes)
         self.describe["fallback_reasons"] = dict(self.reasons.most_common())
+        self.describe["repairs"] = dict(self.repairs.most_common())

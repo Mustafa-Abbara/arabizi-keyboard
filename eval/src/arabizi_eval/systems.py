@@ -92,16 +92,18 @@ def ft_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], Syste
             **{f"ft-{m['id']}-protect": partial(_ft, m["id"], True) for m in models}}
 
 
-def _engine(model_id: str | None) -> System:
+def _engine(model_id: str | None, repair: bool = True) -> System:
     from arabizi_eval import engine
 
-    return engine.EngineSystem(model_id)
+    return engine.EngineSystem(model_id, repair=repair)
 
 
 def engine_systems(manifest: Path = MODELS_MANIFEST) -> dict[str, Callable[[], System]]:
-    """P5: the Swift engine through arabizi-cli: engine-rules, and engine-<id> for every fine-tuned model."""
+    """P5: the Swift engine through arabizi-cli: engine-rules, engine-<id> for every fine-tuned model, and
+    engine-<id>-norepair without the token repair (ADR 0023)."""
     models = [m for m in json.loads(manifest.read_text(encoding="utf-8"))["models"] if "prompt" in m]
-    return {"engine-rules": partial(_engine, None), **{f"engine-{m['id']}": partial(_engine, m["id"]) for m in models}}
+    return {"engine-rules": partial(_engine, None), **{f"engine-{m['id']}": partial(_engine, m["id"]) for m in models},
+            **{f"engine-{m['id']}-norepair": partial(_engine, m["id"], False) for m in models}}
 
 
 REGISTRY: dict[str, Callable[[], System]] = {
