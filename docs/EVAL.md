@@ -142,6 +142,18 @@ Public rows only (113; `eval/results/20261016-1312*-test-public`): fine-tuned ra
 
 Not done from P4 step 4–5 (optional in the solo plan, roadmap §5): the data ablations (with/without AI rows, with/without variants), Q4_K_M vs unquantized, and the local AladdinBench check on other people's typing.
 
+### v2: trained with the real rows, test sets run once (17 Oct 2026)
+
+Full tables and the decision: [ADR 0022](decisions/0022-model-v2-real-rows.md) (proposed). Numbers protected, as the engine runs it:
+
+| System | Frozen test (243) | Others test (299, ADR 0021) |
+|---|---|---|
+| **`arabizi-llama3.2-1b-v2`** | **0.820** [0.80, 0.84] | **0.800** [0.78, 0.82] |
+| shipped `v1` | 0.783 [0.76, 0.81] | 0.656 [0.64, 0.67] |
+| B0 rules | 0.594 [0.57, 0.62] | 0.607 [0.59, 0.62] |
+
+`v2` − `v1` (paired): **+0.037 [+0.015, +0.059]** on frozen test and **+0.144 [+0.125, +0.163]** on others test. Raw `v2`: 0.826 frozen, 0.802 others. Public frozen-test rows: `v2` 0.803 raw, 0.794 protected. Others-set runs are public and committed (`eval/results/20261017-*-others`).
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.

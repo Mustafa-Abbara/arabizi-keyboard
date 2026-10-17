@@ -1,0 +1,36 @@
+{
+  "run_id": "20261017-130748-ft-arabizi-llama3.2-1b-v2-test-public",
+  "system": "ft-arabizi-llama3.2-1b-v2",
+  "describe": {
+    "kind": "external",
+    "predictions_file": "predictions.jsonl"
+  },
+  "split": "test",
+  "subset": "public",
+  "set": "testset",
+  "private_sentences": 0,
+  "sentences": 113,
+  "data_sha256": "f1feb063a0a28758f2b7fd3923296fad8c45ec37c9bbe6e30a7c2062e3918d3f",
+  "git_sha": "0aa1dad-dirty",
+  "created": "2026-10-17T13:07:48",
+  "metrics": {
+    "sentences": 113,
+    "word_accuracy": 0.8027127003699137,
+    "word_accuracy_lenient": 0.8064118372379778,
+    "exact_match": 0.3274336283185841,
+    "punctuation_match": 0.9380530973451328,
+    "cer": 0.07244052392408447,
+    "keep_latin_precision": 0.74,
+    "keep_latin_recall": 0.9024390243902439,
+    "keep_latin_f1": 0.8131868131868132,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.0,
+    "hallucination_rate": 0.05309734513274336,
+    "latency_ms_p50": 577.5573329992767,
+    "latency_ms_p95": 1203.6475419999988,
+    "word_accuracy_ci95": [
+      0.7726188980617373,
+      0.8329050470209235
+    ]
+  }
+}

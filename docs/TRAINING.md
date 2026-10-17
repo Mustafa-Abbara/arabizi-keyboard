@@ -68,6 +68,17 @@ Import it like the main notebook, set **GPU T4**, **Internet on**, add the `arab
 
 Upload `build/train-export/` as a **new version** of the private `arabizi-train` dataset (Kaggle → your dataset → **New Version** → replace all files), import the notebook, set GPU T4 and Internet on, add the dataset, then **Save Version → Save & Run All (Commit)**. Download everything with **Download all**. Each run is scored on frozen dev and on the others dev set against the shipped model (others dev, 200 rows: B0 0.591 [0.57, 0.61], shipped model 0.636 [0.62, 0.66], +0.046 [+0.027, +0.065] over B0; hallucination 15%).
 
+### Results (17 Oct 2026)
+
+Both runs: 85 minutes each on a T4; 22,712 examples. Validation losses (0.431 for `v2`, 0.454 for `v2-r16`) are not comparable with earlier runs, because the validation rows changed. Dev word accuracy (numbers protected), paired against the shipped model:
+
+| Run | Frozen dev | Others dev |
+|---|---|---|
+| `v2` | **0.812** (+0.038 [+0.008, +0.068]) | **0.811** (+0.175 [+0.155, +0.195]) |
+| `v2-r16` | 0.803 (+0.029 [+0.001, +0.056]) | 0.797 (+0.160 [+0.139, +0.182]) |
+
+The data makes the difference; rank 32 adds about one point, within noise. `v2` went to the one-time test run: 0.820 frozen test and 0.800 others test (ADR 0022).
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.

@@ -81,6 +81,42 @@
             "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
             "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
       }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-v2",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261017-052446-llama3.2-1b-lora-v2.json",
+      "file": "arabizi-llama3.2-1b-v2-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "c7f760dcf1d8f0f58b2ed8c2012e5ecc2c042e956b58c03f48b1a515d2276b4b",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA fine-tune of Llama 3.2 1B Instruct on Kaggle with the real rows (ADR 0021); weights stay private",
+      "source": "P4 real-rows run",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 17 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-v2-r16",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261017-065546-llama3.2-1b-lora-v2-r16.json",
+      "file": "arabizi-llama3.2-1b-v2-r16-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "5d08923453f4afacc0db4c4c16097c028c18f437dc33d00bf46ed87fc7bf78df",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA fine-tune of Llama 3.2 1B Instruct on Kaggle with the real rows (ADR 0021); weights stay private",
+      "source": "P4 real-rows run",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 17 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
     }
   ]
 }
