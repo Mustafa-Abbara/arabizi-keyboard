@@ -26,6 +26,8 @@ uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B # is
 | `reference`, `identity` | Sanity checks (1.0 and near 0) | `systems.py` |
 | **`b0`** | Rule baseline (P3): clitics joined to the next word (`w el bet` → والبيت, never a double article), words kept in Latin when the training Arabic keeps them, the word dictionary, then letter rules; numbers, links and emoji untouched. Also the logic the Swift fallback will copy in P5. | `b0.py`, `data/rules/arabizi_to_arabic.json` (hand-written), `data/rules/arabizi_lexicon.json` (generated) |
 
+**B0 versions:** B0 v1 is the dictionary used until 17 Oct 2026 (every earlier B0 number); **B0 v2** was rebuilt with the real rows (ADR 0026): others dev 0.725 (v1 0.591), frozen dev 0.628 (v1 0.543).
+
 **Rebuilding the B0 dictionary** (train split only; the variants file is generated, so build it first):
 
 ```bash
