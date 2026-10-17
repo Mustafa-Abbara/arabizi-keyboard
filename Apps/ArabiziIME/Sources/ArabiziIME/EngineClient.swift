@@ -11,7 +11,7 @@ final class EngineClient: @unchecked Sendable {  // `connection` is behind `lock
     private let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
     private let lock = NSLock()
     private var connection: NSXPCConnection?
-    private let deadlineMs: Int
+    private let config: EngineConfig
     private let encoder = Contract.encoder()
     /// How long past the deadline the keyboard waits for the reply (the rule fallback inside the service).
     private static let replyMarginMs = 500
@@ -22,7 +22,7 @@ final class EngineClient: @unchecked Sendable {  // `connection` is behind `lock
             Logger(subsystem: "lb.aub.arabizi", category: "ime").error("engine config not readable: rules only")
             return nil
         }
-        deadlineMs = config.deadlineMs
+        self.config = config
     }
 
     private func proxy() -> ArabiziEngineServiceProtocol? {
@@ -50,6 +50,7 @@ final class EngineClient: @unchecked Sendable {  // `connection` is behind `lock
     }
 
     func convert(_ text: String) -> String? {
+        let deadlineMs = config.deadlineMs(for: text)  // longer messages get longer (ADR 0025)
         guard let proxy = proxy(),
               let request = try? encoder.encode(ConvertRequest(text: text, deadlineMs: deadlineMs)) else { return nil }
         let box = ReplyBox()

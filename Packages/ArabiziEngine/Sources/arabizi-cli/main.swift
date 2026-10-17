@@ -2,7 +2,7 @@
 // engine. One ConvertRequest per line on stdin, one ConvertResponse per line on stdout (docs/API_CONTRACTS.md).
 // The engine's status goes to stderr as one JSON line at start-up. Never prints the text it converts to stderr.
 //
-//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--no-repair]
+//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--no-repair] [--keyboard-deadline]
 // --explain writes one line per request to stderr: why a fallback happened, or how many tokens of a model answer
 // were repaired (ADR 0023); reason null otherwise. Counts only, no text.
 import ArabiziContracts
@@ -22,6 +22,7 @@ func json(_ value: Any) -> String {
 
 var configDirectory = "config", rulesDirectory = "data/rules", modelsDirectory = "models"
 var modelOverride: String?, noModel = false, verifyHash = true, explain = false, repair = true
+var keyboardDeadline = false
 var arguments = CommandLine.arguments.dropFirst().makeIterator()
 @MainActor func value(after flag: String) -> String {
     guard let value = arguments.next() else { fail("\(flag) needs a value") }
@@ -37,6 +38,7 @@ while let argument = arguments.next() {
     case "--skip-hash": verifyHash = false
     case "--explain": explain = true
     case "--no-repair": repair = false
+    case "--keyboard-deadline": keyboardDeadline = true
     default: fail("unknown argument \(argument)")
     }
 }
@@ -78,7 +80,11 @@ while let line = readLine(strippingNewline: true) {
     lineNumber += 1
     guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
     do {
-        let request = try decoder.decode(ConvertRequest.self, from: Data(line.utf8))
+        var request = try decoder.decode(ConvertRequest.self, from: Data(line.utf8))
+        if keyboardDeadline {  // the deadline the keyboard would give this message (ADR 0025)
+            request = ConvertRequest(id: request.id, text: request.text,
+                                     deadlineMs: engine.config.deadlineMs(for: request.text))
+        }
         let (response, reason) = engine.convertExplained(request)
         FileHandle.standardOutput.write(try encoder.encode(response) + Data("\n".utf8))
         if explain {

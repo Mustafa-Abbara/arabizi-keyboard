@@ -63,3 +63,10 @@ func badSettingsAreRejected(changes: String) throws {
     let data = try engine(parsed)
     #expect(throws: EngineConfig.InvalidError.self) { try EngineConfig(engine: data, models: modelsData) }
 }
+
+@Test func theDeadlineGrowsWithTheMessageUpToItsCap() throws {
+    let config = try EngineConfig(configDirectory: configDirectory)  // 1,500 ms to 8 words, +120 per word, cap 3,000
+    #expect(config.deadlineMs(for: "kifak shu 3am ta3mel") == 1500)
+    #expect(config.deadlineMs(for: Array(repeating: "kifak", count: 12).joined(separator: " ")) == 1980)
+    #expect(config.deadlineMs(for: Array(repeating: "kifak", count: 40).joined(separator: " ")) == 3000)
+}

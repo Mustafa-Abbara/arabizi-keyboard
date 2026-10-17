@@ -9,7 +9,7 @@ import Foundation
 /// 1. Text with no Latin letter is returned unchanged (`passthrough`).
 /// 2. No usable model (switched off, file missing, wrong SHA-256, failed to load) or input longer than
 ///    `max_input_chars`: the rule converter answers (`fallbackModelUnavailable`).
-/// 3. Otherwise links, emails, mentions, emoji and standalone numbers become placeholders (ProtectedSpans), the
+/// 3. Otherwise links, emails, mentions and standalone numbers become placeholders (ProtectedSpans), the
 ///    fine-tuned model converts the masked text with its saved prompt and the request's deadline, and its answer is
 ///    cleaned (first line, no wrapping quotes) and checked (OutputChecks). A finished, passing answer is the result
 ///    (`model`); a deadline gives the rules (`fallbackTimeout`); a token limit or a failed check gives the rules
@@ -219,6 +219,7 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         case .placeholders: "check: placeholders"
         case .newLatin(let words): "check: new Latin words (\(words.count))"
         case .wordCount(let output, let input): "check: word count \(output) for \(input) input words"
+        case .emoji: "check: emoji changed"
         }
     }
 
