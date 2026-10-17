@@ -1,6 +1,6 @@
 # ADR 0022: Ship the v2 model trained with the real rows
 
-- **Status:** proposed (needs Moustafa's acceptance before the keyboard switches)
+- **Status:** accepted (Moustafa, 17 Oct 2026: "I accept ADR 0022")
 - **Date:** 2026-10-17
 - **Deciders:** Moustafa Abbara (on Claude's recommendation)
 - **Stage:** P4 (accuracy plan)
@@ -49,7 +49,7 @@ The shipped model `arabizi-llama3.2-1b-v1` (ADR 0005) was trained without real m
 | # | Decision | Source |
 |---|---|---|
 | 1 | **Ship `arabizi-llama3.2-1b-v2`**. It is better than the shipped model on both test sets, with intervals above 0, and much better on other people's typing (+14 points). It has the same size (808 MB GGUF, same architecture) and stays within the latency budget on the frozen test (p95 824 ms ≤ 1,200). | **Claude's recommendation** |
-| 2 | Switch the engine: `config/engine.json` `"model": "arabizi-llama3.2-1b-v2"`, then rebuild and reinstall the keyboard (`scripts/install_ime.sh`). This happens only after Moustafa accepts this ADR. | ADR 0005 #3 pattern |
+| 2 | Switch the engine: `config/engine.json` `"model": "arabizi-llama3.2-1b-v2"`, then rebuild and reinstall the keyboard (`scripts/install_ime.sh`). Done on acceptance (17 Oct 2026). | ADR 0005 #3 pattern |
 | 3 | Keep `v1` registered as the fallback model; `v2-r16` stays registered for the record. | **Claude's recommendation** |
 
 ## Consequences

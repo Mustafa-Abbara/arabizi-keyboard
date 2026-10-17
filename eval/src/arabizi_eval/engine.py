@@ -1,7 +1,7 @@
 """The Swift engine through arabizi-cli (roadmap P5 step 6), so the harness measures what the keyboard runs.
 
   swift build -c release --package-path Packages/ArabiziEngine
-  uv run --project eval evalrun run --system engine-arabizi-llama3.2-1b-v1 --split dev
+  uv run --project eval evalrun run --system engine-arabizi-llama3.2-1b-v2 --split dev
 
 `engine-<id>` runs the engine with that fine-tuned model switched on; `engine-rules` with the model off (the Swift
 rule fallback). Each sentence is one ConvertRequest on the CLI's stdin; the response's text and latency are scored,
