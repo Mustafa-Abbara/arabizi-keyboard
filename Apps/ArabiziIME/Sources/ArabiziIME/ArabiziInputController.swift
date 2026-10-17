@@ -28,7 +28,39 @@ final class ArabiziInputController: IMKInputController {
         engine.warmUp()
         return { text in engine.convert(text) ?? rules(text) }
     }()
-    private var composer = Composer(convert: ArabiziInputController.convert)
+    /// Other spellings for a converted word (⌥Tab, ADR 0027): the rules and their dictionary from Resources, and
+    /// the user's picks recorded in an encrypted file on this Mac. nil without the rule files: ⌥Tab then beeps.
+    private static let suggester: Suggester? = {
+        let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
+        guard let rules = try? RuleConverter(rulesDirectory: resources),
+              let lexicon = try? Data(contentsOf: resources.appending(path: RuleConverter.lexiconFileName)) else {
+            return nil
+        }
+        let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon),
+                                      rules: { rules.convert($0) })
+        let store = CorrectionStore.standard()
+        let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
+        log.info("suggestions ready; corrections \(store == nil ? "not recorded" : "recorded", privacy: .public)")
+        return Suggester(
+            candidates: { shown, latin in suggestions.candidates(for: shown, latin: latin) },
+            align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
+            record: { correction in
+                do { try store?.record(correction) } catch { log.error("correction not saved") }
+            })
+    }()
+    private var composer = Composer(convert: ArabiziInputController.convert, suggester: ArabiziInputController.suggester)
+    private let candidatesPanel = CandidatesPanel()
+
+    /// The candidate window under the selected word. InputMethodKit calls the controller on the main thread.
+    private func showCandidates() {
+        nonisolated(unsafe) let panel = candidatesPanel, server = server()
+        MainActor.assumeIsolated { panel.show(server: server) }
+    }
+
+    private func hideCandidates() {
+        nonisolated(unsafe) let panel = candidatesPanel
+        MainActor.assumeIsolated { panel.hide() }
+    }
     /// Where the cursor was right after the last conversion, so ⌘Z can tell whether it moved since.
     private var conversionEnd: Int?
 
@@ -38,7 +70,7 @@ final class ArabiziInputController: IMKInputController {
         var context = Context(secureInput: IsSecureEventInputEnabled())
         var selection: NSRange?
         switch key {
-        case .undo:
+        case .undo, .suggest:
             let cursor = client.selectedRange()
             context.cursorAtLastConversion = cursor.length == 0 && cursor.location != NSNotFound
                 && cursor.location == conversionEnd
@@ -64,7 +96,15 @@ final class ArabiziInputController: IMKInputController {
         if key.isCommand {
             log.notice("\(key.kind, privacy: .public) -> \(effect.kind, privacy: .public)")
         }
-        defer { if composer.lastConversion == nil { conversionEnd = nil } }
+        return apply(effect, to: client, selection: selection)
+    }
+
+    /// Carries out what the composer decided, in the app.
+    private func apply(_ effect: Effect, to client: IMKTextInput, selection: NSRange? = nil) -> Bool {
+        defer {
+            if composer.lastConversion == nil { conversionEnd = nil }
+            if !composer.isSuggesting { hideCandidates() }
+        }
         switch effect {
         case .pass:
             return false
@@ -96,11 +136,43 @@ final class ArabiziInputController: IMKInputController {
             setMarked(marked, in: client, replacing: NSRange(location: end - replacingLength, length: replacingLength))
             log.debug("restored \(marked.count) Latin characters")
             return true
+        case .suggest(let marked, let selected, _, let replacingLength):
+            var range = Self.notFound
+            if let replacingLength {
+                guard let end = conversionEnd, end >= replacingLength else {
+                    _ = composer.flush()  // the app cannot report the cursor: leave the text alone
+                    NSSound.beep()
+                    return true
+                }
+                range = NSRange(location: end - replacingLength, length: replacingLength)
+            }
+            client.setMarkedText(marked, selectionRange: NSRange(location: selected.lowerBound, length: selected.count),
+                                 replacementRange: range)
+            showCandidates()
+            return true
+        case .commitAndCompose(let text, let marked):
+            insert(text, into: client)
+            setMarked(marked, in: client)
+            return true
         }
+    }
+
+    /// The spellings shown in the candidate window (InputMethodKit asks for them).
+    override func candidates(_ sender: Any!) -> [Any]! {
+        composer.currentCandidates
+    }
+
+    /// A spelling clicked in the candidate window: the same as pressing its number.
+    override func candidateSelected(_ candidateString: NSAttributedString!) {
+        guard let picked = candidateString?.string, let client = client(),
+              let index = composer.currentCandidates.firstIndex(of: picked) else { return }
+        _ = apply(composer.handle(.text(String(index + 1))), to: client)
+        rememberConversionEnd(in: client)
     }
 
     /// Called when focus moves away (click elsewhere, app switch) while composing.
     override func commitComposition(_ sender: Any!) {
+        hideCandidates()
         guard let client = sender as? IMKTextInput, let text = composer.flush() else { return }
         insert(text, into: client)
     }
@@ -129,9 +201,29 @@ final class ArabiziInputController: IMKInputController {
     }
 }
 
+/// The macOS candidate window (InputMethodKit), created on first use. It asks the controller for the spellings.
+final class CandidatesPanel {
+    private var window: IMKCandidates?
+
+    @MainActor func show(server: IMKServer?) {
+        if window == nil {
+            window = IMKCandidates(server: server, panelType: kIMKSingleColumnScrollingCandidatePanel)
+            window?.setSelectionKeys([18, 19, 20, 21, 23].map { NSNumber(value: $0) })  // the keys 1–5
+        }
+        window?.update()
+        window?.show(kIMKLocateCandidatesBelowHint)
+    }
+
+    @MainActor func hide() {
+        window?.hide()
+    }
+}
+
 // Names for logs: kinds only, never the text the user typed.
 extension Key {
-    var isCommand: Bool { self == .enter || self == .undo || self == .convertSelection || self == .escape }
+    var isCommand: Bool {
+        self == .enter || self == .undo || self == .convertSelection || self == .escape || self == .suggest
+    }
     var kind: String { "\(self)".prefix(while: { $0 != "(" }).description }
 }
 
@@ -140,7 +232,8 @@ extension Effect {
 }
 
 extension Key {
-    /// macOS virtual key codes: 36 Return, 76 keypad Enter, 51 Delete (backspace), 53 Escape.
+    /// macOS virtual key codes: 36 Return, 76 keypad Enter, 51 Delete (backspace), 53 Escape, 48 Tab,
+    /// 123 ← and 124 →.
     init(_ event: NSEvent) {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let isReturn = event.keyCode == 36 || event.keyCode == 76
@@ -150,6 +243,14 @@ extension Key {
         }
         if modifiers == .option, isReturn {
             self = .convertSelection
+            return
+        }
+        if modifiers == .option, event.keyCode == 48 {
+            self = .suggest
+            return
+        }
+        if modifiers.isEmpty, event.keyCode == 123 || event.keyCode == 124 {
+            self = event.keyCode == 123 ? .arrowLeft : .arrowRight
             return
         }
         if !modifiers.isDisjoint(with: [.command, .control, .option]) {
