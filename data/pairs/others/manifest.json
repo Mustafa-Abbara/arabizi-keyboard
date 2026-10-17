@@ -1,0 +1,20 @@
+{
+  "_comment": "Frozen \"others\" held-out set (ADR 0021): real messages by other people, scored with `evalrun ... --others`. `pairs validate` and CI fail if a listed file changes. Do not edit by hand.",
+  "version": "others-v1.0",
+  "frozen_on": "2026-10-17",
+  "reason": "first import of the others set",
+  "previous_version": null,
+  "unchecked_rows": 0,
+  "files": {
+    "others/test.jsonl": {
+      "sha256": "3b4f5ea971b838ed4524684c0d0dd8e1ec00708df358ddebff9d81a223324b4c",
+      "rows": 299,
+      "private": false
+    },
+    "others/dev.jsonl": {
+      "sha256": "7131d9eaa30889058e67810bd3fd7c5f46c08435736ffa5158da778f95df1d42",
+      "rows": 200,
+      "private": false
+    }
+  }
+}

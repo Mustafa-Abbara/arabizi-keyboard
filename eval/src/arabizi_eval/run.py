@@ -26,11 +26,13 @@ RESULTS_DIR = P.ROOT / "eval" / "results"
 PRIVATE_RESULTS_DIR = RESULTS_DIR / "private"  # .gitignore: runs that include private rows (ADR 0014)
 
 
-def split_rows(split: str, limit: int | None = None, subset: str = "all") -> tuple[list[dict], str]:
-    """Rows of a split (public, private or all) and the SHA-256 of the files they came from."""
+def split_rows(split: str, limit: int | None = None, subset: str = "all",
+               others: bool = False) -> tuple[list[dict], str]:
+    """Rows of a split (public, private or all) and the SHA-256 of the files they came from.
+    `others=True`: the "others" held-out set (ADR 0021) instead of testset-v1.0."""
     digest = hashlib.sha256()
     rows: list[dict] = []
-    for path in P.pair_files():
+    for path in P.pair_files(others=others):
         if (subset == "public" and P.is_private(path)) or (subset == "private" and not P.is_private(path)):
             continue
         lines = [row for _, row, err in P.read_jsonl(path) if not err and row.get("split") == split]
@@ -70,19 +72,20 @@ def score_outputs(rows: list[dict], outputs: dict[str, dict]) -> tuple[list[dict
 
 
 def write_run(name: str, split: str, rows: list[dict], data_sha: str, records: list[dict], summary: dict,
-              describe: dict, results_dir: Path | None = None, subset: str = "all") -> Path:
+              describe: dict, results_dir: Path | None = None, subset: str = "all", others: bool = False) -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     sha = git_sha()
     private_ids = {r["id"] for path in P.pair_files() if P.is_private(path) for _, r, e in P.read_jsonl(path) if not e}
     has_private = any(r["id"] in private_ids for r in rows)
     default_dir = PRIVATE_RESULTS_DIR if has_private else RESULTS_DIR
-    suffix = "" if subset == "all" else f"-{subset}"
+    suffix = ("-others" if others else "") + ("" if subset == "all" else f"-{subset}")
     run_dir = (results_dir or default_dir) / f"{stamp}-{name}-{split}{suffix}"
     run_dir.mkdir(parents=True, exist_ok=False)
     with (run_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
         for record in records:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     meta = {"run_id": run_dir.name, "system": name, "describe": describe, "split": split, "subset": subset,
+            "set": "others" if others else "testset",
             "private_sentences": sum(r["id"] in private_ids for r in rows), "sentences": len(rows),
             "data_sha256": data_sha, "git_sha": sha, "created": datetime.now().isoformat(timespec="seconds"),
             "metrics": summary}
@@ -106,7 +109,7 @@ def guard_split(split: str, final: bool) -> None:
 
 def cmd_run(args: argparse.Namespace) -> int:
     guard_split(args.split, args.final)
-    rows, data_sha = split_rows(args.split, args.limit, args.subset)
+    rows, data_sha = split_rows(args.split, args.limit, args.subset, args.others)
     if not rows:
         print(f"No rows in the {args.split} split yet (write them with `pairs add`).")
         return 1
@@ -124,7 +127,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         system.close()
     records, summary = score_outputs(rows, outputs)
     run_dir = write_run(system.name, args.split, rows, data_sha, records, summary, system.describe, args.results,
-                        args.subset)
+                        args.subset, args.others)
     print_summary(run_dir, summary)
     return 0
 
@@ -132,11 +135,12 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_score(args: argparse.Namespace) -> int:
     """Score predictions made elsewhere (e.g. a Kaggle notebook): JSONL with id, prediction, latency_ms?."""
     guard_split(args.split, args.final)
-    rows, data_sha = split_rows(args.split, args.limit, args.subset)
+    rows, data_sha = split_rows(args.split, args.limit, args.subset, args.others)
     outputs = {r["id"]: r for _, r, err in P.read_jsonl(Path(args.predictions)) if not err}
     records, summary = score_outputs(rows, outputs)
     describe = {"kind": "external", "predictions_file": Path(args.predictions).name}
-    run_dir = write_run(args.name, args.split, rows, data_sha, records, summary, describe, args.results, args.subset)
+    run_dir = write_run(args.name, args.split, rows, data_sha, records, summary, describe, args.results, args.subset,
+                        args.others)
     print_summary(run_dir, summary)
     return 0
 
@@ -184,6 +188,9 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--subset", choices=["all", "public", "private"], default="all",
                        help="public rows only give results that can be published; runs with private rows are "
                             "saved under eval/results/private (never committed)")
+        p.add_argument("--others", action="store_true",
+                       help='the "others" held-out set (real messages by other people, ADR 0021) instead of '
+                            "testset-v1.0; same --split and --final rules")
         p.add_argument("--results", type=Path, help="results folder (default eval/results)")
     compare = sub.add_parser("compare", help="paired bootstrap on word accuracy between two runs")
     compare.add_argument("run_a", type=Path)

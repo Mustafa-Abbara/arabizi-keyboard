@@ -57,6 +57,17 @@ Import it like the main notebook, set **GPU T4**, **Internet on**, add the `arab
 
 **How the runs are judged** (on the Mac, dev only; the test set is not touched): each run is scored with the same harness and compared with the shipped model by paired bootstrap on the same 104 dev rows. A setting is kept only if the 95% interval of the gain is above 0, and only if it beats `base` by more than `base` differs from the shipped model (the rerun noise). The winners are combined in one more run; a clear overall gain makes a new final candidate (one test run, new ADR).
 
+## Training with the real rows (ADR 0021)
+
+`train/finetune_v2.ipynb` trains Llama 3.2 1B twice on the new export (4,994 real training rows added; 22,712 examples, AI-derived share 18%):
+
+| Run (`--tag`) | Settings | Why |
+|---|---|---|
+| `v2` | rank 32, alpha 64 | the candidate: the sweep's best setting with more data |
+| `v2-r16` | the shipped settings | separates the data's effect from the rank's |
+
+Upload `build/train-export/` as a **new version** of the private `arabizi-train` dataset (Kaggle → your dataset → **New Version** → replace all files), import the notebook, set GPU T4 and Internet on, add the dataset, then **Save Version → Save & Run All (Commit)**. Download everything with **Download all**. Each run is scored on frozen dev and on the others dev set against the shipped model (others dev, 200 rows: B0 0.591 [0.57, 0.61], shipped model 0.636 [0.62, 0.66], +0.046 [+0.027, +0.065] over B0; hallucination 15%).
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.

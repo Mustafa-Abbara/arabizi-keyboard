@@ -370,6 +370,90 @@ def cmd_import_chats(args: argparse.Namespace) -> int:
     return 0
 
 
+ARTICLE_TATWEEL = re.compile(r"الـ\s*")  # "الـ X" -> "الX" (SPELLING.md 2.3: no tatweel)
+
+
+def clean_sheet_arabic(text: str) -> str:
+    return " ".join(P.DIACRITICS.sub("", ARTICLE_TATWEEL.sub("ال", str(text))).replace(P.TATWEEL, "").split())
+
+
+def _near_duplicate(arabizi: str, word_sets: list[set[str]]) -> bool:
+    """Same sentence with small edits: at least 4 words and 80% word overlap with a training sentence."""
+    words = set(P.normalize_arabizi(arabizi).split())
+    return len(words) >= 4 and any(len(words & o) / len(words | o) >= 0.8 for o in word_sets if o)
+
+
+def cmd_import_real(args: argparse.Namespace) -> int:
+    """Import real messages written by other people (ADR 0021), all public: --train rows into
+    data/pairs/train-hand.jsonl, --held-out rows into the "others" held-out set (data/pairs/others/), split into
+    dev and test and frozen with its own manifest. Rows that break a rule or repeat a sentence are skipped; a
+    held-out row that repeats or nearly repeats a training sentence is skipped too. Prints counts only.
+    """
+    if P.OTHERS_MANIFEST_PATH.exists():
+        print("The others set is already frozen; importing again would change it.")
+        return 1
+    existing = all_rows() + [row for path in P.pair_files(others=True) for _, row, err in P.read_jsonl(path) if not err]
+    new: list[dict] = []
+    reasons: Counter = Counter()
+    seen = set().union(*(P._dedupe_keys(r) for r in existing))
+    next_number = int(next_id("hand", existing).split("-")[1])
+
+    def take(path: str, split: str, train_words: list[set[str]] | None = None) -> list[dict]:
+        nonlocal next_number
+        taken = []
+        for item in read_sheet(Path(path)):
+            arabizi = " ".join(str(item.get("arabizi") or "").split())
+            row = new_hand_row(arabizi, clean_sheet_arabic(item.get("arabic") or ""), {}, split, [])
+            row.update(id=f"{P.ID_PREFIX['hand']}-{next_number:04d}", writer=args.writer,
+                       checked_by=args.checked_by, source=args.source)
+            problems = [e.split(":")[0] for e in P.row_errors(row, split if split == "train" else None, "hand")]
+            keys = P._dedupe_keys(row)
+            if keys & seen:
+                problems.append("repeats a sentence already in the data")
+            elif train_words is not None and _near_duplicate(arabizi, train_words):
+                problems.append("nearly repeats a training sentence")
+            if problems:
+                reasons.update(f"{split}: {p}" for p in set(problems))
+                continue
+            seen.update(keys)
+            next_number += 1
+            new.append(row)
+            taken.append(row)
+        return taken
+
+    train = take(args.train, "train")
+    train_words = [set(P.normalize_arabizi(r["arabizi"]).split()) for r in existing + new if r.get("split") == "train"]
+    held = take(args.held_out, "test", train_words)
+    rng = random.Random(args.seed)
+    dev_ids = {r["id"] for r in rng.sample(held, min(args.dev, len(held)))}
+    for row in held:
+        row["split"] = "dev" if row["id"] in dev_ids else "test"
+    counts = Counter(r["split"] for r in train + held)
+    print(f"{'would import' if args.dry_run else 'imported'}: train {counts['train']} (data/pairs/train-hand.jsonl), "
+          f"others dev {counts['dev']} + test {counts['test']} (data/pairs/others/)")
+    if reasons:
+        print(f"skipped {sum(reasons.values())}: " + "; ".join(f"{r} ({n})" for r, n in reasons.most_common()))
+    if args.dry_run:
+        return 0
+    for row in train:
+        append(path_for("train", "hand"), row)
+    P.OTHERS_DIR.mkdir(parents=True, exist_ok=True)
+    for row in held:
+        append(P.OTHERS_DIR / f"{row['split']}.jsonl", row)
+    files = {key: {"sha256": P.sha256_file(path), "rows": counts[key.split("/")[1].split(".")[0]], "private": False}
+             for key, (path, _) in P.others_files().items() if path.exists()}
+    manifest = {
+        "_comment": "Frozen \"others\" held-out set (ADR 0021): real messages by other people, scored with "
+                    "`evalrun ... --others`. `pairs validate` and CI fail if a listed file changes. "
+                    "Do not edit by hand.",
+        "version": args.version, "frozen_on": date.today().isoformat(),
+        "reason": "first import of the others set", "previous_version": None, "unchecked_rows": 0, "files": files,
+    }
+    P.OTHERS_MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"froze {args.version} (data/pairs/others/manifest.json)")
+    return 0
+
+
 def cmd_export_train(args: argparse.Namespace) -> int:
     """Write build/train-export/ for a PRIVATE Kaggle dataset: training rows only, as chat examples."""
     from arabizi_eval import export
@@ -855,6 +939,17 @@ def main(argv: list[str] | None = None) -> int:
     chats.add_argument("--held-out", type=int, default=300, help="rows for test+dev, drawn evenly from each chat")
     chats.add_argument("--seed", type=int, default=2026)
     chats.add_argument("--dry-run", action="store_true", help="check and report without writing")
+    real = sub.add_parser("import-real", help="import real messages by other people: training rows and the "
+                                              "frozen 'others' held-out set (ADR 0021)")
+    real.add_argument("--train", required=True, help=".xlsx/.jsonl with arabizi and arabic columns")
+    real.add_argument("--held-out", required=True, help=".xlsx/.jsonl for the others dev/test set")
+    real.add_argument("--dev", type=int, default=200, help="held-out rows that go to dev (the rest: test)")
+    real.add_argument("--writer", default="friends-and-family")
+    real.add_argument("--source", default="friends-and-family (ADR 0021)")
+    real.add_argument("--checked-by", default="moustafa")
+    real.add_argument("--version", default="others-v1.0")
+    real.add_argument("--seed", type=int, default=2026)
+    real.add_argument("--dry-run", action="store_true")
     sub.add_parser("lexicon", help="rebuild the B0 word dictionary from the public train split")
     exp = sub.add_parser("export-train", help="training files for Kaggle fine-tuning (P4)")
     exp.add_argument("--ai-variants", type=int, default=1, help="spelling variants kept per AI-drafted row")
@@ -881,7 +976,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("validate", help="run all checks")
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
-                "import-chats": cmd_import_chats, "variants": cmd_variants, "lexicon": cmd_lexicon,
+                "import-chats": cmd_import_chats, "import-real": cmd_import_real, "variants": cmd_variants,
+                "lexicon": cmd_lexicon,
                 "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze, "publish": cmd_publish,
                 "export-train": cmd_export_train, "validate": cmd_validate}
     return commands[args.command](args)
