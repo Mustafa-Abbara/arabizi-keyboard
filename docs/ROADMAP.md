@@ -245,7 +245,7 @@ About 8–12 hours in W1, spread over the week:
 - [x] The fine-tuned model beats B0 **and** the best B1 on test word accuracy, with the 95% CI of the difference above 0. *Test, 16 Oct 2026: 0.783 vs B0 0.594 (+0.189 [+0.159, +0.219]) and best B1 0.147 (EVAL.md, "P4 final").*
 - [x] Number preservation ≥ 99% and Keep-Latin F1 reported; hallucination rate reported. *24/24 numbers; Keep-Latin F1 0.81; hallucinations 7.0%.*
 - [x] The quantized model meets the Section 0 budgets on the 8 GB Air. *830–988 MB; p50/p95 487/1,013 ms (protected run).*
-- [ ] Re-running training in a fresh Kaggle/Colab session at the same data SHA gives dev accuracy within 2 points. *Not done yet.*
+- [x] Re-running training in a fresh Kaggle/Colab session at the same data SHA gives dev accuracy within 2 points. *17 Oct 2026: the sweep's `base` run gave a bit-identical model (same SHA-256), so 0 points apart (EVAL.md).*
 - **If the gate fails:** see Section 7, C2.
 
 **Rubric mapping:** Agent performance/evaluation 20% (model improvement with evidence); real-world constraint (on-device size and latency); reproducibility.

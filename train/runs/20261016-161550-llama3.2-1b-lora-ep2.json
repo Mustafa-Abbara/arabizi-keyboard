@@ -1,0 +1,224 @@
+{
+  "run_id": "20261016-161550-llama3.2-1b-lora-ep2",
+  "base": "llama3.2-1b",
+  "hf_id": "unsloth/Llama-3.2-1B-Instruct",
+  "hf_revision": "5a8abab4a5d6f164389b1079fb721cfab8d7126c",
+  "method": "LoRA, completion-only loss",
+  "hyperparameters": {
+    "base": "llama3.2-1b",
+    "data": "/kaggle/input/datasets/mustafaabbara2003/arabizi-train",
+    "out": "/kaggle/working/out",
+    "epochs": 2.0,
+    "lr": 0.0002,
+    "rank": 16,
+    "alpha": 32,
+    "dropout": 0.05,
+    "batch": 8,
+    "grad_accum": 4,
+    "warmup": 0.03,
+    "max_length": 256,
+    "seed": 2026,
+    "limit": null,
+    "tag": "ep2"
+  },
+  "data": {
+    "export_files": {
+      "train-public.jsonl": {
+        "rows": 3832,
+        "sha256": "dd5bba98c16b17090451f9c1b73ae1266d49aa5ec04ed39460678b8ec8502ec0"
+      },
+      "train-private.jsonl": {
+        "rows": 4125,
+        "sha256": "61c8e3a55aa0325b5b699b21c64948e3b6ba10128c8ddca6bba540c42bc2c05f"
+      },
+      "val-public.jsonl": {
+        "rows": 164,
+        "sha256": "0c16e24ae91b3eefa244061387ebd3e8d445e383a3905d271392b7e7aa12a458"
+      },
+      "val-private.jsonl": {
+        "rows": 264,
+        "sha256": "92990a9767fe62b9604b2c0f783d35af994f18100454e98aaf1be8616836cf3a"
+      }
+    },
+    "rows_total": 8385,
+    "ai_share": 0.477,
+    "prompt_version": 1,
+    "export_sha256_16": "534522f2defbdf88"
+  },
+  "best_eval_loss": 0.43095114827156067,
+  "best_checkpoint": "/kaggle/working/out/20261016-161550-llama3.2-1b-lora-ep2/checkpoints/checkpoint-498",
+  "history": [
+    {
+      "loss": 3.128556823730469,
+      "learning_rate": 0.00019996615683488039,
+      "epoch": 0.08040201005025126
+    },
+    {
+      "loss": 1.6720632553100585,
+      "learning_rate": 0.00019878404957532814,
+      "epoch": 0.16080402010050251
+    },
+    {
+      "loss": 1.1750184059143067,
+      "learning_rate": 0.00019593262165898076,
+      "epoch": 0.24120603015075376
+    },
+    {
+      "loss": 0.9048007011413575,
+      "learning_rate": 0.0001914600584714605,
+      "epoch": 0.32160804020100503
+    },
+    {
+      "loss": 0.8182957649230957,
+      "learning_rate": 0.00018544194045464886,
+      "epoch": 0.4020100502512563
+    },
+    {
+      "loss": 0.678756856918335,
+      "learning_rate": 0.0001779799658965153,
+      "epoch": 0.4824120603015075
+    },
+    {
+      "loss": 0.6197185039520263,
+      "learning_rate": 0.00016920023236366002,
+      "epoch": 0.5628140703517588
+    },
+    {
+      "loss": 0.5652683734893799,
+      "learning_rate": 0.00015925110581810394,
+      "epoch": 0.6432160804020101
+    },
+    {
+      "loss": 0.5311353206634521,
+      "learning_rate": 0.00014830071342745112,
+      "epoch": 0.7236180904522613
+    },
+    {
+      "loss": 0.4558077335357666,
+      "learning_rate": 0.00013653410243663952,
+      "epoch": 0.8040201005025126
+    },
+    {
+      "loss": 0.43874392509460447,
+      "learning_rate": 0.0001241501131126138,
+      "epoch": 0.8844221105527639
+    },
+    {
+      "loss": 0.39904611110687255,
+      "learning_rate": 0.00011135801860504749,
+      "epoch": 0.964824120603015
+    },
+    {
+      "eval_loss": 0.5043028593063354,
+      "epoch": 1.0
+    },
+    {
+      "loss": 0.31655890941619874,
+      "learning_rate": 9.837398850505324e-05,
+      "epoch": 1.0442211055276382
+    },
+    {
+      "loss": 0.2579291582107544,
+      "learning_rate": 8.541743586309365e-05,
+      "epoch": 1.1246231155778894
+    },
+    {
+      "loss": 0.24282691478729249,
+      "learning_rate": 7.270730939669006e-05,
+      "epoch": 1.2050251256281408
+    },
+    {
+      "loss": 0.22399449348449707,
+      "learning_rate": 6.045839354474786e-05,
+      "epoch": 1.285427135678392
+    },
+    {
+      "loss": 0.20363328456878663,
+      "learning_rate": 4.8877678892719866e-05,
+      "epoch": 1.3658291457286431
+    },
+    {
+      "loss": 0.1923669695854187,
+      "learning_rate": 3.816086430365321e-05,
+      "epoch": 1.4462311557788945
+    },
+    {
+      "loss": 0.1836451530456543,
+      "learning_rate": 2.8489049864510054e-05,
+      "epoch": 1.5266331658291459
+    },
+    {
+      "loss": 0.17484227418899537,
+      "learning_rate": 2.002567653262479e-05,
+      "epoch": 1.607035175879397
+    },
+    {
+      "loss": 0.1716522455215454,
+      "learning_rate": 1.2913764198251132e-05,
+      "epoch": 1.6874371859296482
+    },
+    {
+      "loss": 0.17013572454452514,
+      "learning_rate": 7.2734948363144206e-06,
+      "epoch": 1.7678391959798994
+    },
+    {
+      "loss": 0.14496910572052002,
+      "learning_rate": 3.2001815889286856e-06,
+      "epoch": 1.8482412060301507
+    },
+    {
+      "loss": 0.16473143100738524,
+      "learning_rate": 7.62658098515856e-07,
+      "epoch": 1.9286432160804021
+    },
+    {
+      "eval_loss": 0.43095114827156067,
+      "epoch": 2.0
+    },
+    {
+      "epoch": 2.0
+    }
+  ],
+  "public_samples": [
+    {
+      "arabizi": "khayye l zghir sarlo se3tein 3am yel3ab PlayStation w ma 3am yesma3 la 7ada.",
+      "reference": "خيي الزغير صارلو ساعتين عم يلعب PlayStation وما عم يسمع لحدا.",
+      "output": "خيي الزغير صرلو ساعتين عم يلعب PlayStation وما عم يسما لحدا."
+    },
+    {
+      "arabizi": "bel madrase kenu y3a2bouna iza 7kina 3arabe b saff el frensewe.",
+      "reference": "بالمدرسة كانوا يعاقبونا إذا حكينا عربي بصف الفرنساوي.",
+      "output": "بالمدرسة كانوا يعقبونا إذا حكينا عربي بصيف الفرنساوي."
+    },
+    {
+      "arabizi": "kifik ya sabiyye? shu hal jamal el yom?",
+      "reference": "كيفك يا صبية؟ شو هالجمال اليوم؟",
+      "output": "كيفك يا سبيطة؟ شو هالجمال اليوم؟"
+    },
+    {
+      "arabizi": "el mudir talab menne khalles el report 2abl el deadline b yomein.",
+      "reference": "المدير طلب مني خلص ال report قبل ال deadline بيومين.",
+      "output": "المدير طلب مني خلص ال report قبل ال deadline بيومين."
+    },
+    {
+      "arabizi": "iza btkhalles el shoghl bakkir, fik tfell 2abl el 5.",
+      "reference": "إذا بتخلص الشغل بكير، فيك تفل قبل ال 5.",
+      "output": "إذا بتخلص الشغل بكير، فيك تفل قبل ال 5."
+    }
+  ],
+  "prompt": {
+    "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+    "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "gpu": "Tesla T4",
+  "precision": "fp16",
+  "minutes": 17.1,
+  "python": "3.13.15",
+  "versions": {
+    "torch": "2.11.0+cu128",
+    "transformers": "5.16.1",
+    "peft": "0.20.0",
+    "trl": "1.16.0"
+  }
+}
