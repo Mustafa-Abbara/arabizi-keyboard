@@ -137,7 +137,7 @@ Public rows only (113; `eval/results/20261016-1312*-test-public`): fine-tuned ra
 - [x] The fine-tuned model beats B0 **and** the best B1 on test word accuracy with the 95% CI of the difference above 0: +0.189 [+0.159, +0.219] and +0.636 [+0.607, +0.665].
 - [x] Number preservation ≥ 99%: 24/24 (100%) raw and protected (dev: raw 13/14, protected 14/14). Keep-Latin F1 0.81 and hallucination rate 7.0% reported.
 - [x] The quantized model meets the budgets on the 8 GB Air: 830–988 MB (≤ 1.5 GB); p50 487 ms (≤ 600), p95 1,013 ms (≤ 1,200) in the protected run; dev raw 421 / 853 ms.
-- [ ] Re-running training in a fresh Kaggle session at the same data SHA gives dev accuracy within 2 points: **not done** for Llama. (Qwen was trained twice, but the first run's file was lost before it was scored.)
+- [x] Re-running training in a fresh Kaggle session at the same data SHA gives dev accuracy within 2 points: the sweep's `base` run (17 Oct 2026, fresh session, same data and package versions, seed 2026) produced a GGUF **bit-for-bit identical** to the shipped model (same SHA-256 `807121d8…60eb13`), so its dev score is the shipped one exactly (0 points apart). TRAINING.md, "Sweep results".
 
 Not done from P4 step 4–5 (optional in the solo plan, roadmap §5): the data ablations (with/without AI rows, with/without variants), Q4_K_M vs unquantized, and the local AladdinBench check on other people's typing.
 
