@@ -1,6 +1,6 @@
 # ADR 0023: Repair invented Latin token by token instead of discarding the whole answer
 
-- **Status:** proposed (results below)
+- **Status:** accepted (Moustafa, 17 Oct 2026: "I accept ADR 0023")
 - **Date:** 2026-10-17
 - **Deciders:** Moustafa Abbara (Claude's recommendation)
 - **Stage:** P5 (engine), accuracy plan
