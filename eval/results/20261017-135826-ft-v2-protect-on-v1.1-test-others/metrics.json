@@ -1,0 +1,36 @@
+{
+  "run_id": "20261017-135826-ft-v2-protect-on-v1.1-test-others",
+  "system": "ft-v2-protect-on-v1.1",
+  "describe": {
+    "kind": "external",
+    "predictions_file": "predictions.jsonl"
+  },
+  "split": "test",
+  "subset": "all",
+  "set": "others",
+  "private_sentences": 0,
+  "sentences": 299,
+  "data_sha256": "32287600ef00092a2961007da73253c3244a79c744f6a2cf5388019234f605ca",
+  "git_sha": "29a240b-dirty",
+  "created": "2026-10-17T13:58:26",
+  "metrics": {
+    "sentences": 299,
+    "word_accuracy": 0.7918886915334518,
+    "word_accuracy_lenient": 0.7939609236234458,
+    "exact_match": 0.11371237458193979,
+    "punctuation_match": 0.43478260869565216,
+    "cer": 0.08307731694828469,
+    "keep_latin_precision": 0.6965174129353234,
+    "keep_latin_recall": 0.6542056074766355,
+    "keep_latin_f1": 0.674698795180723,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.0,
+    "hallucination_rate": 0.13377926421404682,
+    "latency_ms_p50": 763.8798749994749,
+    "latency_ms_p95": 1207.8771670003334,
+    "word_accuracy_ci95": [
+      0.775364474858673,
+      0.8077045258639628
+    ]
+  }
+}

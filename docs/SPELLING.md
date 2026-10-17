@@ -2,7 +2,7 @@
 
 This guide fixes **how the Arabic side of every data pair is written**, so the test set, the training data and the model all agree. Read it before writing any pair, and re-read it during the delayed self-check (roadmap P2, [ADR 0011](decisions/0011-solo-build.md)).
 
-> **Status: v1.2, 13 Oct 2026.** v1.2: the "her" ending (ـا / ـها) and `3a` before a word (ع جونيه / عجونيه) are correct both ways; Moustafa writes both on purpose for variety, and the scorer accepts both (EVAL.md). v1.1: `eza`/`iza` is written **إذا** (Moustafa: "a special word"), إزا accepted. v1.0 (12 Oct 2026): drafted by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling; Moustafa confirmed all nine choices marked **[confirm]** (Section 9). Changing a rule means fixing every existing pair, so bump the version and say why in the PR.
+> **Status: v1.3, 17 Oct 2026.** v1.3: Section 4's split rule for an English word with an Arabic prefix (`ال video`, never `الvideo`) re-confirmed by Moustafa and applied to the real rows and the others set, which had glued them (ADR 0024). v1.2: the "her" ending (ـا / ـها) and `3a` before a word (ع جونيه / عجونيه) are correct both ways; Moustafa writes both on purpose for variety, and the scorer accepts both (EVAL.md). v1.1: `eza`/`iza` is written **إذا** (Moustafa: "a special word"), إزا accepted. v1.0 (12 Oct 2026): drafted by Claude from the roadmap (P2 step 1) and common Lebanese chat spelling; Moustafa confirmed all nine choices marked **[confirm]** (Section 9). Changing a rule means fixing every existing pair, so bump the version and say why in the PR.
 
 ---
 
@@ -124,7 +124,7 @@ These decide most of the hard cases (the "la mohammad" problem).
 
 - **Non-Arabic words stay in Latin exactly as typed**, including capitalisation: `ma 3ndi meeting today` → ما عندي meeting today, `merci` → merci, `bonjour` → bonjour, `sorry` → sorry, `ok` → ok, `lol` → lol.
 - **Exception: a loanword with Arabic grammar on it** is written in Arabic: `talfanetlak` → تلفنتلك, `masajtak` → مسجتك.
-- **English word with an Arabic prefix** (`bstudy`, `3am bcheck`, `el meeting`) [confirm]: write the Arabic prefix in Arabic, **separated by a space**, and keep the English word: `3am bcheck` → عم ب check, `el wifi mesh 3am yemshi` → ال wifi مش عم يمشي. Do not mix scripts inside one token.
+- **English word with an Arabic prefix** (`bstudy`, `3am bcheck`, `el meeting`) [confirmed again in v1.3, ADR 0024]: write the Arabic prefix in Arabic, **separated by a space**, and keep the English word: `3am bcheck` → عم ب check, `el wifi mesh 3am yemshi` → ال wifi مش عم يمشي. Do not mix scripts inside one token.
 - **Brand and app names** stay Latin: Netflix, Instagram, WhatsApp, Uber.
 - **People's names:** Arabic names in Arabic (`mohammad` → محمد, `rami` → رامي, `nour` → نور); non-Arabic names stay Latin (`Chris`, `Joelle`). **Places in Lebanon** in Arabic (`beirut` → بيروت, `hamra` → الحمرا, `jounieh` → جونيه); places abroad in Arabic if Lebanese say them in Arabic (`dubai` → دبي, `paris` → باريس), otherwise Latin.
 
