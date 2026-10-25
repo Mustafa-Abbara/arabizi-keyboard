@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Mustafa-Abbara/arabizi-keyboard/docs/schemas/convert_response.v1.schema.json",
+  "title": "ConvertResponse v1",
+  "description": "The converted text and how it was made. Sent by the engine to the keyboard, and written by arabizi-cli as one JSON object per line. Swift: ArabiziContracts.ConvertResponse. Explained in docs/API_CONTRACTS.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "id", "text", "outcome", "latencyMs"],
+  "properties": {
+    "v": {"description": "Contract version; anything else is rejected.", "const": 1},
+    "id": {"description": "The id of the request this answers.", "type": "string", "format": "uuid",
+           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
+    "text": {"description": "The text to insert: Arabic script, with protected spans (links, numbers, emoji) unchanged.", "type": "string"},
+    "outcome": {
+      "description": "Which path produced the text: the model, the rule fallback with its reason, or unchanged.",
+      "enum": ["model", "fallbackTimeout", "fallbackCheckFailed", "fallbackModelUnavailable", "passthrough"]
+    },
+    "latencyMs": {"description": "Time from receiving the request to answering it.", "type": "integer", "minimum": 0}
+  }
+}
