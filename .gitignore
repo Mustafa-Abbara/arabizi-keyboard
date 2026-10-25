@@ -1,0 +1,52 @@
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Xcode / Swift ---
+build/
+DerivedData/
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+# Package.resolved IS committed (pinned dependencies).
+
+# --- Python (eval/, bench/, scripts/) ---
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+mlruns/
+
+# --- Secrets: only .env.example is committed ---
+.env
+.env.*
+!.env.example
+
+# --- Model weights and LM binaries: fetched by scripts/fetch_models.sh, never committed ---
+models/
+*.gguf
+*.arpa
+*.klm
+
+# --- Derived data: regenerate with `uv run --project eval pairs variants` (deterministic per seed) ---
+data/pairs/train-rule_variant.jsonl
+
+# --- Local working files (review sheets, backups) and any future private data: never committed. The project's
+# data is all public since ADR 0028; these folders hold only local working copies. ---
+data/private/
+data/**/*[Mm][Aa][Dd][Aa][Rr]*
+research/consent/signed/
+research/**/raw/
+eval/results/private/
+
+# --- Local traces (may contain eval-mode text) ---
+traces/
+
+# Local instructions for coding assistants (kept out of the repo, 25 Oct 2026)
+CLAUDE.md

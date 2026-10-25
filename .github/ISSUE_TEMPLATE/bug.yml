@@ -1,0 +1,30 @@
+name: Bug
+description: Something behaves wrongly. Every bug becomes a regression test before it is fixed.
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened vs what was expected
+      description: Do NOT paste private chat text. Use a synthetic example that reproduces it.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ..."
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "macOS 26.1, M2 16 GB, app: WhatsApp desktop 2.26.x, commit abc1234"
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression rule
+      options:
+        - label: A failing test or eval case reproducing this will be added before the fix
+          required: true

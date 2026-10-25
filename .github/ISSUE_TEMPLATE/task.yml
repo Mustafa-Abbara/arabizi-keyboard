@@ -1,0 +1,26 @@
+name: Task
+description: A unit of planned work from the roadmap
+labels: ["type:task"]
+body:
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Stage
+      options: [P0, P1, P2, P3, P4, P5, P6, P7]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs to be done
+      description: Link the roadmap step if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: How a reviewer can check this is finished (test, file, screenshot, number).
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
