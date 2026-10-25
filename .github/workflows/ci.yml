@@ -1,0 +1,80 @@
+# Runs on every pull request and on main (roadmap P5 CI, brought forward in P3: Recommendation).
+# All project data is in the repo (ADR 0028), so CI tests the full data set and the code.
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: "python (eval + data tools)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --project eval --locked
+      - run: uv run --project eval ruff check eval scripts/fetch_models.py train
+      - run: uv run --project eval pytest -q
+
+  swift:
+    name: "swift (ArabiziCore tests + keyboard build)"
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift test --package-path Packages/ArabiziCore
+      - run: swift test --package-path Packages/ArabiziContracts
+      # ArabiziLLM pulls llama.cpp's 62 MB XCFramework (ADR 0017); SwiftPM keeps downloads in this cache. CI has no
+      # model weights, so the tests that need a model are skipped.
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/ArabiziLLM/Package.swift') }}
+      - run: swift test --package-path Packages/ArabiziLLM
+      - run: swift test --package-path Packages/ArabiziEngine  # the real-model test is skipped (no weights on CI)
+      - run: scripts/build_ime.sh
+
+  hygiene:
+    name: "hygiene (pre-commit: secrets, file checks)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pre-commit/action@v3.0.1
+
+  testset-guard:
+    name: "testset guard (frozen test set changes need a label)"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: the frozen manifests (data/pairs/manifest.json, data/pairs/others/manifest.json) may only change with the testset-change label
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'testset-change') }}
+        run: |
+          if git diff --name-only "$BASE"...HEAD | grep -qxE 'data/pairs/(others/)?manifest\.json'; then
+            if [ "$HAS_LABEL" != "true" ]; then
+              echo "::error::A frozen held-out set changed (data/pairs/manifest.json or data/pairs/others/manifest.json). Add the 'testset-change' label and give the reason in the PR (docs/DATA.md)."
+              exit 1
+            fi
+            echo "Frozen test set changed, with the testset-change label."
+          else
+            echo "Frozen test set unchanged."
+          fi
