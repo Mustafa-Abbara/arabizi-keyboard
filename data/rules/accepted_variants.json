@@ -1,0 +1,13 @@
+{
+  "_comment": "Global accepted spellings from docs/SPELLING.md Section 8 (v1.0): primary -> also accepted. Applied to every row at scoring time (P3). Keep in sync with the guide.",
+  "variants": {
+    "هلق": ["هلأ"],
+    "إمتى": ["إيمتى"],
+    "قديش": ["أديش"],
+    "عنجد": ["عن جد"],
+    "قهوة": ["أهوة"],
+    "قال": ["أل"],
+    "قلت": ["ألت"],
+    "إذا": ["إزا"]
+  }
+}

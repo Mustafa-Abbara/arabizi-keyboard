@@ -1,0 +1,47 @@
+{
+  "_comment": "Hand-written rules for B0 (roadmap P3 step 2) and, from P5, the Swift fallback: both read this file and must behave the same. Words are looked up in arabizi_lexicon.json (generated from training data) first; these letter rules are only for unknown words. Spellings follow docs/SPELLING.md.",
+  "version": 1,
+  "clitics": {
+    "_comment": "Small words written as their own Arabizi word but attached to the next word in Arabic (SPELLING.md 3).",
+    "w": "و", "wu": "و",
+    "b": "ب", "bi": "ب",
+    "bel": "بال", "bil": "بال", "bl": "بال",
+    "el": "ال", "il": "ال", "l": "ال",
+    "wel": "وال", "wl": "وال",
+    "la": "ل", "lal": "لل", "lel": "لل",
+    "3al": "عال", "3a": "ع",
+    "hal": "هال",
+    "mnel": "من ال", "mnl": "من ال", "mel": "من ال"
+  },
+  "clitic_before_latin": {
+    "_comment": "Before a word kept in Latin (English), the Arabic part stays a separate word (SPELLING.md 4): el meeting -> ال meeting.",
+    "separate": true
+  },
+  "punctuation": {"?": "؟", ",": "،", ";": "؛"},
+  "letters": {
+    "_comment": "Longest match first. Digits inside words are letters (SPELLING.md 2). 2 is usually an etymological ق in Lebanese (2alle -> قلي); 8 is غ for many typists (8ali -> غالي).",
+    "sequences": {
+      "sh": "ش", "ch": "ش", "kh": "خ", "gh": "غ", "th": "ت", "3'": "غ", "7'": "خ",
+      "aa": "ا", "ee": "ي", "ei": "ي", "ay": "ي", "ai": "ي", "oo": "و", "ou": "و"
+    },
+    "consonants": {
+      "b": "ب", "t": "ت", "j": "ج", "g": "ج", "d": "د", "r": "ر", "z": "ز", "s": "س", "f": "ف",
+      "q": "ق", "k": "ك", "c": "ك", "l": "ل", "m": "م", "n": "ن", "h": "ه", "w": "و", "y": "ي",
+      "v": "ف", "p": "ب", "x": "كس",
+      "2": "ق", "3": "ع", "5": "خ", "6": "ط", "7": "ح", "8": "غ", "9": "ص"
+    },
+    "vowels": {
+      "initial": {"a": "أ", "e": "إ", "i": "إ", "o": "أ", "u": "أ"},
+      "medial": {"a": "", "e": "", "i": "ي", "o": "و", "u": "و"},
+      "final": {"a": "ا", "e": "ة", "i": "ي", "o": "و", "u": "و"},
+      "final_e_short_word": "ي",
+      "_short_word_comment": "Final e in words of 4 letters or fewer is usually 'my' (bade -> بدي); longer ones are usually feminine (kbire -> كبيرة)."
+    },
+    "word_endings": {
+      "_comment": "Checked before letter-by-letter conversion: the 'me / my' ending -ne/-ni is ني (sheyfne -> شايفني, kllfne -> كلفني).",
+      "ne": "ني", "ni": "ني"
+    },
+    "short_word_max_len": 4,
+    "collapse_doubled_consonants": true
+  }
+}

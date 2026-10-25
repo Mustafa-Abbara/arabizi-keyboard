@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Mustafa-Abbara/arabizi-keyboard/data/schema/pair.schema.json",
+  "title": "Arabizi pair",
+  "description": "One Lebanese Arabizi sentence and its Lebanese Arabic-script spelling (docs/SPELLING.md). One JSON object per line in data/pairs/*.jsonl. Documented in docs/DATA.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "arabizi", "arabic", "accepted", "method", "writer", "checked_by", "source", "split", "date"],
+  "properties": {
+    "id": {
+      "description": "Unique id. Prefix by method: hw = hand, rv = rule_variant, pb = public, ai = ai_checked.",
+      "type": "string",
+      "pattern": "^(hw|rv|pb|ai)-[0-9]{4,}$"
+    },
+    "arabizi": {
+      "description": "The Latin-script message, exactly as typed.",
+      "type": "string",
+      "minLength": 1
+    },
+    "arabic": {
+      "description": "The primary Arabic-script spelling, following docs/SPELLING.md.",
+      "type": "string",
+      "minLength": 1
+    },
+    "accepted": {
+      "description": "Row-specific accepted variants: primary text in `arabic` -> other accepted spellings. Global variants live in data/rules/accepted_variants.json.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1},
+        "minItems": 1
+      }
+    },
+    "method": {
+      "description": "How the pair was made (ADR 0010).",
+      "enum": ["hand", "rule_variant", "public", "ai_checked"]
+    },
+    "writer": {
+      "description": "Who wrote the Arabizi side: a person, a script name, or a provider/model for ai_checked.",
+      "type": "string",
+      "minLength": 1
+    },
+    "checked_by": {
+      "description": "Who checked the row, e.g. moustafa-delayed. null until checked.",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "source": {
+      "description": "hand-written, a dataset name (public), a generator name (rule_variant) or a prompt file (ai_checked).",
+      "type": "string",
+      "minLength": 1
+    },
+    "split": {
+      "enum": ["test", "dev", "train"]
+    },
+    "date": {
+      "description": "Date the row was written (YYYY-MM-DD).",
+      "type": "string",
+      "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]$"
+    },
+    "parent": {
+      "description": "rule_variant only: id of the train row this variant was made from.",
+      "type": "string",
+      "pattern": "^(hw|pb|ai)-[0-9]{4,}$"
+    }
+  }
+}
