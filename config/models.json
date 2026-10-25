@@ -1,0 +1,176 @@
+{
+  "_comment": "Pinned model files for B1 (P3) and the engine (P5). Fetched by scripts/fetch_models.py into models/ (never committed) and checked against sha256. Revisions and hashes from the Hugging Face API (metadata only), 14 Oct 2026. See docs/MODELS.md. Fine-tuned models (P4) have no Hugging Face repo: their file comes from the private Kaggle run (docs/TRAINING.md), `run` points to its train/runs/ file, and `prompt` is the exact rendered prompt the engine uses (ADR 0017/0018).",
+  "version": 1,
+  "models": [
+    {
+      "id": "qwen2.5-0.5b", "repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF", "revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+      "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf", "size": 491400032,
+      "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+      "params": "0.5B", "quant": "Q4_K_M", "licence": "Apache-2.0", "licence_acceptance": null,
+      "publisher": "Qwen (official)", "source": "roadmap"
+    },
+    {
+      "id": "qwen2.5-1.5b", "repo": "Qwen/Qwen2.5-1.5B-Instruct-GGUF", "revision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf", "size": 1117320736,
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "params": "1.5B", "quant": "Q4_K_M", "licence": "Apache-2.0", "licence_acceptance": null,
+      "publisher": "Qwen (official)", "source": "roadmap"
+    },
+    {
+      "id": "qwen3-0.6b", "repo": "unsloth/Qwen3-0.6B-GGUF", "revision": "50968a4468ef4233ed78cd7c3de230dd1d61a56b",
+      "file": "Qwen3-0.6B-Q4_K_M.gguf", "size": 396705472,
+      "sha256": "ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a",
+      "params": "0.6B", "quant": "Q4_K_M", "licence": "Apache-2.0", "licence_acceptance": null,
+      "publisher": "Unsloth (conversion of Qwen's official weights; Qwen publishes only Q8_0 GGUF for Qwen3)",
+      "source": "recommendation"
+    },
+    {
+      "id": "qwen3-1.7b", "repo": "unsloth/Qwen3-1.7B-GGUF", "revision": "d7f544eead698dbd1f15126ef60b45a1e1933222",
+      "file": "Qwen3-1.7B-Q4_K_M.gguf", "size": 1107409472,
+      "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+      "params": "1.7B", "quant": "Q4_K_M", "licence": "Apache-2.0", "licence_acceptance": null,
+      "publisher": "Unsloth (conversion of Qwen's official weights)", "source": "recommendation"
+    },
+    {
+      "id": "gemma3-1b", "repo": "bartowski/google_gemma-3-1b-it-GGUF", "revision": "116f76234503685a98f572982177b11d44ec8ff1",
+      "file": "google_gemma-3-1b-it-Q4_K_M.gguf", "size": 806058496,
+      "sha256": "12bf0fff8815d5f73a3c9b586bd8fee8e7b248c935de70dec367679873d0f29d",
+      "params": "1B", "quant": "Q4_K_M", "licence": "Gemma Terms of Use", "licence_acceptance": "gemma",
+      "publisher": "bartowski (conversion of Google's weights; the Gemma Terms of Use still apply)", "source": "roadmap"
+    },
+    {
+      "id": "llama3.2-1b", "repo": "bartowski/Llama-3.2-1B-Instruct-GGUF", "revision": "067b946cf014b7c697f3654f621d577a3e3afd1c",
+      "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf", "size": 807694464,
+      "sha256": "6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83",
+      "params": "1B", "quant": "Q4_K_M", "licence": "Llama 3.2 Community License", "licence_acceptance": "llama",
+      "publisher": "bartowski (conversion of Meta's weights; the Llama 3.2 Community License still applies)",
+      "source": "roadmap"
+    },
+    {
+      "id": "arabizi-llama3.2-1b-v1",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261016-051159-llama3.2-1b-lora.json",
+      "file": "arabizi-llama3.2-1b-v1-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "807121d8e05ac8fb2122a151646cb89bbc3fd8a57d81536eb4aca9e85560eb13",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA fine-tune of Llama 3.2 1B Instruct on Kaggle (ADR 0015); weights not in the repo (808 MB), may be published (ADR 0028)",
+      "source": "P4 fine-tuning",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-qwen3-1.7b-v1",
+      "base": "qwen3-1.7b",
+      "run": "train/runs/20261016-084514-qwen3-1.7b-lora.json",
+      "file": "arabizi-qwen3-1.7b-v1-Q4_K_M.gguf",
+      "size": 1107408608,
+      "sha256": "6da6b60ce924f65ca09c6c4312dfbfa3aa37694274d58478c1e4cc17f163b6eb",
+      "params": "1.7B",
+      "quant": "Q4_K_M",
+      "licence": "Apache-2.0",
+      "licence_acceptance": null,
+      "publisher": "this project: LoRA fine-tune of Qwen3-1.7B on Kaggle (ADR 0015); weights not in the repo (808 MB), may be published (ADR 0028)",
+      "source": "P4 fine-tuning",
+      "prompt": {
+            "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+            "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-rank32",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261016-152120-llama3.2-1b-lora-rank32.json",
+      "file": "arabizi-llama3.2-1b-rank32-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "88f917fd34c40328be258470df63b1ee1ff05410f94eb0dacf5bcb2971c139d1",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA sweep run of Llama 3.2 1B Instruct on Kaggle (TRAINING.md, Sweep); weights not in the repo (808 MB), may be published (ADR 0028)",
+      "source": "P4 sweep",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-lr1e-4",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261016-154840-llama3.2-1b-lora-lr1e-4.json",
+      "file": "arabizi-llama3.2-1b-lr1e-4-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "bfe7f0cf7e39bb46e51238d45f136427ae5649b9f5ccadc37d7d99212d8bd5da",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA sweep run of Llama 3.2 1B Instruct on Kaggle (TRAINING.md, Sweep); weights not in the repo (808 MB), may be published (ADR 0028)",
+      "source": "P4 sweep",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-ep2",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261016-161550-llama3.2-1b-lora-ep2.json",
+      "file": "arabizi-llama3.2-1b-ep2-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "c3ae5e544a09406f665310aa39d656c43cdfa40424df73dacdfa236465453e1d",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA sweep run of Llama 3.2 1B Instruct on Kaggle (TRAINING.md, Sweep); weights not in the repo (808 MB), may be published (ADR 0028)",
+      "source": "P4 sweep",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 16 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-v2",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261017-052446-llama3.2-1b-lora-v2.json",
+      "file": "arabizi-llama3.2-1b-v2-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "c7f760dcf1d8f0f58b2ed8c2012e5ecc2c042e956b58c03f48b1a515d2276b4b",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA fine-tune of Llama 3.2 1B Instruct on Kaggle with the real rows (ADR 0021); weights not in the repo (808 MB), may be published (ADR 0028)",
+      "source": "P4 real-rows run",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 17 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-v2-r16",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261017-065546-llama3.2-1b-lora-v2-r16.json",
+      "file": "arabizi-llama3.2-1b-v2-r16-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "5d08923453f4afacc0db4c4c16097c028c18f437dc33d00bf46ed87fc7bf78df",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA fine-tune of Llama 3.2 1B Instruct on Kaggle with the real rows (ADR 0021); weights not in the repo (808 MB), may be published (ADR 0028)",
+      "source": "P4 real-rows run",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 17 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    }
+  ]
+}
