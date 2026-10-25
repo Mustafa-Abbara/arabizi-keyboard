@@ -1,0 +1,20 @@
+{
+  "_comment": "Frozen held-out data (roadmap P2 step 4). `pairs validate` and CI fail if a listed file changes. Private files: hash and row count only, checked where they exist. Do not edit by hand: use `pairs freeze --version ... --reason ...` with the testset-change label (docs/DATA.md).",
+  "version": "testset-v1.1",
+  "frozen_on": "2026-10-25",
+  "reason": "All held-out rows made public (ADR 0028): the 130 private test and 56 private dev rows moved into the public files with source own-chat-published; the same 347 rows and splits, no text changed",
+  "previous_version": "testset-v1.0",
+  "unchecked_rows": 0,
+  "files": {
+    "public/test.jsonl": {
+      "sha256": "737420c7d7f9cf69a768701f6edc9c8de17d27b1a0f623aa328ee0557af0fcba",
+      "rows": 243,
+      "private": false
+    },
+    "public/dev.jsonl": {
+      "sha256": "08b3a640601ba74e07488c64f584f7661f8457eea68d84169828b1a5dddf3c8e",
+      "rows": 104,
+      "private": false
+    }
+  }
+}

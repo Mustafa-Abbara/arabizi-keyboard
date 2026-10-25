@@ -1,0 +1,20 @@
+{
+  "_comment": "Frozen \"others\" held-out set (ADR 0021): real messages by other people, scored with `evalrun ... --others`. `pairs validate` and CI fail if a listed file changes. Re-freeze with `pairs freeze --others --version ... --reason ...`.",
+  "version": "others-v1.1",
+  "frozen_on": "2026-10-17",
+  "reason": "SPELLING.md 4 applied to the references: Arabic prefixes written apart from Latin words (65 rows: 24 dev, 41 test), ADR 0024; same rows and splits",
+  "previous_version": "others-v1.0",
+  "unchecked_rows": 0,
+  "files": {
+    "others/test.jsonl": {
+      "sha256": "32287600ef00092a2961007da73253c3244a79c744f6a2cf5388019234f605ca",
+      "rows": 299,
+      "private": false
+    },
+    "others/dev.jsonl": {
+      "sha256": "8d4dbdbf40a37b7d911ea9b66482d7b79a61913e972055234d322453a2ef5349",
+      "rows": 200,
+      "private": false
+    }
+  }
+}

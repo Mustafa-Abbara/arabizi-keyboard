@@ -1,0 +1,47 @@
+{
+  "run_id": "20261014-133430-b1-qwen2.5-0.5b-0shot-dev",
+  "system": "b1-qwen2.5-0.5b-0shot",
+  "describe": {
+    "kind": "base model (no fine-tuning)",
+    "model": "qwen2.5-0.5b",
+    "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+    "params": "0.5B",
+    "quant": "Q4_K_M",
+    "licence": "Apache-2.0",
+    "shots": 0,
+    "few_shot_ids": [],
+    "prompt_version": 1,
+    "temperature": 0,
+    "runtime": "version: 0.6.0 (build 11429, commit d81235049)",
+    "load_seconds": 1.02,
+    "peak_rss_mb": 599.4
+  },
+  "split": "dev",
+  "subset": "all",
+  "private_sentences": 90,
+  "sentences": 105,
+  "data_sha256": "1acd2b9c8d7edece5aa6c9e888f9a0f4f4962952532b0ff1bade6ebfec7d0bc4",
+  "git_sha": "f59ecac-dirty",
+  "created": "2026-10-14T13:34:30",
+  "metrics": {
+    "sentences": 105,
+    "word_accuracy": 0.06315789473684211,
+    "word_accuracy_lenient": 0.06616541353383458,
+    "exact_match": 0.0,
+    "punctuation_match": 0.8476190476190476,
+    "cer": 0.7915863840719332,
+    "keep_latin_precision": 0.06274509803921569,
+    "keep_latin_recall": 0.3902439024390244,
+    "keep_latin_f1": 0.10810810810810811,
+    "number_preservation": 0.8571428571428571,
+    "msa_rewrite_rate": 0.009523809523809525,
+    "hallucination_rate": 0.3333333333333333,
+    "latency_ms_p50": 384.6897090006678,
+    "latency_ms_p95": 889.7697080010403,
+    "word_accuracy_ci95": [
+      0.04457652303120357,
+      0.08320498893911032
+    ]
+  }
+}

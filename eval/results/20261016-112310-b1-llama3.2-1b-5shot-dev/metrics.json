@@ -1,0 +1,57 @@
+{
+  "run_id": "20261016-112310-b1-llama3.2-1b-5shot-dev",
+  "system": "b1-llama3.2-1b-5shot",
+  "describe": {
+    "kind": "llm",
+    "model": "llama3.2-1b",
+    "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+    "sha256": "6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83",
+    "params": "1B",
+    "quant": "Q4_K_M",
+    "licence": "Llama 3.2 Community License",
+    "runtime": "llama.cpp llama-server",
+    "server": "managed",
+    "prompt_version": 1,
+    "shots": "5shot",
+    "shot_ids": [
+      "ai-0004",
+      "ai-0022",
+      "ai-0056",
+      "ai-0116",
+      "ai-0050"
+    ],
+    "shots_sha256_16": "81b9c7239b67e03b",
+    "decoding": "greedy (temperature 0, seed 0), max_tokens 10 per word + 32",
+    "postprocess": "<think> blocks removed; first non-empty line; wrapping quotes stripped",
+    "build_info": "b11429-d81235049",
+    "load_seconds": 1.53,
+    "peak_rss_mb": 971.1
+  },
+  "split": "dev",
+  "subset": "all",
+  "private_sentences": 56,
+  "sentences": 104,
+  "data_sha256": "68cd5195078e2d46a061fa522759b7264fc5ac6a74af95fa71d428e4b3a947ef",
+  "git_sha": "e4d082f-dirty",
+  "created": "2026-10-16T11:23:11",
+  "metrics": {
+    "sentences": 104,
+    "word_accuracy": 0.1661764705882353,
+    "word_accuracy_lenient": 0.1762114537444934,
+    "exact_match": 0.0,
+    "punctuation_match": 0.019230769230769232,
+    "cer": 0.5290113452188007,
+    "keep_latin_precision": 0.1276595744680851,
+    "keep_latin_recall": 0.2727272727272727,
+    "keep_latin_f1": 0.17391304347826086,
+    "number_preservation": 0.7142857142857143,
+    "msa_rewrite_rate": 0.028846153846153848,
+    "hallucination_rate": 0.4807692307692308,
+    "latency_ms_p50": 582.6664999995046,
+    "latency_ms_p95": 1109.7597500011034,
+    "word_accuracy_ci95": [
+      0.14075256107171003,
+      0.19115601661491988
+    ]
+  }
+}
