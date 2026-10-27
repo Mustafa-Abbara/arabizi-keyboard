@@ -21,7 +21,8 @@ cp "$PKG/Resources/Info.plist" "$APP/Contents/Info.plist"
 plutil -lint -s "$APP/Contents/Info.plist"
 swift "$PKG/Tools/make_icon.swift" "$APP/Contents/Resources/MenuIcon.tiff"
 # The keyboard's own rule converter (used when the engine service cannot answer) and the engine settings.
-cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$APP/Contents/Resources/"
+cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$ROOT/data/rules/spelling_options.json" \
+   "$APP/Contents/Resources/"
 cp "$ROOT/config/engine.json" "$ROOT/config/models.json" "$APP/Contents/Resources/"
 
 # The engine service: its executable, llama.framework, and everything it reads (the sandbox lets it read only its

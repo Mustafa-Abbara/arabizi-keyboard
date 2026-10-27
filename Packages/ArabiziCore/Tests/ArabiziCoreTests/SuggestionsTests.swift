@@ -51,17 +51,26 @@ func dictionary(_ arabic: [String]) -> [String: String] {
 
 @Test func alignmentIsByPositionWhenTheCountsMatch() {
     #expect(WordAlignment.align(latin: ["kifak", "ya", "sabiye"], shown: ["كيفك", "يا", "سبية"], rules: fakeRules)
-            == [0, 1, 2])
+            == [0..<1, 1..<2, 2..<3])
 }
 
 @Test func alignmentMatchesWordsWhenTheCountsDiffer() {
     // "w el bet" became one word; "kifak" and "sabiye" still line up.
     let shown = ["كيفك", "والبيت", "صبية"]
     let aligned = WordAlignment.align(latin: ["kifak", "w", "el", "bet", "sabiye"], shown: shown, rules: fakeRules)
-    #expect(aligned[0] == 0 && aligned[2] == 4)
+    #expect(aligned[0] == 0..<1 && aligned[2] == 4..<5)
     // A word kept in Latin lines up with itself.
     #expect(WordAlignment.align(latin: ["shefet", "el", "video"], shown: ["شفت", "الvideo-not", "video"],
-                                rules: fakeRules)[2] == 2)
+                                rules: fakeRules)[2] == 2..<3)
+}
+
+@Test func aShownWordCanComeFromARunOfTypedWords() {
+    // The rules write a small word joined to the next one: الشر comes from "el shr", never from "el" alone.
+    let rules: @Sendable (String) -> String = { ["el shr": "الشر", "el": "ال", "shr": "شر", "ma": "ما",
+                                                  "byswa": "بيسوى", "w el bet": "والبيت"][$0] ?? $0 }
+    #expect(WordAlignment.align(latin: ["el", "shr", "ma", "byswa"], shown: ["الشر", "ما", "بيسوى"], rules: rules)
+            == [0..<2, 2..<3, 3..<4])
+    #expect(WordAlignment.align(latin: ["w", "el", "bet"], shown: ["والبيت"], rules: rules) == [0..<3])
 }
 
 @Test func theStoreEncryptsKeepsAndExpiresCorrections() throws {
@@ -146,9 +155,12 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     _ = composer.handle(.suggest, context: Context(cursorAtLastConversion: true))
     // ← goes to the next word in reading order: none after the last word, so the key is swallowed.
     #expect(composer.handle(.arrowLeft) == .consume)
-    // → goes back: "يا" has no candidates, so it lands on "كيفك".
+    // → goes back one word at a time, also to a word with no candidates (it can still be spelled).
+    #expect(composer.handle(.arrowRight) == .suggest(marked: "كيفك يا سبية؟", selected: 5..<7,
+                                                     candidates: [], replacingLength: nil))
     #expect(composer.handle(.arrowRight) == .suggest(marked: "كيفك يا سبية؟", selected: 0..<4,
                                                      candidates: ["كيفيك"], replacingLength: nil))
+    #expect(composer.handle(.arrowRight) == .consume)  // no word before the first
     #expect(composer.handle(.escape) == .commit("كيفك يا سبية؟"))
     #expect(recorded.all.isEmpty)
 }
@@ -160,6 +172,15 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     #expect(composer.handle(.suggest, context: Context(cursorAtLastConversion: false)) == .consume)
     // The conversion is kept, so ⌥Tab still works once the cursor is back.
     #expect(composer.lastConversion != nil)
+}
+
+@Test func optionTabOpensOnTheLastWordEvenWithoutCandidates() {
+    var composer = suggestingComposer(Recorded())
+    for character in "ya" { _ = composer.handle(.text(String(character))) }
+    _ = composer.handle(.enter)  // converted to itself: no candidates for it
+    #expect(composer.handle(.suggest, context: Context(cursorAtLastConversion: true))
+            == .suggest(marked: "ya", selected: 0..<2, candidates: [], replacingLength: 2))
+    #expect(composer.isSuggesting)
 }
 
 @Test func typingALetterWhileSuggestingStartsANewWord() {
@@ -174,4 +195,26 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     let one = { (a: String, b: String) in Suggestions.oneEditApart(Array(a), Array(b)) }
     #expect(one("sabiye", "sabiyeh") && one("sabiye", "sabiy") && one("sabiye", "sabiya"))
     #expect(!one("sabiye", "sabiye") && !one("sabiye", "sabaya") && !one("sabiye", "sabiyeteh"))
+}
+
+@Test func pastFixesForTheSameTypedWordComeFirst() {
+    func fix(_ latin: String, _ chosen: String, _ day: Double) -> Correction {
+        Correction(latin: latin, chosen: chosen, rejected: "سبية", date: Date(timeIntervalSince1970: day * 86_400))
+    }
+    let past = [fix("sabiye", "صبية", 1), fix("Sabiye", "صبية", 2), fix("sabiye", "سابية", 3),
+                fix("kifak", "كيفك", 3), fix("sabiye", "سبية", 4)]
+    let offered = Suggestions.pastFixesFirst(past, latin: "sabiye?", shown: "سبية؟",
+                                             candidates: ["سابية", "صبيه", "sabiye", "a", "b"])
+    #expect(offered == ["صبية", "سابية", "صبيه", "sabiye", "a"])  // most often chosen first; no repeats; at most 5
+    #expect(!offered.contains("سبية"))  // never the word already shown
+    #expect(!offered.contains("كيفك"))  // another typed word's fix
+    #expect(Suggestions.pastFixesFirst(past, latin: nil, shown: "سبية", candidates: ["صبيه"]) == ["صبيه"])
+}
+
+@Test func aWordFromARunOfTypedWordsOffersSpellingsOfItsMainWord() {
+    let rules: @Sendable (String) -> String = { ["el shr": "الشر", "el": "ال", "shr": "شر"][$0] ?? $0 }
+    let suggestions = Suggestions(dictionary: ["shar": "شار"], rules: rules)
+    let offered = suggestions.candidates(for: "الشر", latin: "el shr")
+    #expect(offered.first == "الشار")  // the main word's spelling, with ال in front
+    #expect(!offered.contains("ال") && !offered.contains("الشر"))
 }

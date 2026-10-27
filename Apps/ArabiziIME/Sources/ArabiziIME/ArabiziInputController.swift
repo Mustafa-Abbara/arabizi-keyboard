@@ -41,20 +41,28 @@ final class ArabiziInputController: IMKInputController {
         let store = CorrectionStore.standard()
         let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
         log.info("suggestions ready; corrections \(store == nil ? "not recorded" : "recorded", privacy: .public)")
+        let spelling = try? SpellingOptions(rulesDirectory: resources, rules: rules)
+        if spelling == nil { log.error("spelling options not loaded") }
         return Suggester(
-            candidates: { shown, latin in suggestions.candidates(for: shown, latin: latin) },
+            candidates: { shown, latin in
+                suggestions.personalized(for: shown, latin: latin, past: store?.all() ?? [])
+            },
             align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
             record: { correction in
                 do { try store?.record(correction) } catch { log.error("correction not saved") }
-            })
+            },
+            spelling: spelling)
     }()
     private var composer = Composer(convert: ArabiziInputController.convert, suggester: ArabiziInputController.suggester)
     private let candidatesPanel = CandidatesPanel()
 
-    /// The candidate window under the selected word. InputMethodKit calls the controller on the main thread.
+    /// The candidate window under the selected word (hidden when there is nothing to offer). InputMethodKit calls
+    /// the controller on the main thread.
     private func showCandidates() {
+        guard !composer.currentCandidates.isEmpty else { return hideCandidates() }
         nonisolated(unsafe) let panel = candidatesPanel, server = server()
-        MainActor.assumeIsolated { panel.show(server: server) }
+        let candidates = composer.currentCandidates, spelling = composer.isSpelling, choice = composer.currentChoice
+        MainActor.assumeIsolated { panel.show(server: server, candidates: candidates, spelling: spelling, choice: choice) }
     }
 
     private func hideCandidates() {
@@ -95,6 +103,9 @@ final class ArabiziInputController: IMKInputController {
         let effect = composer.handle(key, context: context)
         if key.isCommand {
             log.notice("\(key.kind, privacy: .public) -> \(effect.kind, privacy: .public)")
+        }
+        if key == .arrowLeft || key == .arrowRight || key == .suggest, let word = composer.selectedWord {
+            log.notice("\(key.kind, privacy: .public): word \(word.index + 1, privacy: .public) of \(word.count, privacy: .public)")
         }
         return apply(effect, to: client, selection: selection)
     }
@@ -162,12 +173,14 @@ final class ArabiziInputController: IMKInputController {
         composer.currentCandidates
     }
 
-    /// A spelling clicked in the candidate window: the same as pressing its number.
+    /// A spelling clicked in the candidate window: the same as pressing its number. While spelling, a letter for
+    /// the last key (by its text: a number key would spell a letter there).
     override func candidateSelected(_ candidateString: NSAttributedString!) {
-        guard let picked = candidateString?.string, let client = client(),
-              let index = composer.currentCandidates.firstIndex(of: picked) else { return }
-        _ = apply(composer.handle(.text(String(index + 1))), to: client)
-        rememberConversionEnd(in: client)
+        guard let picked = candidateString?.string, let client = client() else { return }
+        let effect = composer.pick(picked)
+        guard effect != .consume else { return }
+        _ = apply(effect, to: client)
+        if !composer.isSuggesting { rememberConversionEnd(in: client) }
     }
 
     /// Called when focus moves away (click elsewhere, app switch) while composing.
@@ -204,18 +217,31 @@ final class ArabiziInputController: IMKInputController {
 /// The macOS candidate window (InputMethodKit), created on first use. It asks the controller for the spellings.
 final class CandidatesPanel {
     private var window: IMKCandidates?
+    /// What the window lists now: reloading it puts its highlight back on the first line, so it is reloaded only
+    /// when the list changes, not when ↓/↑ or Tab only move the highlight.
+    private var listed: (candidates: [String], spelling: Bool)?
 
-    @MainActor func show(server: IMKServer?) {
+    /// Spellings are picked with the keys 1–5. While spelling, digits are letters, so the window has no number
+    /// keys and highlights the letter chosen for the last key (Tab/⇧Tab and ↓/↑ move it).
+    @MainActor func show(server: IMKServer?, candidates: [String], spelling: Bool, choice: Int?) {
         if window == nil {
             window = IMKCandidates(server: server, panelType: kIMKSingleColumnScrollingCandidatePanel)
-            window?.setSelectionKeys([18, 19, 20, 21, 23].map { NSNumber(value: $0) })  // the keys 1–5
         }
-        window?.update()
-        window?.show(kIMKLocateCandidatesBelowHint)
+        guard let window else { return }
+        if listed?.candidates != candidates || listed?.spelling != spelling {
+            window.setSelectionKeys(spelling ? [] : [18, 19, 20, 21, 23].map { NSNumber(value: $0) })  // the keys 1–5
+            window.update()
+            listed = (candidates, spelling)
+        }
+        window.show(kIMKLocateCandidatesBelowHint)
+        if let choice {
+            window.selectCandidate(withIdentifier: window.candidateIdentifier(atLineNumber: choice))
+        }
     }
 
     @MainActor func hide() {
         window?.hide()
+        listed = nil
     }
 }
 
@@ -223,6 +249,7 @@ final class CandidatesPanel {
 extension Key {
     var isCommand: Bool {
         self == .enter || self == .undo || self == .convertSelection || self == .escape || self == .suggest
+            || self == .arrowDown || self == .arrowUp || self == .tab || self == .backtab
     }
     var kind: String { "\(self)".prefix(while: { $0 != "(" }).description }
 }
@@ -233,7 +260,7 @@ extension Effect {
 
 extension Key {
     /// macOS virtual key codes: 36 Return, 76 keypad Enter, 51 Delete (backspace), 53 Escape, 48 Tab,
-    /// 123 ← and 124 →.
+    /// 123 ←, 124 →, 125 ↓ and 126 ↑.
     init(_ event: NSEvent) {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let isReturn = event.keyCode == 36 || event.keyCode == 76
@@ -249,8 +276,16 @@ extension Key {
             self = .suggest
             return
         }
+        if event.keyCode == 48, modifiers.isEmpty || modifiers == .shift {
+            self = modifiers.isEmpty ? .tab : .backtab
+            return
+        }
         if modifiers.isEmpty, event.keyCode == 123 || event.keyCode == 124 {
             self = event.keyCode == 123 ? .arrowLeft : .arrowRight
+            return
+        }
+        if modifiers.isEmpty, event.keyCode == 125 || event.keyCode == 126 {
+            self = event.keyCode == 125 ? .arrowDown : .arrowUp
             return
         }
         if !modifiers.isDisjoint(with: [.command, .control, .option]) {

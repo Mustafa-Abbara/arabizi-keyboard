@@ -16,7 +16,13 @@ public enum Key: Equatable, Sendable {
     /// ← and → (they move between words while suggestions are shown).
     case arrowLeft
     case arrowRight
-    /// Anything else: arrows, Tab, shortcuts with Command/Control/Option.
+    /// Tab and ⇧Tab (they change the last letter while a word is spelled; otherwise like `other`).
+    case tab
+    case backtab
+    /// ↓ and ↑ (they move through the candidate window while it is shown; otherwise like `other`).
+    case arrowDown
+    case arrowUp
+    /// Anything else: other keys, shortcuts with Command/Control/Option.
     case other
 }
 
@@ -63,21 +69,24 @@ public enum Effect: Equatable, Sendable {
 }
 
 /// What suggestions need from the outside (ADR 0027): spellings for a word, which typed word each shown word
-/// came from, and where a correction goes.
+/// came from, where a correction goes, and the letters for spelling a word (nil: no spelling).
 public struct Suggester: Sendable {
     public let candidates: @Sendable (_ shown: String, _ latin: String?) -> [String]
-    public let align: @Sendable (_ latin: [String], _ shown: [String]) -> [Int?]
+    public let align: @Sendable (_ latin: [String], _ shown: [String]) -> [Range<Int>?]
     public let record: @Sendable (Correction) -> Void
     public let now: @Sendable () -> Date
+    public let spelling: SpellingOptions?
 
     public init(candidates: @escaping @Sendable (String, String?) -> [String],
-                align: @escaping @Sendable ([String], [String]) -> [Int?],
+                align: @escaping @Sendable ([String], [String]) -> [Range<Int>?],
                 record: @escaping @Sendable (Correction) -> Void,
-                now: @escaping @Sendable () -> Date = { Date() }) {
+                now: @escaping @Sendable () -> Date = { Date() },
+                spelling: SpellingOptions? = nil) {
         self.candidates = candidates
         self.align = align
         self.record = record
         self.now = now
+        self.spelling = spelling
     }
 }
 
@@ -86,10 +95,14 @@ struct SuggestionSession: Equatable {
     let latin: String
     let latinWords: [String]
     var words: [String]
-    let alignment: [Int?]
+    let alignment: [Range<Int>?]
     var index: Int
     var candidates: [String]
     let original: String
+    /// Set while the selected word is spelled letter by letter (⌥Tab a second time).
+    var speller: Speller?
+    /// The candidate moved to with ↓/↑ (Enter takes it); nil until an arrow is pressed.
+    var highlighted: Int?
 
     var text: String { words.joined(separator: " ") }
 
@@ -99,7 +112,8 @@ struct SuggestionSession: Equatable {
         return start..<(start + words[index].utf16.count)
     }
 
-    func latinWord(_ i: Int) -> String? { alignment[i].map { latinWords[$0] } }
+    /// The typed words shown word `i` came from (one, or a run like `el shr` for الشر).
+    func latinWord(_ i: Int) -> String? { alignment[i].map { latinWords[$0].joined(separator: " ") } }
 }
 
 /// The last conversion, kept for exactly one key press so ⌘Z can bring the Latin back.
@@ -114,8 +128,14 @@ public struct Composer {
     public private(set) var lastConversion: Conversion?
     /// True while suggestions are shown.
     public var isSuggesting: Bool { session != nil }
-    /// The spellings currently offered (for the candidate window).
-    public var currentCandidates: [String] { session?.candidates ?? [] }
+    /// Which word is selected while suggestions are shown, and of how many (for logs: positions only, no text).
+    public var selectedWord: (index: Int, count: Int)? { session.map { ($0.index, $0.words.count) } }
+    /// True while the selected word is spelled letter by letter.
+    public var isSpelling: Bool { session?.speller != nil }
+    /// The spellings currently offered (for the candidate window); while spelling, the letters for the last key.
+    public var currentCandidates: [String] { session?.speller?.labels ?? session?.candidates ?? [] }
+    /// Which of `currentCandidates` is highlighted now (the letter chosen while spelling, or the one moved to with ↓/↑).
+    public var currentChoice: Int? { session?.speller != nil ? session?.speller?.choice : session?.highlighted }
     private var session: SuggestionSession?
     private let convert: @Sendable (String) -> String
     private let suggester: Suggester?
@@ -173,9 +193,21 @@ public struct Composer {
             session = started
             return .suggest(marked: started.text, selected: started.selected, candidates: started.candidates,
                             replacingLength: previous.converted.utf16.count)
-        case .arrowLeft, .arrowRight, .other:
+        case .arrowLeft, .arrowRight, .arrowDown, .arrowUp, .tab, .backtab, .other:
             return buffer.isEmpty ? .pass : .commitAndPass(take())
         }
+    }
+
+    /// A spelling (or, while spelling, a letter) clicked in the candidate window.
+    public mutating func pick(_ candidate: String) -> Effect {
+        guard var current = session else { return .pass }
+        if current.speller != nil {
+            guard current.speller?.choose(candidate) == true else { return .consume }
+            session = current
+            return spellingEffect(current)
+        }
+        guard let index = current.candidates.firstIndex(of: candidate) else { return .consume }
+        return handle(.text(String(index + 1)))
     }
 
     private func startSuggesting(_ conversion: Conversion) -> SuggestionSession? {
@@ -185,66 +217,148 @@ public struct Composer {
         let alignment = suggester.align(latinWords, words)
         var session = SuggestionSession(latin: conversion.latin, latinWords: latinWords, words: words,
                                         alignment: alignment, index: 0, candidates: [], original: conversion.converted)
-        // Start on the last word that has candidates (the one just typed is the usual suspect).
-        for i in words.indices.reversed() where words[i].contains(where: \.isLetter) {
-            let offered = suggester.candidates(words[i], session.latinWord(i))
-            if !offered.isEmpty {
-                session.index = i
-                session.candidates = offered
-                return session
-            }
-        }
-        return nil
+        // Start on the last word (the one just typed is the usual suspect), even without candidates: any word
+        // can be spelled.
+        guard let last = words.indices.last(where: { words[$0].contains(where: \.isLetter) }) else { return nil }
+        session.index = last
+        session.candidates = suggester.candidates(words[last], session.latinWord(last))
+        return session
     }
 
     private mutating func handleSuggestion(_ key: Key) -> Effect {
         guard var current = session, let suggester else { return .pass }
+        if current.speller != nil {
+            return handleSpelling(key, current, suggester)
+        }
         func finish(_ text: String) -> String {
             session = nil
             lastConversion = Conversion(latin: current.latin, converted: text)  // ⌘Z and ⌥Tab still work
             return text
         }
+        func take(_ chosen: String) -> Effect {
+            let parts = WordParts(current.words[current.index])
+            if let latin = current.latinWord(current.index) {
+                suggester.record(Correction(latin: WordParts(latin).core, chosen: chosen, rejected: parts.core,
+                                            date: suggester.now()))
+            }
+            current.words[current.index] = parts.with(chosen)
+            return .commit(finish(current.text))
+        }
         switch key {
         case .text(let character):
-            if let number = Int(character), (1...current.candidates.count).contains(number) {
-                let shown = current.words[current.index]
-                let parts = WordParts(shown)
-                let chosen = current.candidates[number - 1]
-                if let latin = current.latinWord(current.index) {
-                    suggester.record(Correction(latin: WordParts(latin).core, chosen: chosen, rejected: parts.core,
-                                                date: suggester.now()))
-                }
-                current.words[current.index] = parts.with(chosen)
-                return .commit(finish(current.text))
+            if let number = Int(character), number >= 1, number <= current.candidates.count {
+                return take(current.candidates[number - 1])
             }
             let text = finish(current.text)
             if character == " " { return .commitAndPass(text) }
             buffer = character
             return .commitAndCompose(text, marked: buffer)
         case .arrowLeft, .arrowRight:
-            // Arabic runs right to left: ← moves to the next word, → to the previous one.
+            // Arabic runs right to left: ← moves to the next word, → to the previous one. Every word with letters
+            // can be selected (spelled with ⌥Tab when nothing is offered); numbers and emoji are skipped.
             let step = key == .arrowLeft ? 1 : -1
             var i = current.index + step
             while current.words.indices.contains(i) {
-                let offered = current.words[i].contains(where: \.isLetter)
-                    ? suggester.candidates(current.words[i], current.latinWord(i)) : []
-                if !offered.isEmpty {
+                if current.words[i].contains(where: \.isLetter) {
                     current.index = i
-                    current.candidates = offered
+                    current.highlighted = nil
+                    current.candidates = suggester.candidates(current.words[i], current.latinWord(i))
                     session = current
-                    return .suggest(marked: current.text, selected: current.selected, candidates: offered,
+                    return .suggest(marked: current.text, selected: current.selected, candidates: current.candidates,
                                     replacingLength: nil)
                 }
                 i += step
             }
             return .consume
+        case .arrowDown, .arrowUp:
+            // Move through the spellings (round), shown in place of the word; Enter takes it, Esc restores it.
+            let count = current.candidates.count
+            var shown = current
+            if count > 0 {
+                let from = current.highlighted ?? (key == .arrowDown ? -1 : count)
+                let highlighted = ((from + (key == .arrowDown ? 1 : -1)) % count + count) % count
+                current.highlighted = highlighted
+                session = current
+                shown = current
+                shown.words[shown.index] = WordParts(shown.words[shown.index]).with(current.candidates[highlighted])
+            }
+            return .suggest(marked: shown.text, selected: shown.selected, candidates: current.candidates,
+                            replacingLength: nil)
         case .escape:
             return .commit(finish(current.original))
-        case .enter, .suggest, .undo, .convertSelection:
+        case .suggest:
+            // ⌥Tab a second time: spell the selected word letter by letter.
+            guard let spelling = suggester.spelling else { return .commit(finish(current.text)) }
+            current.speller = Speller(spelling)
+            session = current
+            return spellingEffect(current)
+        case .enter:
+            if let highlighted = current.highlighted { return take(current.candidates[highlighted]) }
             return .commit(finish(current.text))
-        case .backspace, .other:
+        case .undo, .convertSelection:
+            return .commit(finish(current.text))
+        case .backspace, .tab, .backtab, .other:
             return .commitAndPass(finish(current.text))
         }
+    }
+
+    /// Keys while a word is spelled: letters and digits spell, Tab/⇧Tab or ↓/↑ change the last letter, Enter takes
+    /// the word (and records it), Esc or Backspace on an empty word go back to the suggestions.
+    private mutating func handleSpelling(_ key: Key, _ start: SuggestionSession, _ suggester: Suggester) -> Effect {
+        var current = start
+        guard var speller = current.speller else { return .pass }
+        func backToSuggestions() -> Effect {
+            current.speller = nil
+            session = current
+            return .suggest(marked: current.text, selected: current.selected, candidates: current.candidates,
+                            replacingLength: nil)
+        }
+        func finish(_ text: String) -> String {
+            session = nil
+            lastConversion = Conversion(latin: current.latin, converted: text)
+            return text
+        }
+        switch key {
+        case .text(let character):
+            guard speller.type(character) else { return .consume }
+        case .tab, .arrowDown:
+            speller.cycle(1)
+        case .backtab, .arrowUp:
+            speller.cycle(-1)
+        case .backspace:
+            if speller.isEmpty { return backToSuggestions() }
+            speller.backspace()
+        case .escape:
+            return backToSuggestions()
+        case .enter:
+            guard !speller.arabic.isEmpty else { return backToSuggestions() }
+            let parts = WordParts(current.words[current.index])
+            if speller.arabic != parts.core, let latin = current.latinWord(current.index) {
+                suggester.record(Correction(latin: WordParts(latin).core, chosen: speller.arabic, rejected: parts.core,
+                                            date: suggester.now()))
+            }
+            current.words[current.index] = parts.with(speller.arabic)
+            return .commit(finish(current.text))
+        case .suggest, .arrowLeft, .arrowRight:
+            break
+        case .undo, .convertSelection:
+            return .commit(finish(current.text))
+        case .other:
+            return .commitAndPass(finish(current.text))
+        }
+        current.speller = speller
+        session = current
+        return spellingEffect(current)
+    }
+
+    /// The text with the word being spelled in place of the selected word (the old word until a key is typed).
+    private func spellingEffect(_ current: SuggestionSession) -> Effect {
+        var shown = current
+        if let speller = current.speller, !speller.isEmpty {
+            shown.words[shown.index] = WordParts(shown.words[shown.index]).with(speller.arabic)
+        }
+        return .suggest(marked: shown.text, selected: shown.selected, candidates: current.speller?.labels ?? [],
+                        replacingLength: nil)
     }
 
     /// Focus moved away while composing: return the Latin text so it is committed unchanged, never converted.

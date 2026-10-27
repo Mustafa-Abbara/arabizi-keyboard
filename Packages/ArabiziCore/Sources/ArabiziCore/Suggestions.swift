@@ -49,6 +49,28 @@ public struct Suggestions: Sendable {
         (try? JSONDecoder().decode(LexiconWords.self, from: lexicon))?.words ?? [:]
     }
 
+    /// The user's own earlier fixes for the same typed word come first (most often chosen, then most recent),
+    /// then `candidates`; the word already shown is never offered.
+    public static func pastFixesFirst(_ past: [Correction], latin: String?, shown: String, candidates: [String],
+                                      limit: Int = 5) -> [String] {
+        let word = WordParts(shown).core
+        var fixes: [String: (count: Int, last: Date)] = [:]
+        if let latin {
+            let typed = WordParts(latin).core.lowercased()
+            for fix in past where fix.latin.lowercased() == typed && fix.chosen != word {
+                let seen = fixes[fix.chosen]
+                fixes[fix.chosen] = ((seen?.count ?? 0) + 1, max(seen?.last ?? fix.date, fix.date))
+            }
+        }
+        let own = fixes.sorted { $0.value.count != $1.value.count ? $0.value.count > $1.value.count
+                                                                   : $0.value.last > $1.value.last }.map(\.key)
+        var out: [String] = []
+        for candidate in own + candidates where candidate != word && !out.contains(candidate) {
+            out.append(candidate)
+        }
+        return Array(out.prefix(limit))
+    }
+
     public func candidates(for shown: String, latin: String?, limit: Int = 5) -> [String] {
         let word = WordParts(shown).core
         var out: [String] = []
@@ -56,6 +78,22 @@ public struct Suggestions: Sendable {
             if !candidate.isEmpty, candidate != word, !out.contains(candidate) { out.append(candidate) }
         }
         let latinCore = latin.map { WordParts($0).core }
+        // A word written from a run of typed words (el shr -> الشر): the spellings of its last, main word, with the
+        // small words' Arabic in front (الشار), first.
+        if let typedWords = latinCore?.split(separator: " ").map(String.init), typedWords.count > 1,
+           let main = typedWords.last {
+            let mainRuled = WordParts(rules(main)).core, runRuled = WordParts(rules(typedWords.joined(separator: " "))).core
+            if runRuled.hasSuffix(mainRuled), !mainRuled.isEmpty {
+                let prefix = String(runRuled.dropLast(mainRuled.count))
+                if !prefix.isEmpty, word.hasPrefix(prefix) {
+                    let stem = String(word.dropFirst(prefix.count))
+                    for candidate in candidates(for: stem, latin: main, limit: limit)
+                    where candidate.unicodeScalars.contains(where: Self.isArabicLetter) {
+                        add(prefix + candidate)
+                    }
+                }
+            }
+        }
         if let latinCore, !latinCore.isEmpty {
             let ruled = WordParts(rules(latinCore)).core
             if ruled.unicodeScalars.contains(where: Self.isArabicLetter) { add(ruled) }
@@ -153,34 +191,54 @@ public struct Suggestions: Sendable {
 
 /// Which typed word each shown word came from, so a correction is recorded against the right Arabizi word.
 public enum WordAlignment {
-    /// For each word of `shown` (Arabic), the index of the Latin word it came from, or nil. Same counts: by
-    /// position. Otherwise the best in-order matching by how close the rules' spelling of each Latin word is.
-    public static func align(latin: [String], shown: [String], rules: (String) -> String) -> [Int?] {
-        if latin.count == shown.count { return Array(latin.indices) }
-        let ruled = latin.map { WordParts(rules(WordParts($0).core)).core }
+    /// The longest run of typed words one shown word can come from (`w el bet` -> والبيت).
+    static let maxRun = 3
+
+    /// For each word of `shown` (Arabic), the typed (Latin) words it came from, or nil. Same counts: one by one,
+    /// by position. Otherwise the best in-order matching by how close the rules' spelling is, where a shown word
+    /// may come from a run of typed words that the rules write as one word (`el shr` -> الشر).
+    public static func align(latin: [String], shown: [String], rules: (String) -> String) -> [Range<Int>?] {
+        if latin.count == shown.count { return latin.indices.map { $0..<($0 + 1) } }
         let typed = latin.map { WordParts($0).core.lowercased() }
         let cores = shown.map { WordParts($0).core }
         let n = latin.count, m = shown.count
-        func score(_ i: Int, _ j: Int) -> Double {
-            if cores[j].lowercased() == typed[i] { return 1 }  // kept in Latin
-            return similarity(ruled[i], cores[j])
+        // ruled[i][k]: the rules' spelling of latin[i ..< i+k+1], or nil when it is not one word.
+        let ruled: [[String?]] = latin.indices.map { i in
+            (1...maxRun).map { length in
+                guard i + length <= n else { return nil }
+                let out = WordParts(rules(latin[i..<(i + length)].map { WordParts($0).core }.joined(separator: " "))).core
+                return length == 1 || !out.contains(" ") ? out : nil
+            }
+        }
+        func score(_ i: Int, _ length: Int, _ j: Int) -> Double {
+            if length == 1 && cores[j].lowercased() == typed[i] { return 1 }  // kept in Latin
+            guard let out = ruled[i][length - 1] else { return 0 }
+            return similarity(out, cores[j])
         }
         var best = Array(repeating: Array(repeating: 0.0, count: m + 1), count: n + 1)
         for i in stride(from: n - 1, through: 0, by: -1) {
             for j in stride(from: m - 1, through: 0, by: -1) {
-                let s = score(i, j)
-                best[i][j] = max(best[i + 1][j], best[i][j + 1], s >= 0.4 ? s + best[i + 1][j + 1] : 0)
+                var value = max(best[i + 1][j], best[i][j + 1])
+                for length in 1...maxRun where i + length <= n {
+                    let s = score(i, length, j)
+                    if s >= 0.4 { value = max(value, s + best[i + length][j + 1]) }
+                }
+                best[i][j] = value
             }
         }
-        var result = [Int?](repeating: nil, count: m)
+        var result = [Range<Int>?](repeating: nil, count: m)
         var i = 0, j = 0
-        while i < n && j < m {
-            let s = score(i, j)
-            if s >= 0.4 && best[i][j] == s + best[i + 1][j + 1] {
-                result[j] = i
-                i += 1
-                j += 1
-            } else if best[i][j] == best[i + 1][j] {
+        walk: while i < n && j < m {
+            for length in (1...maxRun).reversed() where i + length <= n {  // the longer run when equal
+                let s = score(i, length, j)
+                if s >= 0.4 && best[i][j] == s + best[i + length][j + 1] {
+                    result[j] = i..<(i + length)
+                    i += length
+                    j += 1
+                    continue walk
+                }
+            }
+            if best[i][j] == best[i + 1][j] {
                 i += 1
             } else {
                 j += 1
