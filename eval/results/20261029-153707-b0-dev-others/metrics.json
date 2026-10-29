@@ -1,0 +1,49 @@
+{
+  "run_id": "20261029-153707-b0-dev-others",
+  "system": "b0",
+  "describe": {
+    "kind": "rules",
+    "rules_version": 1,
+    "lexicon_words": 22307,
+    "lexicon_keep_latin": 1833,
+    "lexicon_built_from": {
+      "rows": 46418,
+      "aligned_rows": 41036,
+      "by_method": {
+        "ai_checked": 2000,
+        "hand": 16039,
+        "rule_variant": 28379
+      },
+      "row_ids_sha256_16": "8c248cd6e68fc6e1",
+      "min_share": 0.5
+    }
+  },
+  "split": "dev",
+  "subset": "all",
+  "set": "others",
+  "private_sentences": 0,
+  "sentences": 200,
+  "data_sha256": "8d4dbdbf40a37b7d911ea9b66482d7b79a61913e972055234d322453a2ef5349",
+  "git_sha": "5ed78d8-dirty",
+  "created": "2026-10-29T15:37:07",
+  "metrics": {
+    "sentences": 200,
+    "word_accuracy": 0.7349342999546896,
+    "word_accuracy_lenient": 0.7381060262800181,
+    "exact_match": 0.07,
+    "punctuation_match": 0.26,
+    "cer": 0.09809237920015493,
+    "keep_latin_precision": 1.0,
+    "keep_latin_recall": 0.7153846153846154,
+    "keep_latin_f1": 0.8340807174887892,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.0,
+    "hallucination_rate": 0.0,
+    "latency_ms_p50": 0.034978998883161694,
+    "latency_ms_p95": 0.06541599941556342,
+    "word_accuracy_ci95": [
+      0.7153384591508128,
+      0.7546646372125212
+    ]
+  }
+}
