@@ -22,7 +22,7 @@ plutil -lint -s "$APP/Contents/Info.plist"
 swift "$PKG/Tools/make_icon.swift" "$APP/Contents/Resources/MenuIcon.tiff"
 # The keyboard's own rule converter (used when the engine service cannot answer) and the engine settings.
 cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$ROOT/data/rules/spelling_options.json" \
-   "$APP/Contents/Resources/"
+   "$ROOT/data/rules/english_stopwords.json" "$APP/Contents/Resources/"
 cp "$ROOT/config/engine.json" "$ROOT/config/models.json" "$APP/Contents/Resources/"
 
 # The engine service: its executable, llama.framework, and everything it reads (the sandbox lets it read only its
@@ -32,7 +32,8 @@ cp "$XPC_BIN_DIR/ArabiziEngineXPC" "$XPC/Contents/MacOS/ArabiziEngineXPC"
 cp "$XPC_PKG/Resources/Info.plist" "$XPC/Contents/Info.plist"
 plutil -lint -s "$XPC/Contents/Info.plist"
 cp -R "$XPC_BIN_DIR/llama.framework" "$XPC/Contents/Frameworks/"
-cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$XPC/Contents/Resources/"
+cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$ROOT/data/rules/english_stopwords.json" \
+   "$XPC/Contents/Resources/"
 cp "$ROOT/config/engine.json" "$ROOT/config/models.json" "$XPC/Contents/Resources/"
 MODEL_FILE="$(python3 - "$ROOT/config" <<'EOF'
 import json, sys

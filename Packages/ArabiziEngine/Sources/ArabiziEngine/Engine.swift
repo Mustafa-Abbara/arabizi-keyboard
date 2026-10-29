@@ -6,7 +6,8 @@ import Foundation
 
 /// The conversion engine (roadmap P5): one request in, one response out, never an error.
 ///
-/// 1. Text with no Latin letter is returned unchanged (`passthrough`).
+/// 1. Text with no Latin letter, and text that is plain English (EnglishGuard, ADR 0031), is returned unchanged
+///    (`passthrough`).
 /// 2. No usable model (switched off, file missing, wrong SHA-256, failed to load) or input longer than
 ///    `max_input_chars`: the rule converter answers (`fallbackModelUnavailable`).
 /// 3. Otherwise links, emails, mentions and standalone numbers become placeholders (ProtectedSpans), the
@@ -17,7 +18,8 @@ import Foundation
 /// 4. When the only failure is Latin the input did not have, the answer is first repaired token by token (ADR 0023):
 ///    a mixed token such as `الvideo` is split (`ال video`, SPELLING.md 4), any other is replaced by the rule
 ///    conversion of the one input word it came from. A repaired answer that passes every check is the result
-///    (`model`); otherwise the rules answer.
+///    (`model`); otherwise the rules answer. A word that cannot be traced to one input word is replaced by the rule
+///    conversion of the input word in the same position, when the answer has as many words as the input.
 ///
 /// Never logs the text it converts.
 public final class Engine: @unchecked Sendable {  // immutable after init; the generator serialises its own calls
@@ -34,13 +36,16 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     private let rules: RuleConverter
     private let generator: (any TextGenerator)?
     private let template: PromptTemplate?
+    private let englishGuard: EnglishGuard?
     /// Step 4 (token repair, ADR 0023); off only to measure what it adds (arabizi-cli --no-repair).
     public let repairTokens: Bool
 
     /// For tests and hosts that build the parts themselves.
     public init(config: EngineConfig, rules: RuleConverter, generator: (any TextGenerator)?,
-                template: PromptTemplate?, modelState: ModelState, repairTokens: Bool = true) {
+                template: PromptTemplate?, modelState: ModelState, repairTokens: Bool = true,
+                englishGuard: EnglishGuard? = nil) {
         self.config = config
+        self.englishGuard = englishGuard
         self.rules = rules
         self.generator = generator
         self.template = template
@@ -60,13 +65,15 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     public static func load(config: EngineConfig, rulesDirectory: URL, modelsDirectory: URL,
                             verifyModelHash: Bool = true, repairTokens: Bool = true) throws -> Engine {
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
+        let english = EnglishGuard(rulesDirectory: rulesDirectory, rules: rules)
         guard let model = config.model else {
-            return Engine(config: config, rules: rules, generator: nil, template: nil, modelState: .off)
+            return Engine(config: config, rules: rules, generator: nil, template: nil, modelState: .off,
+                          englishGuard: english)
         }
         let path = modelsDirectory.appending(path: model.file)
         func unavailable(_ reason: String) -> Engine {
             Engine(config: config, rules: rules, generator: nil, template: nil,
-                   modelState: .unavailable(id: model.id, reason: reason))
+                   modelState: .unavailable(id: model.id, reason: reason), englishGuard: english)
         }
         guard FileManager.default.fileExists(atPath: path.path) else {
             return unavailable("model file not found: \(model.file)")
@@ -82,7 +89,7 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
             let generator = try LlamaModel(path: path.path, settings: settings)
             return Engine(config: config, rules: rules, generator: generator,
                           template: PromptTemplate(prefix: model.promptPrefix, suffix: model.promptSuffix),
-                          modelState: .ready(id: model.id), repairTokens: repairTokens)
+                          modelState: .ready(id: model.id), repairTokens: repairTokens, englishGuard: english)
         } catch {
             return unavailable("model failed to load: \(error)")
         }
@@ -104,6 +111,10 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         }
         let text = request.text
         guard text.unicodeScalars.contains(where: { $0.isASCII && $0.properties.isAlphabetic }) else {
+            return respond(text, .passthrough)
+        }
+        if let englishGuard, englishGuard.isEnglish(text) {
+            reason = "english"
             return respond(text, .passthrough)
         }
         guard let generator, let template else {
@@ -173,9 +184,11 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         let inputWords = input.split(whereSeparator: \.isWhitespace).map { core(of: String($0)).core.lowercased() }
             .filter { !$0.contains("⟦") }
         let allowed = Set(inputWords)
+        let inputTokens = input.split(whereSeparator: \.isWhitespace).map(String.init)
+        let answerTokens = answer.split(whereSeparator: \.isWhitespace).map(String.init)
         var repaired = 0
         var output: [String] = []
-        for word in answer.split(whereSeparator: \.isWhitespace).map(String.init) {
+        for (position, word) in answerTokens.enumerated() {
             let (lead, core, trail) = core(of: word)
             guard core.unicodeScalars.contains(where: isLatinLetter), !OutputChecks.isInputWord(core, allowed) else {
                 output.append(word)
@@ -187,8 +200,15 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
                 output.append("\(lead)\(match.1) \(match.2)\(trail)")
             } else {
                 let sources = Set(inputWords.filter { !latin.isEmpty && $0.contains(latin) })
-                guard sources.count == 1, let source = sources.first else { return nil }
-                output.append(lead + rules.convert(source) + trail)
+                if sources.count == 1, let source = sources.first {
+                    output.append(lead + rules.convert(source) + trail)
+                } else if answerTokens.count == inputTokens.count,
+                          case let same = Self.core(of: inputTokens[position]).core.lowercased(),
+                          !same.contains("⟦"), same.unicodeScalars.contains(where: isLatinLetter) {
+                    output.append(lead + rules.convert(same) + trail)  // the input word in the same position
+                } else {
+                    return nil
+                }
             }
             repaired += 1
         }
