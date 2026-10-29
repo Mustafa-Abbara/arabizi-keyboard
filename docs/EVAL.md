@@ -158,6 +158,19 @@ Full tables and the decision: [ADR 0022](decisions/0022-model-v2-real-rows.md) (
 
 `v2` − `v1` (paired): **+0.037 [+0.015, +0.059]** on frozen test and **+0.144 [+0.125, +0.163]** on others test. Raw `v2`: 0.826 frozen, 0.802 others. Public frozen-test rows: `v2` 0.803 raw, 0.794 protected. Others-set runs are public and committed (`eval/results/20261017-*-others`).
 
+### v3: second friends-and-family batch, test sets run once (29 Oct 2026)
+
+Decision and training: [ADR 0030](decisions/0030-model-v3.md). Each system was run once per test set; the v2 rows are the recorded 17 Oct runs, the others-test v2 row rescored on the current set (`others-v1.1`).
+
+| System | Frozen test (243) | Others test (299) |
+|---|---|---|
+| **v3, keyboard engine** (`engine-arabizi-llama3.2-1b-v3-kb`) | **0.836** [0.815, 0.857] | **0.826** [0.811, 0.840] |
+| v3, model only (`ft-arabizi-llama3.2-1b-v3`) | 0.836 [0.816, 0.857] | 0.827 [0.813, 0.842] |
+| v2, protected spans (`v2-protect`) | 0.820 [0.80, 0.84] | 0.792 |
+| v2, model only | 0.826 [0.805, 0.848] | 0.802 (`others-v1.0`) |
+
+Paired word accuracy, v3 engine − v2: **+0.034 [+0.021, +0.047]** on others test (against v2 protected spans, same set); **+0.016 [−0.001, +0.033]** on frozen test against v2 protected spans and **+0.009 [−0.007, +0.026]** against v2 model only: no clear difference. Keep-Latin F1 on others test 0.84 against 0.68 (v2 protected spans), hallucination rate 1.7% against 13.4%; on frozen test 0.93 and 0% against 0.84 and 4.9%. Dev (v3 − v2, keyboard engine): +0.009 frozen dev, +0.017 others dev; v3 never fell back to the rules on others dev (v2: 7 of 200).
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
