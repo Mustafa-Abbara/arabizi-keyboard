@@ -40,3 +40,4 @@ A search for fixes that need no retraining (17 Oct 2026) tried two dictionary us
 
 - B0 is a stronger baseline from now on. Report which version a B0 number comes from.
 - Rules or dictionary changes always ship with a regenerated parity fixture; this one does.
+- **Rebuilt 29 Oct 2026** with all public training rows (ADR 0028, 0029): 22,307 words (from 16,025) and 1,833 words kept in Latin (from 949), from 46,418 training rows. B0 on dev, same code: others dev 0.725 → 0.735 (+0.010 [+0.005, +0.016]); frozen dev 0.628 → 0.756 (the frozen set is Moustafa's own chats, which the first build did not yet contain). The engine on dev is unchanged (0.824 frozen, 0.826 others), since the model answers almost every sentence. Entries whose reading changed: 153 (for example `l7al` الحل → الحال).
