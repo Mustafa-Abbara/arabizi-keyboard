@@ -39,6 +39,19 @@ func percent(_ part: Int, _ whole: Int) -> String { whole == 0 ? "-" : "\(100 * 
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 
+if arguments.first == "--english" {
+    // Which sentences the English guard would leave unchanged: counts per file, and the sentences with --show.
+    guard let guardRules = EnglishGuard(rulesDirectory: rulesDirectory, rules: rules) else { exit(1) }
+    let show = arguments.contains("--show")
+    for path in arguments.dropFirst().filter({ !$0.hasPrefix("--") }) {
+        let texts = try rows(path).compactMap { $0["arabizi"] as? String }
+        let flagged = texts.filter { guardRules.isEnglish($0) }
+        print("\(URL(filePath: path).lastPathComponent): \(flagged.count) of \(texts.count) left unchanged")
+        if show { flagged.forEach { print("   \($0)") } }
+    }
+    exit(0)
+}
+
 if arguments == ["--corrections"] {
     guard let store = CorrectionStore.standard() else {
         print("no correction record on this Mac")

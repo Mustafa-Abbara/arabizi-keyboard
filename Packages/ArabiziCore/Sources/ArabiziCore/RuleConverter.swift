@@ -27,6 +27,10 @@ public struct RuleConverter: Sendable {
     let words: [String: String]
     let keepLatin: Set<String>
 
+    /// The Arabizi words of the dictionary (lower case) that the training data does not also keep in Latin, for
+    /// recognising Arabizi in a text.
+    public var arabiziWords: Set<String> { Set(words.keys).subtracting(keepLatin) }
+
     /// Reads the two rule files from a folder (data/rules in the repo, Resources in the app). A missing
     /// dictionary means letter rules only, as in Python.
     public init(rulesDirectory: URL) throws {

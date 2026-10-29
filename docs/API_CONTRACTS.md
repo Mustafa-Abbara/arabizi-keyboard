@@ -42,7 +42,7 @@ The Swift tests decode and re-encode the examples byte for byte; `eval/tests/tes
 | `fallbackTimeout` | The model did not finish before the deadline: rule fallback. |
 | `fallbackCheckFailed` | The model's answer failed an output check: rule fallback. |
 | `fallbackModelUnavailable` | No model (switched off, missing file, wrong checksum, failed to load): rule fallback. |
-| `passthrough` | Nothing to convert (no Latin letter): `text` is returned unchanged. |
+| `passthrough` | Nothing to convert: `text` has no Latin letter, or is plain English (ADR 0031); it is returned unchanged. |
 
 `arabizi-cli` (P5 step 6, `Packages/ArabiziEngine`) reads requests and writes responses as one JSON object per line, keys sorted (`Contract.encoder()`); its status goes to stderr as one JSON line, and `--explain` adds why each fallback happened (counts only). In the engine ([ADR 0019](decisions/0019-engine-and-cli.md)), `fallbackModelUnavailable` also covers input longer than `max_input_chars` and a generation error, and `fallbackCheckFailed` also covers an answer that hit the token limit.
 

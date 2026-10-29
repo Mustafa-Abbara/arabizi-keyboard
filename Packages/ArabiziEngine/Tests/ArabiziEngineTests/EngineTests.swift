@@ -33,14 +33,15 @@ func finished(_ text: String, _ stop: Generation.Stop = .endOfTurn) -> Generatio
     Generation(text: text, stop: stop, promptTokens: 10, generatedTokens: 5, elapsed: .milliseconds(5))
 }
 
-func engine(_ model: ScriptedModel?, maxInputChars: Int? = nil) throws -> Engine {
+func engine(_ model: ScriptedModel?, maxInputChars: Int? = nil, english: Bool = false) throws -> Engine {
     var json = try #require(JSONSerialization.jsonObject(
         with: Data(contentsOf: configDirectory.appending(path: "engine.json"))) as? [String: Any])
     if let maxInputChars { json["max_input_chars"] = maxInputChars }
     let config = try EngineConfig(engine: JSONSerialization.data(withJSONObject: json),
                                   models: Data(contentsOf: configDirectory.appending(path: "models.json")))
     return Engine(config: config, rules: rules, generator: model, template: model == nil ? nil : template,
-                  modelState: model == nil ? .off : .ready(id: "scripted"))
+                  modelState: model == nil ? .off : .ready(id: "scripted"),
+                  englishGuard: english ? EnglishGuard(rulesDirectory: rulesDirectory, rules: rules) : nil)
 }
 
 func request(_ text: String) -> ConvertRequest { ConvertRequest(text: text, deadlineMs: 1500) }
@@ -106,13 +107,35 @@ func mixedTokensAreSplit(input: String, answer: String, repaired: String, count:
 }
 
 @Test(arguments: [
-    ("kifak", "كيفك the"),  // no input word holds "the"
-    ("programe w programs", "برنامج و program"),  // two input words hold "program"
+    ("kifak", "كيفك the"),  // no input word holds "the", and the answer has more words than the input
+    ("programe w programs ktir", "برنامج program"),  // two input words hold "program", and the counts differ
 ])
 func untraceableLatinStillGivesTheRules(input: String, answer: String) throws {
     let model = ScriptedModel { _ in finished(answer) }
     let response = try engine(model).convert(request(input))
     #expect(response.outcome == .fallbackCheckFailed && response.text == rules.convert(input))
+}
+
+@Test func anUntraceableWordTakesTheRulesForTheInputWordInTheSamePosition() throws {
+    // Two input words hold "program", so the invented word cannot be traced; the answer has as many words as the
+    // input, so the word in the same position is converted by the rules and the model's other words are kept.
+    let model = ScriptedModel { _ in finished("برنامج و program") }
+    let response = try engine(model).convert(request("programe w programs"))
+    #expect(response.outcome == .model && response.text == "برنامج و " + rules.convert("programs"))
+}
+
+@Test func plainEnglishIsLeftAloneAndNeverReachesTheModel() throws {
+    let model = ScriptedModel { _ in finished("never used") }
+    let text = "why is it converting the sentence in paran to arabic (also the one after)"
+    let response = try engine(model, english: true).convert(request(text))
+    #expect(response.outcome == .passthrough && response.text == text)
+    #expect(model.prompts.isEmpty)
+    // Without the guard the same text goes to the model, as before.
+    #expect(try engine(ScriptedModel { _ in finished("عادي") }).convert(request(text)).text != text)
+    // Arabizi with English words in it still goes to the model.
+    let mixed = try engine(ScriptedModel { _ in finished("شو الـ meeting") }, english: true)
+        .convert(request("shu el meeting"))
+    #expect(mixed.outcome == .model)
 }
 
 @Test func aFailingModelGivesTheRules() throws {
