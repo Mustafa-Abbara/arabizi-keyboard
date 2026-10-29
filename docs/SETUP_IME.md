@@ -7,6 +7,7 @@ The keyboard is a macOS **input method**: a background app that macOS loads when
 | You do | You see |
 |---|---|
 | Type Arabizi | Your Latin text, underlined (marked text) |
+| Typing (live preview) | A small box above the text shows the Arabic for the words typed so far, then the Latin typed since; each finished word, or a short pause, converts the sentence in the background. Enter uses the ready conversion at once. Off: `defaults write lb.aub.arabizi.inputmethod.ArabiziIME livePreview -bool false` |
 | **Enter** | The underlined text is replaced by Arabic; the message is **not** sent |
 | **Enter** again | The app sends (WhatsApp, Slack…) |
 | **Esc** | The Latin text is kept as typed |

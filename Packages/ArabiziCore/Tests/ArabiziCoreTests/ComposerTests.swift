@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import ArabiziCore
 
@@ -157,4 +158,24 @@ private let cursorUnmoved = Context(cursorAtLastConversion: true)
     _ = c.handle(.enter)
     _ = c.flush()
     #expect(c.handle(.undo, context: cursorUnmoved) == .pass)
+}
+
+@Test func aReadyConversionIsUsedInsteadOfConvertingAgain() {
+    let calls = Counter()
+    var composer = Composer(convert: { calls.add(); return "converted:" + $0 },
+                            ready: { $0 == "kifak" ? "كيفك" : nil })
+    for character in "kifak" { _ = composer.handle(.text(String(character))) }
+    #expect(composer.handle(.enter) == .commit("كيفك"))  // from the preview
+    #expect(calls.value == 0)
+    #expect(composer.lastConversion == Conversion(latin: "kifak", converted: "كيفك"))  // ⌘Z still works
+    for character in "kifak2" { _ = composer.handle(.text(String(character))) }  // text changed since: converted now
+    #expect(composer.handle(.enter) == .commit("converted:kifak2"))
+    #expect(calls.value == 1)
+}
+
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func add() { lock.withLock { count += 1 } }
+    var value: Int { lock.withLock { count } }
 }
