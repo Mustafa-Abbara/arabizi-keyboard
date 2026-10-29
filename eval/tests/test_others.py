@@ -118,3 +118,21 @@ def test_split_prefixes_rewrites_training_and_others_then_refreeze(data):
     assert P.validate().ok
     assert [r["arabic"] for path in P.pair_files(others=True) for _, r, _ in P.read_jsonl(path)] == [
         "عال facebook هلق يا حبيبي"]
+
+
+def test_training_rows_alone_after_the_freeze(data, tmp_path, capsys):
+    public, train, held = data
+    assert main(["import-real", "--train", train, "--held-out", held, "--dev", "1"]) == 0
+    frozen = P.OTHERS_MANIFEST_PATH.read_text(encoding="utf-8")
+    more = sheet(tmp_path / "more.jsonl", [
+        ("wen kenet mbere7", "وين كنت مبارح"),
+        ("yalla mnetla2a bokra 3al 8 tamem", "يلا منتلاقى بكرا عال 8 تمام"),  # nearly a held-out sentence: skipped
+        ("kifak ya habibi", "كيفك يا حبيبي"),                                  # a held-out sentence: skipped
+    ])
+    assert main(["import-real", "--train", more, "--source", "batch 2"]) == 0
+    train_rows = [r for _, r, _ in P.read_jsonl(public / "train-hand.jsonl")]
+    assert [r["arabic"] for r in train_rows][-1] == "وين كنت مبارح" and train_rows[-1]["source"] == "batch 2"
+    assert len(train_rows) == 3
+    assert P.OTHERS_MANIFEST_PATH.read_text(encoding="utf-8") == frozen  # held-out sets untouched
+    assert P.validate().ok
+    assert "nearly repeats a held-out sentence (1)" in capsys.readouterr().out

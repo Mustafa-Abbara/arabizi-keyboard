@@ -388,12 +388,16 @@ def cmd_import_real(args: argparse.Namespace) -> int:
     """Import real messages written by other people (ADR 0021), all public: --train rows into
     data/pairs/train-hand.jsonl, --held-out rows into the "others" held-out set (data/pairs/others/), split into
     dev and test and frozen with its own manifest. Rows that break a rule or repeat a sentence are skipped; a
-    held-out row that repeats or nearly repeats a training sentence is skipped too. Prints counts only.
+    held-out row that repeats or nearly repeats a training sentence is skipped too. Without --held-out, only
+    training rows are imported (the held-out sets stay as they are), and a training row that nearly repeats a
+    held-out sentence is skipped. Prints counts only.
     """
-    if P.OTHERS_MANIFEST_PATH.exists():
-        print("The others set is already frozen; importing again would change it.")
+    if args.held_out and P.OTHERS_MANIFEST_PATH.exists():
+        print("The others set is already frozen; importing again would change it (import --train alone).")
         return 1
     existing = all_rows() + [row for path in P.pair_files(others=True) for _, row, err in P.read_jsonl(path) if not err]
+    held_out_words = [set(P.normalize_arabizi(r["arabizi"]).split()) for r in existing
+                      if r.get("split") in ("dev", "test")]
     new: list[dict] = []
     reasons: Counter = Counter()
     seen = set().union(*(P._dedupe_keys(r) for r in existing))
@@ -413,6 +417,8 @@ def cmd_import_real(args: argparse.Namespace) -> int:
                 problems.append("repeats a sentence already in the data")
             elif train_words is not None and _near_duplicate(arabizi, train_words):
                 problems.append("nearly repeats a training sentence")
+            elif train_words is None and split == "train" and _near_duplicate(arabizi, held_out_words):
+                problems.append("nearly repeats a held-out sentence")
             if problems:
                 reasons.update(f"{split}: {p}" for p in set(problems))
                 continue
@@ -424,7 +430,7 @@ def cmd_import_real(args: argparse.Namespace) -> int:
 
     train = take(args.train, "train")
     train_words = [set(P.normalize_arabizi(r["arabizi"]).split()) for r in existing + new if r.get("split") == "train"]
-    held = take(args.held_out, "test", train_words)
+    held = take(args.held_out, "test", train_words) if args.held_out else []
     rng = random.Random(args.seed)
     dev_ids = {r["id"] for r in rng.sample(held, min(args.dev, len(held)))}
     for row in held:
@@ -438,6 +444,8 @@ def cmd_import_real(args: argparse.Namespace) -> int:
         return 0
     for row in train:
         append(path_for("train", "hand"), row)
+    if not args.held_out:
+        return 0
     P.OTHERS_DIR.mkdir(parents=True, exist_ok=True)
     for row in held:
         append(P.OTHERS_DIR / f"{row['split']}.jsonl", row)
@@ -1015,7 +1023,7 @@ def main(argv: list[str] | None = None) -> int:
     real = sub.add_parser("import-real", help="import real messages by other people: training rows and the "
                                               "frozen 'others' held-out set (ADR 0021)")
     real.add_argument("--train", required=True, help=".xlsx/.jsonl with arabizi and arabic columns")
-    real.add_argument("--held-out", required=True, help=".xlsx/.jsonl for the others dev/test set")
+    real.add_argument("--held-out", help=".xlsx/.jsonl for the others dev/test set (omit to import training rows only)")
     real.add_argument("--dev", type=int, default=200, help="held-out rows that go to dev (the rest: test)")
     real.add_argument("--writer", default="friends-and-family")
     real.add_argument("--source", default="friends-and-family (ADR 0021)")
