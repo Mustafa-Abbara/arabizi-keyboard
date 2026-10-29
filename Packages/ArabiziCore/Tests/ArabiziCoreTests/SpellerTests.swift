@@ -265,6 +265,26 @@ let spellingLastWord = ("كيفك يا " as String).utf16.count..<spellingConver
     #expect(composer.handle(.enter) == .commit("كيفك يا صح؟"))
 }
 
+@Test func theWindowsHighlightIsFollowedAfterAnArrow() {
+    let recorded = Recorded()
+    var composer = spellingComposer(recorded)
+    typeAndConvert(&composer, "kifak ya sabiye")
+    _ = composer.handle(.suggest, context: Context(cursorAtLastConversion: true))
+    let shown = "كيفك يا sabiye؟"
+    #expect(composer.highlight("sabiye") == .suggest(marked: shown, selected: spellingLastWord.lowerBound..<shown.utf16.count,
+                                                     candidates: ["صبيه", "sabiye"], replacingLength: nil))
+    #expect(composer.highlight("sabiye") == nil)  // already highlighted
+    #expect(composer.handle(.enter) == .commit(shown))
+    #expect(recorded.all.map(\.chosen) == ["sabiye"])
+
+    typeAndConvert(&composer, "kifak ya sabiye")
+    _ = composer.handle(.suggest, context: Context(cursorAtLastConversion: true))
+    _ = composer.handle(.suggest)
+    _ = composer.handle(.text("s"))
+    #expect(composer.highlight("ص") != nil)  // while spelling: the highlighted letter
+    #expect(composer.handle(.enter) == .commit("كيفك يا ص؟"))
+}
+
 @Test func downOutsideTheWindowIsAnOrdinaryKey() {
     var composer = spellingComposer(Recorded())
     #expect(composer.handle(.arrowDown) == .pass)

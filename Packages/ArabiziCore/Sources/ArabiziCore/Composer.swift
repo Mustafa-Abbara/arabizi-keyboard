@@ -138,11 +138,15 @@ public struct Composer {
     public var currentChoice: Int? { session?.speller != nil ? session?.speller?.choice : session?.highlighted }
     private var session: SuggestionSession?
     private let convert: @Sendable (String) -> String
+    /// A conversion already made for exactly this text (the live preview), used instead of converting again.
+    private let ready: @Sendable (String) -> String?
     private let suggester: Suggester?
 
-    public init(convert: @escaping @Sendable (String) -> String, suggester: Suggester? = nil) {
+    public init(convert: @escaping @Sendable (String) -> String, suggester: Suggester? = nil,
+                ready: @escaping @Sendable (String) -> String? = { _ in nil }) {
         self.convert = convert
         self.suggester = suggester
+        self.ready = ready
     }
 
     public mutating func handle(_ key: Key, context: Context = Context()) -> Effect {
@@ -196,6 +200,25 @@ public struct Composer {
         case .arrowLeft, .arrowRight, .arrowDown, .arrowUp, .tab, .backtab, .other:
             return buffer.isEmpty ? .pass : .commitAndPass(take())
         }
+    }
+
+    /// The candidate window moved its highlight to `candidate` after ↓/↑: follow it, so the text shows that spelling
+    /// (or, while spelling, that letter) and Enter takes it. nil when nothing changes.
+    public mutating func highlight(_ candidate: String) -> Effect? {
+        guard var current = session else { return nil }
+        if let speller = current.speller {
+            guard let index = speller.labels.firstIndex(of: candidate), index != speller.choice else { return nil }
+            current.speller?.choose(candidate)
+            session = current
+            return spellingEffect(current)
+        }
+        guard let index = current.candidates.firstIndex(of: candidate), index != current.highlighted else { return nil }
+        current.highlighted = index
+        session = current
+        var shown = current
+        shown.words[shown.index] = WordParts(shown.words[shown.index]).with(candidate)
+        return .suggest(marked: shown.text, selected: shown.selected, candidates: current.candidates,
+                        replacingLength: nil)
     }
 
     /// A spelling (or, while spelling, a letter) clicked in the candidate window.
@@ -373,7 +396,7 @@ public struct Composer {
     }
 
     private mutating func convertAndRemember(_ latin: String) -> String {
-        let converted = convert(latin)
+        let converted = ready(latin) ?? convert(latin)
         lastConversion = Conversion(latin: latin, converted: converted)
         return converted
     }
