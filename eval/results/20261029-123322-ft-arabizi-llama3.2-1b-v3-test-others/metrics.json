@@ -1,0 +1,53 @@
+{
+  "run_id": "20261029-123322-ft-arabizi-llama3.2-1b-v3-test-others",
+  "system": "ft-arabizi-llama3.2-1b-v3",
+  "describe": {
+    "kind": "llm-finetuned",
+    "model": "arabizi-llama3.2-1b-v3",
+    "file": "arabizi-llama3.2-1b-v3-Q4_K_M.gguf",
+    "sha256": "8441e6e0d84a83889b748276ab2dd8bd82f7a367af9d2f76421028b36727fd1d",
+    "params": "1B",
+    "quant": "Q4_K_M",
+    "licence": "Llama 3.2 Community License",
+    "runtime": "llama.cpp llama-server",
+    "server": "managed",
+    "shots": "zero",
+    "decoding": "greedy (temperature 0, seed 0), max_tokens 10 per word + 32",
+    "postprocess": "first non-empty line; wrapping quotes stripped",
+    "base": "llama3.2-1b",
+    "run": "train/runs/20261029-054800-llama3.2-1b-lora-v3.json",
+    "prompt": "saved by the training run (config/models.json), sent to /completion",
+    "prompt_sha256_16": "98e50b96eef762b7",
+    "build_info": "b11429-d81235049",
+    "load_seconds": 1.03,
+    "peak_rss_mb": 987.9
+  },
+  "split": "test",
+  "subset": "all",
+  "set": "others",
+  "private_sentences": 0,
+  "sentences": 299,
+  "data_sha256": "32287600ef00092a2961007da73253c3244a79c744f6a2cf5388019234f605ca",
+  "git_sha": "c407061-dirty",
+  "created": "2026-10-29T12:33:22",
+  "metrics": {
+    "sentences": 299,
+    "word_accuracy": 0.8272592592592592,
+    "word_accuracy_lenient": 0.8302222222222222,
+    "exact_match": 0.1605351170568562,
+    "punctuation_match": 0.43478260869565216,
+    "cer": 0.06854838709677419,
+    "keep_latin_precision": 0.848780487804878,
+    "keep_latin_recall": 0.8130841121495327,
+    "keep_latin_f1": 0.8305489260143198,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.0033444816053511705,
+    "hallucination_rate": 0.06354515050167224,
+    "latency_ms_p50": 885.2255829997375,
+    "latency_ms_p95": 1383.5142910002105,
+    "word_accuracy_ci95": [
+      0.81275596784027,
+      0.8415140613706551
+    ]
+  }
+}
