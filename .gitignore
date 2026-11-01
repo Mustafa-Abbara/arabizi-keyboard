@@ -50,3 +50,6 @@ traces/
 
 # Local instructions for coding assistants (kept out of the repo, 25 Oct 2026)
 CLAUDE.md
+
+# release builds (scripts/package_release.sh)
+dist/

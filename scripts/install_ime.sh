@@ -11,4 +11,4 @@ mkdir -p "$DEST"
 rm -rf "$DEST/ArabiziIME.app"
 # APFS clone: the app holds the 0.8 GB model, so a plain copy would be slow and double the disk use.
 cp -Rc "$ROOT/build/ArabiziIME.app" "$DEST/" 2>/dev/null || cp -R "$ROOT/build/ArabiziIME.app" "$DEST/"
-swift "$ROOT/Apps/ArabiziIME/Tools/register.swift" "$DEST/ArabiziIME.app"
+"$DEST/ArabiziIME.app/Contents/MacOS/harfi-register" "$DEST/ArabiziIME.app"

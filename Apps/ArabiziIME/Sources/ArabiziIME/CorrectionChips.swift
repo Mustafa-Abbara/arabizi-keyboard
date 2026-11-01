@@ -121,16 +121,16 @@ final class ChipView: NSView {
         let label = NSMutableAttributedString()
         if let number {
             label.append(NSAttributedString(string: number + "  ", attributes: [
-                .font: NSFont.systemFont(ofSize: 12), .foregroundColor: selected ? Theme.accent : Theme.textMuted]))
+                .font: NSFont.systemFont(ofSize: 12 * Theme.scale), .foregroundColor: selected ? Theme.accent : Theme.textMuted]))
         }
         label.append(NSAttributedString(string: text, attributes: [
-            .font: NSFont.systemFont(ofSize: 18), .foregroundColor: selected ? Theme.accent : Theme.text]))
+            .font: Theme.arabic(20 * Theme.scale), .foregroundColor: selected ? Theme.accent : Theme.text]))
         self.init(label, style: .spelling, selected: selected, onClick: onClick)
         setAccessibilityLabel(number.map { "\(text), key \($0)" } ?? text)
     }
 
     convenience init(quiet text: String, onClick: @escaping () -> Void) {
-        self.init(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13),
+        self.init(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13 * Theme.scale),
                                                                 .foregroundColor: Theme.textMuted]),
                   style: .quiet, selected: false, onClick: onClick)
         setAccessibilityLabel(text)
@@ -139,8 +139,8 @@ final class ChipView: NSView {
     /// The word being fixed, with an arrow to its spellings: amber with a dashed line when it looks wrong.
     convenience init(current word: String, doubtful: Bool) {
         let label = NSMutableAttributedString(string: word, attributes: [
-            .font: NSFont.systemFont(ofSize: 18), .foregroundColor: doubtful ? Theme.warning : Theme.textMuted])
-        label.append(NSAttributedString(string: "  ←", attributes: [.font: NSFont.systemFont(ofSize: 13),
+            .font: Theme.arabic(20 * Theme.scale), .foregroundColor: doubtful ? Theme.warning : Theme.textMuted])
+        label.append(NSAttributedString(string: "  ←", attributes: [.font: NSFont.systemFont(ofSize: 13 * Theme.scale),
                                                                      .foregroundColor: Theme.textMuted]))
         self.init(label, style: .current, selected: false, onClick: nil)
         setAccessibilityLabel(doubtful ? "Fixing \(word), it looks wrong" : "Fixing \(word)")
@@ -148,7 +148,7 @@ final class ChipView: NSView {
     }
 
     convenience init(hint text: String) {
-        self.init(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13),
+        self.init(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13 * Theme.scale),
                                                                 .foregroundColor: Theme.textMuted]),
                   style: .hint, selected: false, onClick: nil)
     }
@@ -169,7 +169,7 @@ final class ChipView: NSView {
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             label.topAnchor.constraint(equalTo: topAnchor, constant: 4),
             label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-            heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
+            heightAnchor.constraint(greaterThanOrEqualToConstant: 32 * Theme.scale),
         ])
         if onClick != nil {
             setAccessibilityRole(.button)

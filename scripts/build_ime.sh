@@ -17,6 +17,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/ArabiziIME"
 cp "$(dirname "$BIN")/arabizi-engine-check" "$APP/Contents/MacOS/"  # diagnostic: status, network probe, one sentence
+cp "$(dirname "$BIN")/harfi-register" "$APP/Contents/MacOS/"  # registers the installed app with macOS
 cp "$PKG/Resources/Info.plist" "$APP/Contents/Info.plist"
 plutil -lint -s "$APP/Contents/Info.plist"
 swift "$PKG/Tools/make_icon.swift" "$APP/Contents/Resources/MenuIcon.tiff"
@@ -24,6 +25,25 @@ swift "$PKG/Tools/make_icon.swift" "$APP/Contents/Resources/MenuIcon.tiff"
 cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$ROOT/data/rules/spelling_options.json" \
    "$ROOT/data/rules/english_stopwords.json" "$APP/Contents/Resources/"
 cp "$ROOT/config/engine.json" "$ROOT/config/models.json" "$APP/Contents/Resources/"
+# Installing on another Mac (scripts/install_harfi.sh, the Homebrew cask): the setup script, where the model is
+# published, and the model's licence notice. The model is published under a name that starts with "Llama", as the
+# Llama 3.2 licence asks, in a release of its own (model-<version>), so every app version finds it.
+cp "$ROOT/scripts/harfi-setup.sh" "$ROOT/NOTICE" "$APP/Contents/Resources/"
+cp -R "$PKG/Resources/Fonts" "$APP/Contents/Resources/"  # Noto Naskh Arabic for the Arabic Harfi shows (SIL OFL 1.1)
+python3 - "$ROOT/config" > "$APP/Contents/Resources/model-download.txt" <<'EOF'
+import json, sys
+engine = json.load(open(f"{sys.argv[1]}/engine.json"))
+model = {m["id"]: m for m in json.load(open(f"{sys.argv[1]}/models.json"))["models"]}[engine["model"]]
+version = model["id"].rsplit("-", 1)[-1]  # arabizi-llama3.2-1b-v3 -> v3
+asset = f"Llama-3.2-1B-Harfi-{version}-{model['quant']}.gguf"
+print(f'MODEL_FILE="{model["file"]}"')
+print(f'MODEL_ASSET="{asset}"')
+print(f'MODEL_SHA256="{model["sha256"]}"')
+print(f'MODEL_SIZE="{model["size"]}"')
+part = 100 * 1024 * 1024  # published in parts of 100 MiB: an interrupted upload or download repeats one part only
+print(f'MODEL_PARTS="{-(-model["size"] // part)}"')
+print(f'MODEL_URL="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/download/model-{version}/{asset}"')
+EOF
 
 # The engine service: its executable, llama.framework, and everything it reads (the sandbox lets it read only its
 # own bundle): settings, rule files and the configured model file if it is in models/ (never committed).
@@ -43,7 +63,10 @@ model = engine.get("model")
 print(models[model]["file"] if model and engine["features"]["use_model"] else "")
 EOF
 )"
-if [ -n "$MODEL_FILE" ] && [ -f "$ROOT/models/$MODEL_FILE" ]; then
+# HARFI_NO_MODEL=1 (release builds): no model in the app; the installer adds it (scripts/install_harfi.sh).
+if [ -n "${HARFI_NO_MODEL:-}" ]; then
+  echo "Engine model left out (HARFI_NO_MODEL): the installer adds $MODEL_FILE"
+elif [ -n "$MODEL_FILE" ] && [ -f "$ROOT/models/$MODEL_FILE" ]; then
   cp -c "$ROOT/models/$MODEL_FILE" "$XPC/Contents/Resources/" 2>/dev/null || cp "$ROOT/models/$MODEL_FILE" "$XPC/Contents/Resources/"
   echo "Engine model: $MODEL_FILE"
 elif [ -n "$MODEL_FILE" ]; then

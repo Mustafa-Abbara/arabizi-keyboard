@@ -1,6 +1,7 @@
 // Registers an installed input method with macOS so it appears in System Settings → Keyboard → Input Sources,
 // then prints whether it is visible and enabled. It does not enable it: the user does that in System Settings.
-// Usage: swift register.swift "$HOME/Library/Input Methods/ArabiziIME.app"
+// Built into the app (Contents/MacOS/harfi-register) so installing needs no developer tools.
+// Usage: harfi-register "$HOME/Library/Input Methods/ArabiziIME.app"
 import Carbon
 import Foundation
 
@@ -27,6 +28,6 @@ for source in sources {
     if enabled {
         print("Already enabled: switch to another input source and back (Ctrl+Space) to load the new version.")
     } else {
-        print("Next: System Settings → Keyboard → Input Sources → Edit… → + → Arabic → \"Arabizi Keyboard\".")
+        print("Next: System Settings → Keyboard → Input Sources → Edit… → + → Arabic → \"Harfi\".")
     }
 }

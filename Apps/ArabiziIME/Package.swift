@@ -18,6 +18,8 @@ let package = Package(
             ],
             linkerSettings: [.linkedFramework("InputMethodKit")]
         ),
+        // Registers the installed app with macOS (scripts/install_ime.sh, scripts/install_harfi.sh).
+        .executableTarget(name: "harfi-register", linkerSettings: [.linkedFramework("Carbon")]),
         // Diagnostic: reaches the engine service like the keyboard does (it must sit in the app's Contents/MacOS).
         .executableTarget(
             name: "arabizi-engine-check",
