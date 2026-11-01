@@ -80,3 +80,36 @@ jobs:
           else
             echo "Frozen test set unchanged."
           fi
+
+  windows:
+    name: "windows (ArabiziCore tests, ADR 0032)"
+    runs-on: windows-latest
+    steps:
+      - run: git config --global core.autocrlf false  # the tests compare text written on Unix
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.2-release
+          tag: 6.2-RELEASE
+      - run: swift --version
+      # The runner's Visual Studio is newer than the clang in Swift's Windows toolchain expects.
+      - run: swift test --package-path Packages/ArabiziCore -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+      - name: the Windows keyboard (HarfiTIP.dll) and the core as a C library (HarfiCoreC.dll)
+        shell: pwsh
+        run: |
+          swift build -c release --package-path Packages/ArabiziCore --product HarfiCoreC -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+          cmake -S Apps/HarfiWindows -B build/windows -A x64
+          cmake --build build/windows --config Release
+          New-Item -ItemType Directory -Force dist/harfi-windows/rules | Out-Null
+          Copy-Item build/windows/Release/HarfiTIP.dll dist/harfi-windows/
+          Copy-Item (Get-ChildItem Packages/ArabiziCore/.build -Recurse -Filter HarfiCoreC.dll | Select-Object -First 1).FullName dist/harfi-windows/
+          Copy-Item data/rules/arabizi_to_arabic.json, data/rules/arabizi_lexicon.json, data/rules/spelling_options.json, data/rules/english_stopwords.json dist/harfi-windows/rules/
+          Copy-Item Apps/HarfiWindows/install.ps1 dist/harfi-windows/
+          # The Swift runtime HarfiCoreC.dll needs, so the PC does not need a Swift toolchain.
+          $runtime = Get-ChildItem "$env:LOCALAPPDATA/Programs/Swift/Runtimes" -Directory | Sort-Object Name | Select-Object -Last 1
+          Copy-Item "$($runtime.FullName)/usr/bin/*.dll" dist/harfi-windows/
+          Get-ChildItem dist/harfi-windows | Format-Table Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: harfi-windows
+          path: dist/harfi-windows

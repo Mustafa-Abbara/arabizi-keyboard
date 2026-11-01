@@ -1,4 +1,8 @@
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto  // swift-crypto: the same API on Windows and Linux (ADR 0032)
+#endif
 import Foundation
 
 /// One word the user corrected (ADR 0027): never a sentence.
@@ -42,11 +46,12 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
         guard var folder = folder ?? fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appending(path: "ArabiziKeyboard") else { return nil }
         do {
-            try fm.createDirectory(at: folder, withIntermediateDirectories: true,
-                                   attributes: [.posixPermissions: 0o700])
+            try fm.createDirectory(at: folder, withIntermediateDirectories: true, attributes: Self.ownerOnly(0o700))
+            #if os(macOS)
             var values = URLResourceValues()
             values.isExcludedFromBackup = true
             try folder.setResourceValues(values)
+            #endif
             let keyFile = folder.appending(path: "corrections.key")
             let key: SymmetricKey
             if let data = try? Data(contentsOf: keyFile), data.count == 32 {
@@ -54,7 +59,7 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
             } else {
                 key = SymmetricKey(size: .bits256)
                 let data = key.withUnsafeBytes { Data($0) }
-                guard fm.createFile(atPath: keyFile.path, contents: data, attributes: [.posixPermissions: 0o600])
+                guard fm.createFile(atPath: keyFile.path, contents: data, attributes: Self.ownerOnly(0o600))
                 else { return nil }
             }
             return CorrectionStore(file: folder.appending(path: "corrections.bin"), key: key)
@@ -100,6 +105,17 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
         let data = try JSONEncoder().encode(corrections)
         guard let sealed = try AES.GCM.seal(data, using: key).combined else { return }
         try sealed.write(to: file, options: [.atomic])
+        #if !os(Windows)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        #endif
+    }
+
+    /// File permissions for the user alone; Windows keeps the user profile's own access rules instead.
+    private static func ownerOnly(_ mode: Int) -> [FileAttributeKey: Any] {
+        #if os(Windows)
+        return [:]
+        #else
+        return [.posixPermissions: mode]
+        #endif
     }
 }
