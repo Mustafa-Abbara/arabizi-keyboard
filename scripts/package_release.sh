@@ -2,7 +2,6 @@
 # Builds a Harfi release into dist/, uploading nothing:
 #   Harfi-<version>.zip   the app without the model (installers add it, scripts/harfi-setup.sh)
 #   SHA256SUMS            its checksum, read by scripts/install_harfi.sh
-#   harfi.rb              the Homebrew cask for that zip (packaging/homebrew/harfi.rb.in)
 #   model/                the model under its published name with the Llama 3.2 licence, when models/ has it:
 #                         uploaded separately, once, to the model-<version> release (docs/INSTALL.md)
 set -euo pipefail
@@ -18,7 +17,6 @@ mkdir -p "$DIST"
 ditto -c -k --keepParent "$APP" "$DIST/$ZIP"
 (cd "$DIST" && shasum -a 256 "$ZIP" > SHA256SUMS)
 SHA="$(cut -d' ' -f1 "$DIST/SHA256SUMS")"
-sed -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$SHA/" "$ROOT/packaging/homebrew/harfi.rb.in" > "$DIST/harfi.rb"
 
 # shellcheck source=/dev/null
 . "$APP/Contents/Resources/model-download.txt"

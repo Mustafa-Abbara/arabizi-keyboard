@@ -1,6 +1,6 @@
 #!/bin/bash
-# Finishes installing Harfi for this macOS user (run by scripts/install_harfi.sh and by the Homebrew cask; it
-# ships inside the app as Contents/Resources/harfi-setup.sh). No admin password and no developer tools needed.
+# Finishes installing Harfi for this macOS user (run by scripts/install_harfi.sh; it ships inside the app as
+# Contents/Resources/harfi-setup.sh, so it can be run again to add or repair the model). No admin password and no developer tools needed.
 #
 # 1. Downloads the model named in Contents/Resources/model-download.txt into ~/Library/Caches/Harfi, resuming a
 #    dropped download, and checks its SHA-256.
