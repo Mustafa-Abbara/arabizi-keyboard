@@ -7,16 +7,28 @@ import os
 /// deadline plus a margin, and return the converted text, or nil so the keyboard uses its own rules. The service
 /// starts on the rules and loads the model in the background, so the first Enter after login is never slow.
 /// Logs only outcomes, timings and the service status: never the text.
-public final class EngineClient: @unchecked Sendable {  // `connection` is behind `lock`
+/// One link to the service: what to call, and what keeps the connection alive.
+public struct EngineLink: @unchecked Sendable {
+    public let service: ArabiziEngineServiceProtocol
+    let connection: AnyObject?
+
+    public init(service: ArabiziEngineServiceProtocol, keeping connection: AnyObject? = nil) {
+        self.service = service
+        self.connection = connection
+    }
+}
+
+public final class EngineClient: @unchecked Sendable {  // `link` is behind `lock`
     private let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
     private let lock = NSLock()
-    private var connection: NSXPCConnection?
+    private var link: EngineLink?
     private let config: EngineConfig
     private let encoder = Contract.encoder()
     /// How long past the deadline the keyboard waits for the reply (the rule fallback inside the service).
     static let replyMarginMs = 500
-    /// Makes a new connection to the service: the bundled XPC service in the keyboard, a test listener in tests.
-    private let connect: @Sendable () -> NSXPCConnection
+    /// Opens a link to the service and calls `lost` when it ends (a crash, the service quitting): the bundled XPC
+    /// service in the keyboard, a fake in tests. nil when no link can be made.
+    private let connect: @Sendable (_ lost: @escaping @Sendable () -> Void) -> EngineLink?
 
     /// nil when the bundled config cannot be read: the keyboard then keeps to its own rules.
     public convenience init?(resources: URL) {
@@ -24,28 +36,32 @@ public final class EngineClient: @unchecked Sendable {  // `connection` is behin
             Logger(subsystem: "lb.aub.arabizi", category: "ime").error("engine config not readable: rules only")
             return nil
         }
-        self.init(config: config) { NSXPCConnection(serviceName: EngineService.name) }
+        let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
+        self.init(config: config) { lost in
+            let connection = NSXPCConnection(serviceName: EngineService.name)
+            connection.remoteObjectInterface = NSXPCInterface(with: ArabiziEngineServiceProtocol.self)
+            connection.invalidationHandler = lost
+            connection.resume()
+            guard let service = connection.remoteObjectProxyWithErrorHandler({ error in
+                log.error("engine service error: \(String(describing: error), privacy: .public)")
+            }) as? ArabiziEngineServiceProtocol else { return nil }
+            return EngineLink(service: service, keeping: connection)
+        }
     }
 
-    public init(config: EngineConfig, connect: @escaping @Sendable () -> NSXPCConnection) {
+    public init(config: EngineConfig,
+                connect: @escaping @Sendable (_ lost: @escaping @Sendable () -> Void) -> EngineLink?) {
         self.config = config
         self.connect = connect
     }
 
+    /// The current link, or a new one when there is none (the first message, or the next one after a crash).
     private func proxy() -> ArabiziEngineServiceProtocol? {
         lock.withLock {
-            if connection == nil {
-                let new = connect()
-                new.remoteObjectInterface = NSXPCInterface(with: ArabiziEngineServiceProtocol.self)
-                new.invalidationHandler = { [weak self] in
-                    self?.lock.withLock { self?.connection = nil }
-                }
-                new.resume()
-                connection = new
+            if link == nil {
+                link = connect { [weak self] in self?.lock.withLock { self?.link = nil } }
             }
-            return connection?.remoteObjectProxyWithErrorHandler { [log] error in
-                log.error("engine service error: \(String(describing: error), privacy: .public)")
-            } as? ArabiziEngineServiceProtocol
+            return link?.service
         }
     }
 
