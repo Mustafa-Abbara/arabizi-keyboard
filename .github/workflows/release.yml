@@ -1,5 +1,5 @@
-# Publishes a Harfi release when a version tag (v0.1.0, ...) is pushed: the app without the model, its checksum
-(scripts/package_release.sh). The model is published once, in its own release
+# Publishes a Harfi release when a version tag (v0.1.0, ...) is pushed: the app without the model and its checksum
+# (scripts/package_release.sh). The model is published once, in its own release
 # (scripts/upload_model.sh), so app releases stay small. Ad-hoc signed, no Developer ID (docs/INSTALL.md).
 name: release
 
