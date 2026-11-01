@@ -90,11 +90,12 @@ jobs:
           branch: swift-6.2-release
           tag: 6.2-RELEASE
       - run: swift --version
-      - run: swift test --package-path Packages/ArabiziCore
+      # The runner's Visual Studio is newer than the clang in Swift's Windows toolchain expects.
+      - run: swift test --package-path Packages/ArabiziCore -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
       - name: the Windows keyboard (HarfiTIP.dll) and the core as a C library (HarfiCoreC.dll)
         shell: pwsh
         run: |
-          swift build -c release --package-path Packages/ArabiziCore --product HarfiCoreC
+          swift build -c release --package-path Packages/ArabiziCore --product HarfiCoreC -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
           cmake -S Apps/HarfiWindows -B build/windows -A x64
           cmake --build build/windows --config Release
           New-Item -ItemType Directory -Force dist/harfi-windows/rules | Out-Null
