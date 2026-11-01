@@ -45,6 +45,7 @@ jobs:
       - run: swift test --package-path Packages/ArabiziLLM
       - run: swift test --package-path Packages/ArabiziEngine  # the real-model test is skipped (no weights on CI)
       - run: swift test --package-path Apps/ArabiziIME  # the engine client's failure handling (FAILURE_MATRIX.md)
+      - run: scripts/test_harfi_setup.sh  # the installer's model download: missing, resumed, damaged
       - run: scripts/build_ime.sh
 
   hygiene:
