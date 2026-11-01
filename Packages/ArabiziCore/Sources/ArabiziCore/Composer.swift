@@ -137,6 +137,20 @@ public struct Composer {
     public var isSuggesting: Bool { session != nil }
     /// Which word is selected while suggestions are shown, and of how many (for logs: positions only, no text).
     public var selectedWord: (index: Int, count: Int)? { session.map { ($0.index, $0.words.count) } }
+    /// The selected word as shown, and the typed words it came from, while suggestions are shown.
+    public var selectedText: (shown: String, latin: String?)? {
+        session.map { (WordParts($0.words[$0.index]).core, $0.latinWord($0.index)) }
+    }
+    /// While fixing before sending (↑) and not spelling: the words as shown (a spelling moved to with ↓/↑ in
+    /// place), which one is selected, and the typed text, so the preview can stay on screen around the chips.
+    public var fixingBeforeSending: (words: [String], index: Int, latin: String)? {
+        guard let current = session, current.beforeSending, current.speller == nil else { return nil }
+        var words = current.words
+        if let highlighted = current.highlighted {
+            words[current.index] = WordParts(words[current.index]).with(current.candidates[highlighted])
+        }
+        return (words, current.index, current.latin)
+    }
     /// True while the selected word is spelled letter by letter.
     public var isSpelling: Bool { session?.speller != nil }
     /// The spellings currently offered (for the candidate window); while spelling, the letters for the last key.

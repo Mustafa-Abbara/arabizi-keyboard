@@ -40,11 +40,15 @@ final class CorrectionChips {
     }
 
     /// Shows the spellings above `line` (the text's first line, in screen coordinates). `choice` is highlighted.
-    @MainActor func show(candidates: [String], spelling: Bool, choice: Int?, above line: NSRect,
+    @MainActor func show(word: String?, doubtful: Bool, candidates: [String], spelling: Bool, choice: Int?,
+                         above line: NSRect,
                          pick: @escaping (String) -> Void, spellIt: @escaping () -> Void) {
         hintToken += 1
         let (panel, row) = ensurePanel()
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if let word, !spelling {  // the word being fixed, first (on the right): amber when it looks wrong
+            row.addArrangedSubview(ChipView(current: word, doubtful: doubtful))
+        }
         for (i, candidate) in candidates.enumerated() {
             let number = spelling || i >= 9 ? nil : "\(i + 1)"
             row.addArrangedSubview(ChipView(text: candidate, number: number, selected: i == choice,
@@ -85,14 +89,30 @@ final class CorrectionChips {
         var origin = NSPoint(x: anchor.minX, y: anchor.maxY + 6)
         if origin.y + size.height > visible.maxY { origin.y = anchor.minY - size.height - 6 }  // no room: below
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        let frame = NSRect(origin: origin, size: size)
+        let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        guard !panel.isVisible, !still else {
+            panel.setFrame(frame, display: true)
+            panel.alphaValue = 1
+            panel.orderFrontRegardless()
+            return
+        }
+        // The row rises a few points into place while it fades in.
+        panel.setFrame(frame.offsetBy(dx: 0, dy: -8), display: true)
+        panel.alphaValue = 0
         panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().setFrame(frame, display: true)
+            panel.animator().alphaValue = 1
+        }
     }
 }
 
 /// One chip: a spelling (Arabic, with its number key), a quiet action ("Spell it") or a hint that cannot be clicked.
 final class ChipView: NSView {
-    private enum Style { case spelling, quiet, hint }
+    private enum Style { case spelling, quiet, hint, current }
     private let style: Style
     private let selected: Bool
     private let onClick: (() -> Void)?
@@ -116,6 +136,17 @@ final class ChipView: NSView {
         setAccessibilityLabel(text)
     }
 
+    /// The word being fixed, with an arrow to its spellings: amber with a dashed line when it looks wrong.
+    convenience init(current word: String, doubtful: Bool) {
+        let label = NSMutableAttributedString(string: word, attributes: [
+            .font: NSFont.systemFont(ofSize: 18), .foregroundColor: doubtful ? Theme.warning : Theme.textMuted])
+        label.append(NSAttributedString(string: "  ←", attributes: [.font: NSFont.systemFont(ofSize: 13),
+                                                                     .foregroundColor: Theme.textMuted]))
+        self.init(label, style: .current, selected: false, onClick: nil)
+        setAccessibilityLabel(doubtful ? "Fixing \(word), it looks wrong" : "Fixing \(word)")
+        setAccessibilityElement(true)
+    }
+
     convenience init(hint text: String) {
         self.init(NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: 13),
                                                                 .foregroundColor: Theme.textMuted]),
@@ -129,7 +160,7 @@ final class ChipView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 8
-        layer?.borderWidth = style == .hint ? 0 : 1
+        layer?.borderWidth = style == .hint || style == .current ? 0 : 1
         let label = NSTextField(labelWithAttributedString: text)
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
@@ -156,7 +187,7 @@ final class ChipView: NSView {
             case .spelling, .quiet:
                 layer?.backgroundColor = (selected ? Theme.accentSoft : Theme.surface).cgColor
                 layer?.borderColor = (selected ? Theme.accent : Theme.border).cgColor
-            case .hint:
+            case .hint, .current:
                 layer?.backgroundColor = NSColor.clear.cgColor
             }
         }

@@ -153,18 +153,32 @@ final class ArabiziInputController: IMKInputController {
     private func showCandidates(wordStart: Int) {
         let candidates = composer.currentCandidates, spelling = composer.isSpelling, choice = composer.currentChoice
         guard !candidates.isEmpty || spelling, let client = client() else { return hideCandidates() }
-        hidePreview()
         // Above the text's first line, the same place as the live preview, lined up with the word when the app
         // reports it on that line.
         let marked = client.markedRange()
         let start = marked.location == NSNotFound ? client.selectedRange().location : marked.location
         var line = lineRect(client, at: [start])
-        if line != .zero, let word = plausibleLine(client, at: start + wordStart), abs(word.midY - line.midY) < 2 {
-            line.origin.x = word.minX
+        if let fix = composer.fixingBeforeSending {
+            // Fixing before sending: the preview stays where it was, the selected word highlighted in it, and the
+            // chips rise just above it, so the eye never loses its place.
+            let doubtful = Self.doubtfulWords(fix.words, latin: fix.latin)
+            nonisolated(unsafe) let window = previewWindow
+            let box = MainActor.assumeIsolated {
+                window.show(arabic: fix.words, doubtful: doubtful, selected: fix.index, latin: "", above: line)
+            }
+            line = box
+        } else {
+            hidePreview()
+            if line != .zero, let word = plausibleLine(client, at: start + wordStart), abs(word.midY - line.midY) < 2 {
+                line.origin.x = word.minX
+            }
         }
+        let current = composer.selectedText
+        let doubtful = current.map { Self.suggester?.doubtful($0.shown, $0.latin) ?? false } ?? false
         nonisolated(unsafe) let chips = chips, controller = self
         MainActor.assumeIsolated {
-            chips.show(candidates: candidates, spelling: spelling, choice: choice, above: line,
+            chips.show(word: current?.shown, doubtful: doubtful, candidates: candidates, spelling: spelling,
+                       choice: choice, above: line,
                        pick: { controller.chipPicked($0) }, spellIt: { controller.spellFromChip() })
         }
     }
@@ -252,7 +266,7 @@ final class ArabiziInputController: IMKInputController {
         if key.isCommand {
             log.notice("\(key.kind, privacy: .public) -> \(effect.kind, privacy: .public)")
         }
-        if key == .arrowLeft || key == .arrowRight || key == .suggest, let word = composer.selectedWord {
+        if [.arrowLeft, .arrowRight, .suggest, .arrowUp].contains(key), let word = composer.selectedWord {
             log.notice("\(key.kind, privacy: .public): word \(word.index + 1, privacy: .public) of \(word.count, privacy: .public)")
         }
         if key == .suggest {  // ⌥Tab used: after a few times the hint is no longer needed
@@ -570,7 +584,7 @@ final class PreviewGeneration: @unchecked Sendable {  // `value` is behind `lock
 /// system light or dark appearance, never takes the focus or the mouse, and sits just above the line being typed.
 final class PreviewWindow {
     private var panel: NSPanel?
-    private var label: NSTextField?
+    private var label: PreviewText?
     private static let maxWidth: CGFloat = 560
     private static let padding = NSSize(width: 14, height: 8)
 
@@ -585,14 +599,9 @@ final class PreviewWindow {
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        let label = NSTextField(wrappingLabelWithString: "")
+        let label = PreviewText()
         self.label = label
         let background = PreviewBackground()
-        label.font = .systemFont(ofSize: 20)
-        label.textColor = Theme.text
-        label.baseWritingDirection = .natural
-        label.maximumNumberOfLines = 4
-        label.isSelectable = false
         background.addSubview(label)
         panel.contentView = background
         self.panel = panel
@@ -600,36 +609,34 @@ final class PreviewWindow {
     }
 
     /// Shows the converted Arabic, then the Latin typed since in a quieter colour, just above `line` (the line being
-    /// typed, in screen coordinates; empty when the app gives none).
-    @MainActor func show(arabic words: [String], doubtful: Set<Int>, latin: String, hint: String? = nil,
-                         above line: NSRect) {
+    /// typed, in screen coordinates; empty when the app gives none). Doubtful words get a dashed line under them.
+    /// Returns the box's frame on screen. `selected`: the word being fixed, highlighted (the highlight glides
+    /// from word to word).
+    @discardableResult
+    @MainActor func show(arabic words: [String], doubtful: Set<Int>, selected: Int? = nil, latin: String,
+                         hint: String? = nil, above line: NSRect) -> NSRect {
         let panel = ensurePanel()
-        guard let label else { return }
+        guard let label else { return panel.frame }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.baseWritingDirection = .natural
         let text = NSMutableAttributedString()
+        func add(_ string: String, size: CGFloat, color: NSColor, doubtful: Bool = false) {
+            var attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size),
+                                                             .foregroundColor: color, .paragraphStyle: paragraph]
+            if doubtful { attributes[PreviewText.doubtful] = true }
+            text.append(NSAttributedString(string: string, attributes: attributes))
+        }
+        var selectedRange: NSRange?
         for (i, word) in words.enumerated() {
-            var attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 20), .foregroundColor: Theme.text]
-            if doubtful.contains(i) {  // likely wrong: a dotted line under it, and ↑ starts on it
-                attributes[.underlineStyle] = NSUnderlineStyle.single.union(.patternDot).rawValue
-                attributes[.underlineColor] = Theme.warning
-            }
-            if i > 0 { text.append(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 20)])) }
-            text.append(NSAttributedString(string: word, attributes: attributes))
+            if i > 0 { add(" ", size: 20, color: Theme.text) }
+            if i == selected { selectedRange = NSRange(location: text.length, length: (word as NSString).length) }
+            add(word, size: 20, color: Theme.text, doubtful: doubtful.contains(i))
         }
-        if !latin.isEmpty {
-            text.append(NSAttributedString(string: " " + latin, attributes: [
-                .font: NSFont.systemFont(ofSize: 16), .foregroundColor: Theme.textMuted]))
-        }
-        if let hint {
-            text.append(NSAttributedString(string: "   " + hint, attributes: [
-                .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.accent]))
-        }
-        label.attributedStringValue = text
-        let fitted = label.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: Self.maxWidth - 2 * Self.padding.width,
-                                                            height: 10_000)) ?? .zero
-        let size = NSSize(width: ceil(fitted.width) + 2 * Self.padding.width,
-                          height: ceil(fitted.height) + 2 * Self.padding.height)
-        label.frame = NSRect(x: Self.padding.width, y: Self.padding.height, width: ceil(fitted.width),
-                             height: ceil(fitted.height))
+        if !latin.isEmpty { add(" " + latin, size: 16, color: Theme.textMuted) }
+        if let hint { add("   " + hint, size: 12, color: Theme.accent) }
+        let fitted = label.set(text, maxWidth: Self.maxWidth - 2 * Self.padding.width)
+        let size = NSSize(width: fitted.width + 2 * Self.padding.width, height: fitted.height + 2 * Self.padding.height)
+        label.frame = NSRect(origin: NSPoint(x: Self.padding.width, y: Self.padding.height), size: fitted)
         let anchor = line == .zero ? NSRect(origin: NSEvent.mouseLocation, size: .zero) : line
         let screen = NSScreen.screens.first { $0.frame.contains(anchor.origin) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1_600, height: 1_000)
@@ -637,11 +644,148 @@ final class PreviewWindow {
         if origin.y + size.height > visible.maxY { origin.y = anchor.minY - size.height - 6 }  // no room: below it
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        label.needsDisplay = true
+        label.select(selectedRange)
         panel.orderFrontRegardless()
+        return panel.frame
     }
 
     @MainActor func hide() {
+        label?.select(nil)
         panel?.orderOut(nil)
+    }
+}
+
+/// The preview text, drawn with its own layout so a doubtful word gets a clear dashed line below its lowest
+/// letters (a standard underline runs through Arabic letters that hang below the line).
+final class PreviewText: NSView {
+    static let doubtful = NSAttributedString.Key("HarfiDoubtful")
+    private let storage = NSTextStorage()
+    private let layout = NSLayoutManager()
+    private let container = NSTextContainer()
+    private static let lineGap: CGFloat = 5  // room under the text for the dashed line
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var isFlipped: Bool { true }
+
+    /// Lays `text` out within `maxWidth` and returns the size it needs.
+    func set(_ text: NSAttributedString, maxWidth: CGFloat) -> NSSize {
+        storage.setAttributedString(text)
+        container.size = NSSize(width: maxWidth, height: .greatestFiniteMagnitude)
+        layout.ensureLayout(for: container)
+        let used = layout.usedRect(for: container)
+        container.size = NSSize(width: ceil(used.width), height: .greatestFiniteMagnitude)  // right-aligned text fits
+        layout.ensureLayout(for: container)
+        return NSSize(width: ceil(used.width), height: ceil(used.height) + Self.lineGap)
+    }
+
+    /// Where the characters `range` are drawn, in this view (their first line).
+    private func rect(for range: NSRange) -> NSRect? {
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var found: NSRect?
+        let none = NSRange(location: NSNotFound, length: 0)
+        layout.enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: none, in: container) { rect, stop in
+            found = rect
+            stop.pointee = true
+        }
+        return found
+    }
+
+    /// The highlight behind the selected word: where it is drawn now, and the glide in progress.
+    private var shown: NSRect?
+    private var glide: (from: NSRect, to: NSRect, start: CFTimeInterval)?
+    private var timer: Timer?
+    private var opacity: CGFloat = 0
+    private static let glideTime: CFTimeInterval = 0.18
+
+    /// Highlights the characters `range` (the word being fixed): fades in on the first word, glides to the next.
+    func select(_ range: NSRange?) {
+        guard let range, let target = rect(for: range) else {
+            shown = nil
+            glide = nil
+            opacity = 0
+            needsDisplay = true
+            return
+        }
+        let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if let from = shown, from != target, !still {
+            glide = (from, target, CACurrentMediaTime())
+        } else {
+            shown = target
+            glide = nil
+            if opacity == 0 && !still { glide = (target, target, CACurrentMediaTime()) }  // fade in on the spot
+        }
+        if still { opacity = 1 }
+        startTimer()
+        needsDisplay = true
+    }
+
+    private func startTimer() {
+        guard timer == nil, glide != nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.step() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    /// One frame of the glide (and fade): eased from where the highlight was to the selected word.
+    private func step() {
+        guard let glide else {
+            timer?.invalidate()
+            timer = nil
+            return
+        }
+        let t = min(1, (CACurrentMediaTime() - glide.start) / Self.glideTime)
+        let eased = t * t * (3 - 2 * t)
+        func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * eased }
+        shown = NSRect(x: mix(glide.from.minX, glide.to.minX), y: mix(glide.from.minY, glide.to.minY),
+                       width: mix(glide.from.width, glide.to.width), height: mix(glide.from.height, glide.to.height))
+        opacity = max(opacity, eased)
+        needsDisplay = true
+        if t >= 1 {
+            self.glide = nil
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if let shown, opacity > 0 {  // a clear cedar outline and fill, under the letters
+            let pill = NSBezierPath(roundedRect: shown.insetBy(dx: -4, dy: 0), xRadius: 6, yRadius: 6)
+            Theme.accent.withAlphaComponent(0.18 * opacity).setFill()
+            pill.fill()
+            Theme.accent.withAlphaComponent(0.9 * opacity).setStroke()
+            pill.lineWidth = 1.5
+            pill.stroke()
+        }
+        let glyphs = layout.glyphRange(for: container)
+        layout.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+        storage.enumerateAttribute(Self.doubtful, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard value != nil else { return }
+            let wordGlyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let none = NSRange(location: NSNotFound, length: 0)
+            layout.enumerateEnclosingRects(forGlyphRange: wordGlyphs, withinSelectedGlyphRange: none,
+                                           in: container) { rect, _ in
+                let path = NSBezierPath()
+                let y = rect.maxY + 2
+                path.move(to: NSPoint(x: rect.minX, y: y))
+                path.line(to: NSPoint(x: rect.maxX, y: y))
+                path.lineWidth = 1.5
+                path.setLineDash([4, 3], count: 2, phase: 0)
+                path.lineCapStyle = .round
+                Theme.warning.setStroke()
+                path.stroke()
+            }
+        }
     }
 }
 
