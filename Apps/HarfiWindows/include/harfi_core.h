@@ -20,8 +20,10 @@ void harfi_composer_free(harfi_composer composer);
    "arrowLeft"|"arrowRight"|"arrowUp"|"arrowDown"|"tab"|"backtab"|"other"}, optional "secureInput",
    "cursorAtLastConversion" (booleans), "selectedText". Returns {"effect": "pass"|"consume"|"update"|"commit"|
    "commitAndPass"|"replaceSelection"|"restore"|"suggest"|"commitAndCompose", "marked", "text", "selected",
-   "replacingLength", "candidates", "choice"}. */
+   "replacingLength", "candidates", "choice", "word" (the word being fixed), "spelling"}. */
 char *harfi_composer_key(harfi_composer composer, const char *key_json);
+/* A spelling (or, while spelling, a letter) clicked in the chip row: the same reply as harfi_composer_key. */
+char *harfi_composer_pick(harfi_composer composer, const char *candidate);
 char *harfi_composer_buffer(harfi_composer composer);
 void harfi_free(char *text);
 

@@ -44,6 +44,7 @@ private func json(_ text: String) -> [String: Any] {
     #expect(fix["effect"] as? String == "suggest" && fix["marked"] as? String == "شو عم")
     #expect((fix["selected"] as? [Int]) == [3, 5])
     #expect(!(fix["candidates"] as? [String] ?? []).isEmpty)
+    #expect(fix["word"] as? String == "عم")  // the word being fixed, shown first in the chip row
     let sent = key(#"{"key":"enter"}"#)
     #expect(sent["effect"] as? String == "commit" && sent["text"] as? String == "شو عم")
     #expect(key(#"{"key":"enter"}"#)["effect"] as? String == "pass")  // Enter again sends
@@ -58,4 +59,17 @@ private func json(_ text: String) -> [String: Any] {
     #expect(key(#"{"key":"text","text":"a","secureInput":true}"#) == "pass")
     #expect(key(#"{"key":"teleport"}"#) == "pass")
     #expect(key("not json") == "pass")
+}
+
+@Test func aClickedSpellingIsPickedLikeItsNumber() throws {
+    let core = try #require(rules.path.withCString { harfi_core_open($0) })
+    defer { harfi_core_close(core) }
+    let composer = try #require(harfi_composer_new(core))
+    defer { harfi_composer_free(composer) }
+    for letter in "ma bade" { _ = call({ harfi_composer_key(composer, $0) }, #"{"key":"text","text":"\#(letter)"}"#) }
+    let fix = json(call({ harfi_composer_key(composer, $0) }, #"{"key":"arrowUp"}"#))
+    let offered = try #require((fix["candidates"] as? [String])?.first)
+    let picked = json(call({ harfi_composer_pick(composer, $0) }, offered))
+    #expect(picked["effect"] as? String == "commit")
+    #expect((picked["text"] as? String)?.hasSuffix(offered) == true)
 }

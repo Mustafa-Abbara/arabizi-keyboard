@@ -103,6 +103,8 @@ jobs:
           Copy-Item (Get-ChildItem Packages/ArabiziCore/.build -Recurse -Filter HarfiCoreC.dll | Select-Object -First 1).FullName dist/harfi-windows/
           Copy-Item data/rules/arabizi_to_arabic.json, data/rules/arabizi_lexicon.json, data/rules/spelling_options.json, data/rules/english_stopwords.json dist/harfi-windows/rules/
           Copy-Item Apps/HarfiWindows/install.ps1 dist/harfi-windows/
+          New-Item -ItemType Directory -Force dist/harfi-windows/fonts | Out-Null
+          Copy-Item Apps/ArabiziIME/Resources/Fonts/NotoNaskhArabic-Variable.ttf, Apps/ArabiziIME/Resources/Fonts/OFL.txt dist/harfi-windows/fonts/
           # The Swift runtime HarfiCoreC.dll needs, so the PC does not need a Swift toolchain.
           $runtime = Get-ChildItem "$env:LOCALAPPDATA/Programs/Swift/Runtimes" -Directory | Sort-Object Name | Select-Object -Last 1
           Copy-Item "$($runtime.FullName)/usr/bin/*.dll" dist/harfi-windows/
