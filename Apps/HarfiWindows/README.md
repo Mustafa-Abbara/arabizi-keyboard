@@ -6,13 +6,14 @@ A TSF text input processor (`HarfiTIP.dll`, C++) that uses the same core as the 
 
 ## Try it
 
-1. Download the `harfi-windows` artifact from the latest CI run of the pull request (Actions → the run → Artifacts) and unzip it, for example to `%LOCALAPPDATA%\Harfi`. It holds `HarfiTIP.dll`, `HarfiCoreC.dll` and `rules\`.
-2. `HarfiCoreC.dll` needs the Swift runtime: install the Swift 6.2 toolchain for Windows (swift.org), or copy its runtime DLLs next to it (the installer will bundle them, task 6).
-3. Register: `regsvr32 "%LOCALAPPDATA%\Harfi\HarfiTIP.dll"`. If it fails, run it once from an administrator prompt: Windows may keep keyboard profiles machine-wide (to confirm, ADR 0032 decision 5).
-4. Settings → Time & language → Language & region → Arabic (Lebanon) → Language options → Add a keyboard → **Harfi**. Switch with Win+Space.
-5. Type `shu 3am ta3mel` in Notepad and press Enter: شو عم تعمل.
+On an x64 Windows 10 or 11 PC:
 
-Remove it with `regsvr32 /u "%LOCALAPPDATA%\Harfi\HarfiTIP.dll"`.
+1. Download the `harfi-windows` artifact from the latest CI run of the pull request (Actions → the run → Artifacts) and unzip it. It holds `HarfiTIP.dll`, `HarfiCoreC.dll`, the Swift runtime DLLs, `rules\` and `install.ps1`.
+2. Right-click `install.ps1` → **Run with PowerShell**. It copies the files to `%LOCALAPPDATA%\Harfi` and registers the keyboard; if Windows needs administrator rights for that, it asks once.
+3. Settings → Time & language → Language & region → Arabic (Lebanon) → Language options → Add a keyboard → **Harfi**. Switch with Win+Space.
+4. Type `shu 3am ta3mel` in Notepad and press Enter: شو عم تعمل.
+
+Remove it with `install.ps1 -Uninstall`.
 
 ## Build
 

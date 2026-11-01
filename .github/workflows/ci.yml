@@ -102,6 +102,11 @@ jobs:
           Copy-Item build/windows/Release/HarfiTIP.dll dist/harfi-windows/
           Copy-Item (Get-ChildItem Packages/ArabiziCore/.build -Recurse -Filter HarfiCoreC.dll | Select-Object -First 1).FullName dist/harfi-windows/
           Copy-Item data/rules/arabizi_to_arabic.json, data/rules/arabizi_lexicon.json, data/rules/spelling_options.json, data/rules/english_stopwords.json dist/harfi-windows/rules/
+          Copy-Item Apps/HarfiWindows/install.ps1 dist/harfi-windows/
+          # The Swift runtime HarfiCoreC.dll needs, so the PC does not need a Swift toolchain.
+          $runtime = Get-ChildItem "$env:LOCALAPPDATA/Programs/Swift/Runtimes" -Directory | Sort-Object Name | Select-Object -Last 1
+          Copy-Item "$($runtime.FullName)/usr/bin/*.dll" dist/harfi-windows/
+          Get-ChildItem dist/harfi-windows | Format-Table Name, Length
       - uses: actions/upload-artifact@v4
         with:
           name: harfi-windows
