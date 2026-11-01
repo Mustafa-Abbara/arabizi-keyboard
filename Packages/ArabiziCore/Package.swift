@@ -2,17 +2,28 @@
 // Pure Swift logic for the keyboard: no AppKit, no InputMethodKit, so it is unit-tested with `swift test`.
 import PackageDescription
 
+let crypto: Target.Dependency = .product(name: "Crypto", package: "swift-crypto",
+                                         condition: .when(platforms: [.windows, .linux]))
+
 let package = Package(
     name: "ArabiziCore",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "ArabiziCore", targets: ["ArabiziCore"]),
         .executable(name: "arabizi-suggestions-report", targets: ["arabizi-suggestions-report"]),
+        // The core as a C library for the Windows keyboard (ADR 0032): HarfiCoreC.dll on Windows.
+        .library(name: "HarfiCoreC", type: .dynamic, targets: ["HarfiCoreC"]),
+    ],
+    dependencies: [
+        // CryptoKit's API for Windows and Linux (ADR 0032); Apple platforms keep CryptoKit and never link it.
+        .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0" ..< "4.0.0"),
     ],
     targets: [
-        .target(name: "ArabiziCore"),
+        .target(name: "ArabiziCore", dependencies: [crypto]),
         .executableTarget(name: "arabizi-suggestions-report", dependencies: ["ArabiziCore"]),
+        .target(name: "HarfiCoreC", dependencies: ["ArabiziCore"]),
+        .testTarget(name: "HarfiCoreCTests", dependencies: ["HarfiCoreC"]),
         // Fixtures are read from the source tree (like data/rules), not bundled.
-        .testTarget(name: "ArabiziCoreTests", dependencies: ["ArabiziCore"], exclude: ["Fixtures"]),
+        .testTarget(name: "ArabiziCoreTests", dependencies: ["ArabiziCore", crypto], exclude: ["Fixtures"]),
     ]
 )
