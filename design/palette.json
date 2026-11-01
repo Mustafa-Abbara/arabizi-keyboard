@@ -1,0 +1,26 @@
+{
+  "_name": "Cedar and sand",
+  "_about": "Colour tokens for every Harfi surface (keyboard boxes, settings, website, Windows). One accent; text contrast at least 4.5:1 on its surface in both modes.",
+  "light": {
+    "background": "#F6F3EC",
+    "surface": "#FFFFFF",
+    "text": "#1E2A25",
+    "textMuted": "#6B756F",
+    "border": "#E4DFD4",
+    "accent": "#2F6B5A",
+    "accentSoft": "#E2EEE8",
+    "warning": "#9A6A1F",
+    "danger": "#A6473B"
+  },
+  "dark": {
+    "background": "#151B19",
+    "surface": "#1D2522",
+    "text": "#E9EEEB",
+    "textMuted": "#93A099",
+    "border": "#2C3632",
+    "accent": "#7DBBA5",
+    "accentSoft": "#21392F",
+    "warning": "#E0B062",
+    "danger": "#E0857A"
+  }
+}

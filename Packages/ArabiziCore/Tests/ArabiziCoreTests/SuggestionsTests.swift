@@ -89,6 +89,10 @@ func dictionary(_ arabic: [String]) -> [String: String] {
     let bytes = try Data(contentsOf: file)
     #expect(String(decoding: bytes, as: UTF8.self).contains("tawle") == false)  // not readable on disk
     #expect(CorrectionStore(file: file, key: SymmetricKey(size: .bits256)).all().isEmpty)  // wrong key: nothing
+    let other = Correction(latin: "Tawle", chosen: "تاولة", rejected: "طاولة", date: today)
+    try store.record(other)
+    try store.forget(latin: "TAWLE", chosen: "طاولة")
+    #expect(store.all() == [other])  // only that spelling of that word
     try store.wipe()
     #expect(store.all().isEmpty)
 }
@@ -204,7 +208,7 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     let past = [fix("sabiye", "صبية", 1), fix("Sabiye", "صبية", 2), fix("sabiye", "سابية", 3),
                 fix("kifak", "كيفك", 3), fix("sabiye", "سبية", 4)]
     let offered = Suggestions.pastFixesFirst(past, latin: "sabiye?", shown: "سبية؟",
-                                             candidates: ["سابية", "صبيه", "sabiye", "a", "b"])
+                                             candidates: ["سابية", "صبيه", "sabiye", "a", "b"], limit: 5)
     #expect(offered == ["صبية", "سابية", "صبيه", "sabiye", "a"])  // most often chosen first; no repeats; at most 5
     #expect(!offered.contains("سبية"))  // never the word already shown
     #expect(!offered.contains("كيفك"))  // another typed word's fix
@@ -217,4 +221,17 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     let offered = suggestions.candidates(for: "الشر", latin: "el shr")
     #expect(offered.first == "الشار")  // the main word's spelling, with ال in front
     #expect(!offered.contains("ال") && !offered.contains("الشر"))
+}
+
+@Test func aWordWithALetterNoKeyWritesIsDoubtful() throws {
+    let spelling = try SpellingOptions(rulesDirectory: rulesDirectory, rules: committedConverter)
+    #expect(spelling.canWrite("يجحش", from: "yj7sh") && !spelling.canWrite("يجهش", from: "yj7sh"))
+    #expect(spelling.canWrite("ورايي", from: "waraye") && !spelling.canWrite("ورايق", from: "waraye"))
+    #expect(spelling.canWrite("سكر", from: "sakkar") && spelling.canWrite("الله", from: "allah"))
+    #expect(spelling.canWrite("غلط", from: "3'alat"))  // a two-character key
+    let suggestions = Suggestions(dictionary: [:], arabicWords: ["قلبي": 3], rules: { $0 })
+    #expect(suggestions.isDoubtful("ورايق؟", latin: "waraye?", spelling: spelling))
+    #expect(!suggestions.isDoubtful("قلبي", latin: "albe", spelling: spelling))  // a known word: people write ق
+    #expect(!suggestions.isDoubtful("ورايي", latin: "waraye", spelling: spelling))
+    #expect(!suggestions.isDoubtful("meeting", latin: "meeting", spelling: spelling))
 }

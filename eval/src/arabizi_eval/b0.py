@@ -25,6 +25,9 @@ LEXICON_PATH = P.ROOT / "data" / "rules" / "arabizi_lexicon.json"
 TOKEN = re.compile(r"^(\W*)(.*?)(\W*)$", re.DOTALL)  # DOTALL: a token holding a newline still matches
 WORD = re.compile(r"^[a-z0-9']+$")
 LATIN = re.compile(r"[A-Za-z]")
+EMOJI_RUN = re.compile(r"([^\w\x00-\x7F]+)")  # emoji and other symbols: not a word character, not ASCII
+ARABIC_WORD = re.compile(r"[ء-ي]{2,}")  # letters only: no digits, marks, tatweel or Latin
+ARABIC_CORE = re.compile(r"^[^ء-ي]+|[^ء-ي]+$")  # punctuation and emoji around a word
 VOWELS = set("aeiou")
 MIN_SHARE = 0.5  # a dictionary entry needs at least half of a word's aligned occurrences
 
@@ -133,6 +136,14 @@ class RuleConverter:
         while i < len(tokens):
             token = tokens[i]
             lead, core, trail = TOKEN.match(token).groups()
+            pieces = EMOJI_RUN.split(core)
+            if len(pieces) > 1 and all(p.isascii() for p in pieces[::2]) and any(LATIN.search(p) for p in pieces[::2]) \
+                    and not P.UNTOUCHED.fullmatch(token):
+                # Words glued by emoji (ya😍rayt): each word converted on its own, the emoji kept between them.
+                glued = "".join(self.convert(p) if k % 2 == 0 else p for k, p in enumerate(pieces))
+                out.append(self._punct(lead) + glued + self._punct(trail))
+                i += 1
+                continue
             if self._untouched(token, core):
                 out.append(self._punct(lead) + core + self._punct(trail) if core and not P.UNTOUCHED.fullmatch(token)
                            else token)
@@ -229,6 +240,10 @@ def build_lexicon(rows: list[dict], rules: dict | None = None) -> dict:
         if word not in clitics and count / sum(candidates.values()) >= MIN_SHARE:
             words[word] = best
     keep = sorted(w for w, n in latin_kept.items() if n > latin_converted[w])
+    # How often each Arabic word is written in the training sentences (generated variants repeat their source's
+    # Arabic, so they are not counted): the known spellings that word suggestions may offer, most common first.
+    arabic_words = Counter(core for r in rows if r["method"] != "rule_variant" for t in M.tokens(r["arabic"])
+                           if ARABIC_WORD.fullmatch(core := ARABIC_CORE.sub("", t)))
     methods = Counter(r["method"] for r in rows)
     digest = hashlib.sha256("".join(sorted(r["id"] for r in rows)).encode()).hexdigest()[:16]
     return {
@@ -239,4 +254,5 @@ def build_lexicon(rows: list[dict], rules: dict | None = None) -> dict:
                        "row_ids_sha256_16": digest, "min_share": MIN_SHARE},
         "keep_latin": keep,
         "words": dict(sorted(words.items())),
+        "arabic_words": dict(sorted(arabic_words.items(), key=lambda kv: (-kv[1], kv[0]))),
     }

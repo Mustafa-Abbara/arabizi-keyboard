@@ -21,24 +21,34 @@ public struct WordParts: Equatable, Sendable {
     public func with(_ newCore: String) -> String { lead + newCore + trail }
 }
 
-/// Spellings to offer for one word of a conversion (ADR 0027), at most 5, the shown word never offered back:
+/// Spellings to offer for one word of a conversion (ADR 0027), at most `listLength`, the shown word never offered back:
 /// 1. the rules' spelling of the typed Arabizi word;
 /// 2. the Arabic of dictionary words typed one letter differently (`sabiyeh`, `sabiyi` for `sabiye`), when that
 ///    Arabic looks like the shown word (at least half the letters in common), closest first;
-/// 3. one-letter and long-vowel variants of the shown word that the dictionary knows as words;
+/// 3. one-letter and long-vowel variants of the shown word that are known words (the dictionary's Arabic, or a
+///    word written in the training sentences): the common error kinds first, then any other one-letter change,
+///    the more often written first;
 /// 4. the typed word itself, to keep it in Latin.
 public struct Suggestions: Sendable {
+    /// How many spellings are offered (keys 1–7): 7 holds the right word for 50% and 42% of wrong words on the two
+    /// dev sets, 5 for 41% and 40% (model v3, 1 Nov 2026).
+    public static let listLength = 7
     /// The rule dictionary: Arabizi word -> Arabic spelling.
     let dictionary: [String: String]
     /// The dictionary's Arabizi words by length, so neighbours are looked up among similar lengths only.
     let byLength: [Int: [(key: [Character], arabic: String)]]
-    /// Arabic spellings the dictionary knows; a variant is offered only if it is one of them.
+    /// Arabic spellings the dictionary knows or the training sentences write; a variant is offered only if it is
+    /// one of them.
     let knownArabic: Set<String>
+    /// How often the training sentences write each Arabic word, to order the other one-letter changes.
+    let arabicWords: [String: Int]
     let rules: @Sendable (String) -> String
 
-    public init(dictionary: [String: String], rules: @escaping @Sendable (String) -> String) {
+    public init(dictionary: [String: String], arabicWords: [String: Int] = [:],
+                rules: @escaping @Sendable (String) -> String) {
         self.dictionary = dictionary
-        self.knownArabic = Set(dictionary.values)
+        self.arabicWords = arabicWords
+        self.knownArabic = Set(dictionary.values).union(arabicWords.keys)
         self.byLength = Dictionary(grouping: dictionary.map { (key: Array($0.key), arabic: $0.value) },
                                    by: { $0.key.count })
         self.rules = rules
@@ -49,10 +59,15 @@ public struct Suggestions: Sendable {
         (try? JSONDecoder().decode(LexiconWords.self, from: lexicon))?.words ?? [:]
     }
 
+    /// The Arabic words of the training sentences with their counts (the same file's `arabic_words`).
+    public static func arabicWords(lexicon: Data) -> [String: Int] {
+        (try? JSONDecoder().decode(LexiconArabic.self, from: lexicon))?.arabicWords ?? [:]
+    }
+
     /// The user's own earlier fixes for the same typed word come first (most often chosen, then most recent),
     /// then `candidates`; the word already shown is never offered.
     public static func pastFixesFirst(_ past: [Correction], latin: String?, shown: String, candidates: [String],
-                                      limit: Int = 5) -> [String] {
+                                      limit: Int = listLength) -> [String] {
         let word = WordParts(shown).core
         var fixes: [String: (count: Int, last: Date)] = [:]
         if let latin {
@@ -71,7 +86,7 @@ public struct Suggestions: Sendable {
         return Array(out.prefix(limit))
     }
 
-    public func candidates(for shown: String, latin: String?, limit: Int = 5) -> [String] {
+    public func candidates(for shown: String, latin: String?, limit: Int = listLength) -> [String] {
         let word = WordParts(shown).core
         var out: [String] = []
         func add(_ candidate: String) {
@@ -111,6 +126,8 @@ public struct Suggestions: Sendable {
         for variant in Self.variants(of: word) where knownArabic.contains(variant) {
             add(variant)
         }
+        let others = Set(Self.oneLetterChanges(of: word)).filter(knownArabic.contains)
+        for other in others.sorted(by: { (arabicWords[$0] ?? 0, $1) > (arabicWords[$1] ?? 0, $0) }) { add(other) }
         out = Array(out.prefix(limit - (latinCore == nil ? 0 : 1)))
         if let latinCore, !latinCore.isEmpty, latinCore.unicodeScalars.contains(where: \.properties.isAlphabetic) {
             add(latinCore)
@@ -168,6 +185,34 @@ public struct Suggestions: Sendable {
     }
 
     static func isArabicLetter(_ scalar: Unicode.Scalar) -> Bool { (0x0621...0x064A).contains(scalar.value) }
+
+    static let arabicLetters: [Character] = (0x0621...0x064A).filter { $0 != 0x0640 }  // not the tatweel
+        .compactMap { Unicode.Scalar($0).map(Character.init) }
+
+    /// Every word one Arabic letter away from an Arabic `word`: a letter dropped, changed or added.
+    static func oneLetterChanges(of word: String) -> [String] {
+        let letters = Array(word)
+        guard !letters.isEmpty, word.unicodeScalars.allSatisfy(isArabicLetter) else { return [] }
+        var out: [String] = []
+        for i in letters.indices {
+            var dropped = letters
+            dropped.remove(at: i)
+            out.append(String(dropped))
+            for letter in arabicLetters where letter != letters[i] {
+                var changed = letters
+                changed[i] = letter
+                out.append(String(changed))
+            }
+        }
+        for i in 0...letters.count {
+            for letter in arabicLetters {
+                var added = letters
+                added.insert(letter, at: i)
+                out.append(String(added))
+            }
+        }
+        return out
+    }
 
     /// Exactly one letter added, dropped or changed (linear time).
     static func oneEditApart(_ a: [Character], _ b: [Character]) -> Bool {
@@ -266,4 +311,9 @@ public enum WordAlignment {
 
 private struct LexiconWords: Decodable {
     let words: [String: String]
+}
+
+private struct LexiconArabic: Decodable {
+    let arabicWords: [String: Int]
+    enum CodingKeys: String, CodingKey { case arabicWords = "arabic_words" }
 }

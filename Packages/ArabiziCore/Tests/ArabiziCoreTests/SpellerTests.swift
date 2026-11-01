@@ -289,5 +289,5 @@ let spellingLastWord = ("كيفك يا " as String).utf16.count..<spellingConver
     var composer = spellingComposer(Recorded())
     #expect(composer.handle(.arrowDown) == .pass)
     for key in "ya" { _ = composer.handle(.text(String(key))) }
-    #expect(composer.handle(.arrowUp) == .commitAndPass("ya"))
+    #expect(composer.handle(.arrowDown) == .commitAndPass("ya"))  // ↑ while typing fixes a word (ComposerTests)
 }

@@ -3,6 +3,7 @@
 //
 //   swift run -c release --package-path Packages/ArabiziCore arabizi-suggestions-report [predictions.jsonl ...]
 //   swift run -c release --package-path Packages/ArabiziCore arabizi-suggestions-report --corrections
+//   swift run -c release --package-path Packages/ArabiziCore arabizi-suggestions-report --doubtful predictions.jsonl ...
 //
 // Without arguments: can every Arabic word in the dev sets and the training data be spelled letter by letter,
 // and with how many presses. With predictions (eval/results/<run>/predictions.jsonl): for each wrong word, is the
@@ -15,7 +16,8 @@ let rulesDirectory = URL(filePath: "data/rules")
 let rules = try RuleConverter(rulesDirectory: rulesDirectory)
 let spelling = try SpellingOptions(rulesDirectory: rulesDirectory, rules: rules)
 let lexicon = try Data(contentsOf: rulesDirectory.appending(path: RuleConverter.lexiconFileName))
-let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon), rules: { rules.convert($0) })
+let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon),
+                              arabicWords: Suggestions.arabicWords(lexicon: lexicon), rules: { rules.convert($0) })
 
 func rows(_ path: String) throws -> [[String: Any]] {
     try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n").map {
@@ -48,6 +50,37 @@ if arguments.first == "--english" {
         let flagged = texts.filter { guardRules.isEnglish($0) }
         print("\(URL(filePath: path).lastPathComponent): \(flagged.count) of \(texts.count) left unchanged")
         if show { flagged.forEach { print("   \($0)") } }
+    }
+    exit(0)
+}
+
+if arguments.first == "--doubtful" {
+    // How well "doubtful" (a letter no typed key writes, in an unknown word) points at wrong words: counts only.
+    let spellingOptions = try SpellingOptions(rulesDirectory: rulesDirectory, rules: rules)
+    for path in arguments.dropFirst() {
+        var flagged = 0, wrongFlagged = 0, wrong = 0, sentencesFlagged = 0, sentences = 0
+        for row in try rows(path) {
+            let latin = (row["arabizi"] as? String ?? "").split(whereSeparator: \.isWhitespace).map(String.init)
+            let shown = (row["prediction"] as? String ?? "").components(separatedBy: " ")
+            let reference = (row["reference"] as? String ?? "").components(separatedBy: " ")
+            guard shown.count == reference.count, shown.count == latin.count else { continue }
+            sentences += 1
+            var any = false
+            for i in shown.indices {
+                let isWrong = WordParts(shown[i]).core != WordParts(reference[i]).core
+                if isWrong { wrong += 1 }
+                if suggestions.isDoubtful(shown[i], latin: latin[i], spelling: spellingOptions) {
+                    flagged += 1
+                    any = true
+                    if isWrong { wrongFlagged += 1 }
+                }
+            }
+            if any { sentencesFlagged += 1 }
+        }
+        print(URL(filePath: path).deletingLastPathComponent().lastPathComponent)
+        print("  doubtful words: \(flagged), of them wrong: \(wrongFlagged) (\(percent(wrongFlagged, flagged)))")
+        print("  wrong words caught: \(wrongFlagged) of \(wrong) (\(percent(wrongFlagged, wrong)))")
+        print("  sentences with a doubtful word: \(sentencesFlagged) of \(sentences)")
     }
     exit(0)
 }

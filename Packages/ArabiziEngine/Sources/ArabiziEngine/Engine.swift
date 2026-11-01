@@ -34,6 +34,8 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     public let config: EngineConfig
     public let modelState: ModelState
     private let rules: RuleConverter
+    /// The configured checks with the training data's kept-Latin words.
+    private let checks: OutputChecks
     private let generator: (any TextGenerator)?
     private let template: PromptTemplate?
     private let englishGuard: EnglishGuard?
@@ -47,6 +49,9 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         self.config = config
         self.englishGuard = englishGuard
         self.rules = rules
+        var checks = config.outputChecks
+        checks.keptLatin = rules.keptLatinWords
+        self.checks = checks
         self.generator = generator
         self.template = template
         self.modelState = modelState
@@ -144,13 +149,13 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
             reason = "token limit \(limit)"
             return respond(rules.convert(text), .fallbackCheckFailed)
         case .endOfTurn:
-            switch config.outputChecks.check(Self.clean(generation.text), for: protected) {
+            switch checks.check(Self.clean(generation.text), for: protected) {
             case .success(let converted):
                 return respond(converted, .model)
             case .failure(.newLatin(let invented)):
                 let answer = Self.clean(generation.text)
                 if repairTokens, let (repaired, count) = Self.repair(answer, input: protected.masked, rules: rules),
-                   case .success(let converted) = config.outputChecks.check(repaired, for: protected) {
+                   case .success(let converted) = checks.check(repaired, for: protected) {
                     reason = "repaired: \(count) token(s)"
                     return respond(converted, .model)
                 }
@@ -183,20 +188,21 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     static func repair(_ answer: String, input: String, rules: RuleConverter) -> (String, Int)? {
         let inputWords = input.split(whereSeparator: \.isWhitespace).map { core(of: String($0)).core.lowercased() }
             .filter { !$0.contains("⟦") }
-        let allowed = Set(inputWords)
+        let allowed = Set(inputWords), kept = rules.keptLatinWords
         let inputTokens = input.split(whereSeparator: \.isWhitespace).map(String.init)
         let answerTokens = answer.split(whereSeparator: \.isWhitespace).map(String.init)
         var repaired = 0
         var output: [String] = []
         for (position, word) in answerTokens.enumerated() {
             let (lead, core, trail) = core(of: word)
-            guard core.unicodeScalars.contains(where: isLatinLetter), !OutputChecks.isInputWord(core, allowed) else {
+            guard core.unicodeScalars.contains(where: isLatinLetter),
+                  !OutputChecks.isInputWord(core, allowed, keptLatin: kept) else {
                 output.append(word)
                 continue
             }
             let latin = String(String.UnicodeScalarView(core.unicodeScalars.filter { $0.isASCII })).lowercased()
             if let match = core.wholeMatch(of: /(\p{Arabic}+)([A-Za-z][A-Za-z0-9'-]*)/),
-               OutputChecks.isInputWord(String(match.2), allowed) {
+               OutputChecks.isInputWord(String(match.2), allowed, keptLatin: kept) {
                 output.append("\(lead)\(match.1) \(match.2)\(trail)")
             } else {
                 let sources = Set(inputWords.filter { !latin.isEmpty && $0.contains(latin) })

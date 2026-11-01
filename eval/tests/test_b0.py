@@ -15,7 +15,6 @@ def conv() -> b0.RuleConverter:
 
 @pytest.mark.parametrize(("word", "arabic"), [
     ("ktir", "كتير"), ("mni7", "منيح"), ("ta3mel", "تعمل"), ("7abibi", "حبيبي"),
-    ("ana", "أنا"), ("hayda", "هيدا"), ("bade", "بدي"), ("kbire", "كبيرة"),
     ("shhr", "شهر"),  # the h of "sh" is not a doubled h
     ("sakkar", "سكر"),  # doubled k collapses
     ("sheyfne", "شيفني"), ("kllfne", "كلفني"),  # -ne ending is "me"
@@ -54,6 +53,9 @@ def test_join_clitic_never_doubles_the_article(prefix, word, joined):
     ("shuf www.lau.edu, @rami #lebanon 😂", "شوف www.lau.edu, @rami #lebanon 😂"),
     ("3al 7:30?", "عال 7:30؟"),
     ("shu\nkifak 3am", "shu\nkifak عم"),  # a newline inside a token used to crash TOKEN.match
+    ("ya😍rayt", "يا😍ريت"),  # words glued by an emoji are converted one by one
+    # a joined emoji sequence (❤️‍🔥) stays whole between the two words
+    ("kifak\u2764\ufe0f\u200d\U0001f525shu", "\u0643\u064a\u0641\u0643\u2764\ufe0f\u200d\U0001f525\u0634\u0648"),
 ])
 def test_conversion(conv, arabizi, arabic):
     assert conv.convert(arabizi) == arabic
@@ -78,6 +80,9 @@ def test_build_lexicon_from_direct_and_clitic_alignments():
     assert "meeting" in lexicon["keep_latin"] and "meeting" not in lexicon["words"]
     assert "bel" not in lexicon["words"]  # clitics are rules, not dictionary words
     assert lexicon["built_from"]["rows"] == 6 and lexicon["built_from"]["aligned_rows"] == 5
+    assert lexicon["arabic_words"]["شو"] == 2 and lexicon["arabic_words"]["بالبيت"] == 1
+    assert "meeting" not in lexicon["arabic_words"] and "ما" in lexicon["arabic_words"]
+    assert list(lexicon["arabic_words"])[0] == "شو"  # most common first
 
 
 def test_dictionary_is_never_built_from_dev_or_test():

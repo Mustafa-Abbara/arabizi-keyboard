@@ -50,7 +50,7 @@ extension Suggestions {
     /// 1. earlier fixes of the same typed word (most often chosen, then most recent);
     /// 2. fixes of typed words one letter apart (`shar` for `shr`) whose spelling looks like the shown word;
     /// 3. the usual candidates, the kinds of change the user picks most often first.
-    public func personalized(for shown: String, latin: String?, past: [Correction], limit: Int = 5) -> [String] {
+    public func personalized(for shown: String, latin: String?, past: [Correction], limit: Int = Suggestions.listLength) -> [String] {
         let word = WordParts(shown).core
         let own = Self.pastFixesFirst(past, latin: latin, shown: shown, candidates: [], limit: limit)
         var similar: [String: Int] = [:]

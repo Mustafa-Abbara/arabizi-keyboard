@@ -13,6 +13,8 @@ let englishGuard = EnglishGuard(rulesDirectory: rulesDirectory, rules: committed
     "Thanks, see you at the office tomorrow.",
     "this is not what we want",
     "please check https://example.com/page and tell me what you think",
+    // One word that is also Lebanese (tab: طب) in a long English message.
+    "having to press option tab is a lot of friction, how can we make it more smooth and easy to correct",
 ])
 func plainEnglishIsRecognised(_ text: String) {
     #expect(englishGuard.isEnglish(text), "\(text)")
