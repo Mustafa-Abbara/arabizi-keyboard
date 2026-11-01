@@ -7,28 +7,35 @@ import os
 /// deadline plus a margin, and return the converted text, or nil so the keyboard uses its own rules. The service
 /// starts on the rules and loads the model in the background, so the first Enter after login is never slow.
 /// Logs only outcomes, timings and the service status: never the text.
-final class EngineClient: @unchecked Sendable {  // `connection` is behind `lock`
+public final class EngineClient: @unchecked Sendable {  // `connection` is behind `lock`
     private let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
     private let lock = NSLock()
     private var connection: NSXPCConnection?
     private let config: EngineConfig
     private let encoder = Contract.encoder()
     /// How long past the deadline the keyboard waits for the reply (the rule fallback inside the service).
-    private static let replyMarginMs = 500
+    static let replyMarginMs = 500
+    /// Makes a new connection to the service: the bundled XPC service in the keyboard, a test listener in tests.
+    private let connect: @Sendable () -> NSXPCConnection
 
     /// nil when the bundled config cannot be read: the keyboard then keeps to its own rules.
-    init?(resources: URL) {
+    public convenience init?(resources: URL) {
         guard let config = try? EngineConfig(configDirectory: resources) else {
             Logger(subsystem: "lb.aub.arabizi", category: "ime").error("engine config not readable: rules only")
             return nil
         }
+        self.init(config: config) { NSXPCConnection(serviceName: EngineService.name) }
+    }
+
+    public init(config: EngineConfig, connect: @escaping @Sendable () -> NSXPCConnection) {
         self.config = config
+        self.connect = connect
     }
 
     private func proxy() -> ArabiziEngineServiceProtocol? {
         lock.withLock {
             if connection == nil {
-                let new = NSXPCConnection(serviceName: EngineService.name)
+                let new = connect()
                 new.remoteObjectInterface = NSXPCInterface(with: ArabiziEngineServiceProtocol.self)
                 new.invalidationHandler = { [weak self] in
                     self?.lock.withLock { self?.connection = nil }
@@ -43,13 +50,13 @@ final class EngineClient: @unchecked Sendable {  // `connection` is behind `lock
     }
 
     /// Starts the service early (it loads the model in the background) and logs its status, network probe included.
-    func warmUp() {
+    public func warmUp() {
         proxy()?.status { [log] data in
             log.info("engine status: \(String(decoding: data, as: UTF8.self), privacy: .public)")
         }
     }
 
-    func convert(_ text: String) -> String? {
+    public func convert(_ text: String) -> String? {
         let deadlineMs = config.deadlineMs(for: text)  // longer messages get longer (ADR 0025)
         guard let proxy = proxy(),
               let request = try? encoder.encode(ConvertRequest(text: text, deadlineMs: deadlineMs)) else { return nil }

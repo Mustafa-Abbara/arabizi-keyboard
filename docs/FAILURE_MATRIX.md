@@ -22,7 +22,7 @@ As of 1 Nov 2026 (v0.1.0, model v3).
 
 | Failure | What the user sees | Covered by |
 |---|---|---|
-| Engine service crashes or does not answer | The keyboard's own rules answer (after the deadline plus 0.5 s); the next message reconnects | **manual** (stop `ArabiziEngineXPC` while typing); `EngineClient` has no test target |
+| Engine service crashes or does not answer | The keyboard's own rules answer (after the deadline plus 0.5 s); the next message reconnects | `aServiceThatNeverAnswersGivesUpAfterTheDeadline`, `aServiceThatCrashesIsReachedAgainOnTheNextMessage` (`swift test --package-path Apps/ArabiziIME`) |
 | Engine tries the network | Refused by the sandbox (no network entitlement); nothing is sent | **manual**: `arabizi-engine-check` must report `network: blocked` |
 | Engine config unreadable | The keyboard's own rules | `committedConfigLoads` (the shipped config loads); unreadable case: **manual** |
 | Rule dictionary missing | Letter rules only | `missingDictionaryMeansLetterRulesOnly` |
@@ -44,6 +44,5 @@ As of 1 Nov 2026 (v0.1.0, model v3).
 
 ## Gaps to close for the P7 gate
 
-1. An `EngineClient` test (a fake service that never answers, then one that crashes) for the "service crashes" row.
-2. Shell tests for `harfi-setup.sh`: missing model (404), damaged download, resumed part.
-3. The per-app matrix.
+1. Shell tests for `harfi-setup.sh`: missing model (404), damaged download, resumed part.
+2. The per-app matrix.

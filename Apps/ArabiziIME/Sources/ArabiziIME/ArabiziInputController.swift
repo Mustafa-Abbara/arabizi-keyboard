@@ -1,5 +1,6 @@
 import AppKit
 import ArabiziCore
+import ArabiziEngineClient
 import Carbon
 import InputMethodKit
 import os
