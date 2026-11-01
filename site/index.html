@@ -76,9 +76,9 @@
   </header>
 
   <div class="hero">
-    <div class="demo" aria-label="Example: kifak, shu 3am ta3mel? becomes كيفك، شو عم تعمل؟">
-      <div class="typed" aria-hidden="true"><span id="typed">kifak, shu 3am ta3mel?</span><span class="caret"></span></div>
-      <div class="arabic ar" id="arabic" lang="ar" aria-hidden="true">كيفك، شو عم تعمل؟</div>
+    <div class="demo" aria-label="Example: Shu l wade3 aandak becomes شو الوضع عندك">
+      <div class="typed" aria-hidden="true"><span id="typed">Shu l wade3 aandak</span><span class="caret"></span></div>
+      <div class="arabic ar" id="arabic" lang="ar" aria-hidden="true">شو الوضع عندك</div>
     </div>
     <h1>Type Arabizi. Get Arabic.</h1>
     <p class="lead">Harfi turns Lebanese Arabizi into Arabic as you type, in every app on your Mac. Privately: nothing you type ever leaves it.</p>
@@ -89,7 +89,7 @@
   <section aria-labelledby="why">
     <h2 id="why">Why Harfi</h2>
     <div class="promises">
-      <div class="card"><h3>It speaks Lebanese</h3><p>Trained on how people really text: <code>ma bade 2rou7</code> becomes <span class="ar" lang="ar">ما بدي روح</span>, and your English stays English.</p></div>
+      <div class="card"><h3>It speaks Lebanese</h3><p>Trained on how people really text: <code>Shu bdk t3ml bara</code> becomes <span class="ar" lang="ar">شو بدك تعمل برا</span>, and your English stays English.</p></div>
       <div class="card"><h3>Private by design</h3><p>The conversion runs on your Mac with no internet access. No account, no tracking, no cloud.</p></div>
       <div class="card"><h3>Fix a word in a tap</h3><p>See the Arabic as you type, press <kbd>↑</kbd> to fix a word before sending, and Harfi remembers your spelling.</p></div>
     </div>
@@ -126,13 +126,14 @@
   </footer>
 </main>
 <script>
-  // The hero types the Arabizi, then shows the Arabic, for a few examples in turn. Without scripts (or with reduced
+  // The hero types the Arabizi, then shows the Arabic, for a few examples in turn: real typed messages with their
+  // checked Arabic from the training data (data/pairs/train-hand.jsonl: hw-7739, hw-13179, hw-16809, hw-7738). Without scripts (or with reduced
   // motion) the first example stays as written in the page.
   const examples = [
-    ["kifak, shu 3am ta3mel?", "كيفك، شو عم تعمل؟"],
-    ["ma bade 2rou7 3al jam3a lyom", "ما بدي روح عالجامعة اليوم"],
-    ["yalla ntla2a ba3d el meeting", "يلا نتلاقى بعد ال meeting"],
-    ["shou rayak nrou7 3al ba7r?", "شو رأيك نروح عالبحر؟"],
+    ["Shu l wade3 aandak", "شو الوضع عندك"],
+    ["Yalla shway w beb3at el list", "يلا شوي وببعت ال list"],
+    ["Hala2 bokra mnshuf shu mnaamol", "هلق بكرا منشوف شو منعمل"],
+    ["W ana ha e5od half day tuesday", "وأنا رح آخد half day tuesday"],
   ];
   const typed = document.getElementById("typed"), arabic = document.getElementById("arabic");
   const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
