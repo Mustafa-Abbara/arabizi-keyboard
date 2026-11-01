@@ -13,11 +13,21 @@ let package = Package(
         .executableTarget(
             name: "ArabiziIME",
             dependencies: [
+                "ArabiziEngineClient",
                 .product(name: "ArabiziCore", package: "ArabiziCore"),
                 .product(name: "ArabiziContracts", package: "ArabiziContracts"),
             ],
             linkerSettings: [.linkedFramework("InputMethodKit")]
         ),
+        // The keyboard's side of the engine service, a library so its failure handling can be tested.
+        .target(
+            name: "ArabiziEngineClient",
+            dependencies: [
+                .product(name: "ArabiziCore", package: "ArabiziCore"),
+                .product(name: "ArabiziContracts", package: "ArabiziContracts"),
+            ]
+        ),
+        .testTarget(name: "ArabiziEngineClientTests", dependencies: ["ArabiziEngineClient"]),
         // Registers the installed app with macOS (scripts/install_ime.sh, scripts/install_harfi.sh).
         .executableTarget(name: "harfi-register", linkerSettings: [.linkedFramework("Carbon")]),
         // Diagnostic: reaches the engine service like the keyboard does (it must sit in the app's Contents/MacOS).
