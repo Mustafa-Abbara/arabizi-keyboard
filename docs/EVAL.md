@@ -171,6 +171,27 @@ Decision and training: [ADR 0030](decisions/0030-model-v3.md). Each system was r
 
 Paired word accuracy, v3 engine − v2: **+0.034 [+0.021, +0.047]** on others test (against v2 protected spans, same set); **+0.016 [−0.001, +0.033]** on frozen test against v2 protected spans and **+0.009 [−0.007, +0.026]** against v2 model only: no clear difference. Keep-Latin F1 on others test 0.84 against 0.68 (v2 protected spans), hallucination rate 1.7% against 13.4%; on frozen test 0.93 and 0% against 0.84 and 4.9%. Dev (v3 − v2, keyboard engine): +0.009 frozen dev, +0.017 others dev; v3 never fell back to the rules on others dev (v2: 7 of 200).
 
+## Final report (P7, 1 Nov 2026)
+
+The shipped system is **v3 through the keyboard engine** (`engine-arabizi-llama3.2-1b-v3-kb`): **0.836** [0.815, 0.857] on the frozen test set and **0.826** [0.811, 0.840] on the others test set, each run once (29 Oct 2026, table above). Against the rules (B0: 0.594 / 0.607) that is about +0.24 and +0.22; against the best model without fine-tuning (5-shot Llama 3.2 1B, 0.147 on frozen test) +0.69.
+
+**Speed and memory on the 8 GB M2 Air** (same test runs, the keyboard's own deadline per message): p50 604 ms / p95 945 ms on frozen test, p50 922 ms / p95 1,423 ms on others test (longer messages; the deadline grows with length, ADR 0025). Peak memory was measured for v1 (830 MB with protected spans, P4); v3 has the same size and quantisation (Q4_K_M, 808 MB) and was not measured again.
+
+**Errors by cause.** Wrong words of both v3 test runs, in sentences with as many words as their reference (220 words): grouped automatically, and a random sample of 50 (seed 2026) read and grouped by hand.
+
+| Cause | All 220, automatic | 50, read by hand | Examples (typed → shown, expected) |
+|---|---|---|---|
+| Rare or unseen word read wrongly | 118 (54%) | 14 | `flfoul` → فلوفول (فليفلة), `aarbyye` → قريبة (عربية), `sha5sen` → شخسان (شخصين) |
+| Spelling convention, one letter or ending off (hamza, alif, ة/ه, long vowel, article) | 42 (19%) | 18 | `ymkn` → ممكن (يمكن), `alef` → إلف (ألف), `sobo7` → صبح (الصبح) |
+| Word moved one place: not a model error, an artefact of comparing by position | (in "other") | 9 | `heik` paired with أكل, `ma3` with هيك |
+| Different word or form | 37 (17%) | 2 | `talli3` → تلعب (طلع), `sawene` → سويني (ثواني) |
+| Small ambiguous word (`la`, `w`, `men`, `l`) | 12 (5%) | 4 | `la` → ل (لا), `men` → من (مين) |
+| English word or name converted, or Arabizi left in Latin | 11 (5%) | 3 | `tea` converted, `pampam` left in Latin |
+
+The largest group is words the model never saw in training: 53% of the automatic count and the second group by hand. More training rows with those words (v4) is the main lever; one-letter spelling differences are the next, and the ⌥Tab / ↑ suggestions offer most of them (50% / 42% of wrong words on dev).
+
+**Not done:** the per-app results (the app matrix, `docs/spikes/ime_app_matrix.md`); the P4 data ablations (with and without the AI-drafted rows and the rule variants) and Q4_K_M against the unquantised model; a peak-memory measurement of v3.
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
