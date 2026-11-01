@@ -25,7 +25,7 @@ swift "$PKG/Tools/make_icon.swift" "$APP/Contents/Resources/MenuIcon.tiff"
 cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$ROOT/data/rules/spelling_options.json" \
    "$ROOT/data/rules/english_stopwords.json" "$APP/Contents/Resources/"
 cp "$ROOT/config/engine.json" "$ROOT/config/models.json" "$APP/Contents/Resources/"
-# Installing on another Mac (scripts/install_harfi.sh, the Homebrew cask): the setup script, where the model is
+# Installing on another Mac (scripts/install_harfi.sh): the setup script, where the model is
 # published, and the model's licence notice. The model is published under a name that starts with "Llama", as the
 # Llama 3.2 licence asks, in a release of its own (model-<version>), so every app version finds it.
 cp "$ROOT/scripts/harfi-setup.sh" "$ROOT/NOTICE" "$APP/Contents/Resources/"

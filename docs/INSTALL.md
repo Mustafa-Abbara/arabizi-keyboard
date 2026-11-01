@@ -14,12 +14,6 @@ curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/mai
 
 It installs Harfi and downloads its model (808 MB). If your connection drops, it carries on where it stopped; if you close Terminal, run the same line again and it resumes.
 
-**With Homebrew** instead, if you already use it:
-
-```bash
-brew install --cask mustafa-abbara/harfi/harfi
-```
-
 ## 2. Turn it on (once)
 
 1. Open **System Settings → Keyboard**, and under **Text Input** click **Edit…** next to Input Sources.
@@ -45,7 +39,7 @@ The **Harfi** items in the input menu open the settings, the words Harfi has lea
 
 ## Updating
 
-Run the install line again (or `brew upgrade --cask harfi`). The model is not downloaded again unless it changed.
+Run the install line again. The model is not downloaded again unless it changed.
 
 ## Removing
 
@@ -53,13 +47,13 @@ Run the install line again (or `brew upgrade --cask harfi`). The model is not do
 curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash -s -- --uninstall
 ```
 
-or `brew uninstall --cask harfi`. Then remove Harfi from Input Sources (**−**). The words you taught it stay on your Mac until you choose **Forget all my words** in Harfi's window before removing it.
+Then remove Harfi from Input Sources (**−**). The words you taught it stay on your Mac until you choose **Forget all my words** in Harfi's window before removing it.
 
 ## Questions
 
 **Is it safe?** Harfi converts on your Mac with a model that runs in a sandbox with no network access. It keeps only the single words you correct, encrypted, for 30 days, so your spelling comes first next time. Password fields are never touched.
 
-**Why Terminal?** Harfi is a free project and is not signed with a paid Apple Developer ID, so macOS would block a normal download. The install line downloads and signs it on your own Mac instead, which macOS accepts.
+**Why Terminal?** Harfi is a free project and is not signed with a paid Apple Developer ID, so macOS would block a normal download (and a Homebrew install). The install line downloads and signs it on your own Mac instead, which macOS accepts.
 
 **Something does not work.** Switch to another keyboard with Ctrl+Space and back. If typing feels stuck, choose another input source from the menu bar. Open an issue on [GitHub](https://github.com/Mustafa-Abbara/arabizi-keyboard/issues) with what you typed and what you saw.
 
