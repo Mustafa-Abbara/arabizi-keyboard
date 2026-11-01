@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harfi: type Arabizi, get Arabic</title>
+<meta name="description" content="Harfi turns Lebanese Arabizi into Arabic as you type, privately, on your Mac.">
+<style>
+  @font-face { font-family: "Naskh"; src: url("fonts/NotoNaskhArabic-Variable.ttf") format("truetype"); font-display: swap; }
+  :root {
+    --bg: #F6F3EC; --surface: #FFFFFF; --text: #1E2A25; --muted: #6B756F; --border: #E4DFD4;
+    --accent: #2F6B5A; --accent-soft: #E2EEE8; --on-accent: #FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151B19; --surface: #1D2522; --text: #E9EEEB; --muted: #93A099; --border: #2C3632;
+            --accent: #7DBBA5; --accent-soft: #21392F; --on-accent: #10201A; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.6;
+         font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .ar { font-family: "Naskh", "Geeza Pro", serif; direction: rtl; }
+  main { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 22px 0; }
+  .logo { font-weight: 600; font-size: 20px; display: flex; gap: 10px; align-items: baseline; }
+  .logo .ar { font-size: 24px; color: var(--accent); }
+  header a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  header a:hover { color: var(--text); }
+
+  .hero { text-align: center; padding: 56px 0 40px; }
+  .demo { display: inline-block; min-width: min(560px, 100%); background: var(--surface); border: 1px solid var(--border);
+          border-radius: 16px; padding: 22px 28px; box-shadow: 0 10px 30px rgba(0,0,0,.06); }
+  .typed { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); font-size: 17px; min-height: 1.6em; }
+  .caret { display: inline-block; width: 2px; height: 1.1em; background: var(--accent); vertical-align: -0.15em;
+           margin-left: 2px; animation: blink 1s steps(1) infinite; }
+  .arabic { font-size: clamp(30px, 6vw, 44px); line-height: 1.5; min-height: 1.5em; margin-top: 6px;
+            transition: opacity .35s ease, transform .35s ease; }
+  .arabic.hidden { opacity: 0; transform: translateY(6px); }
+  h1 { font-size: clamp(32px, 6vw, 48px); line-height: 1.15; margin: 34px 0 10px; letter-spacing: -0.02em; }
+  .lead { color: var(--muted); font-size: 19px; margin: 0 auto 28px; max-width: 34em; }
+  .button { display: inline-block; background: var(--accent); color: var(--on-accent); border-radius: 12px;
+            padding: 13px 26px; font-weight: 600; text-decoration: none; }
+  .button:hover { filter: brightness(1.06); }
+  .note { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+  section { padding: 34px 0; }
+  h2 { font-size: 24px; margin: 0 0 18px; }
+  .promises { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .card h3 { margin: 0 0 6px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 16px; }
+  .card .ar { color: var(--text); }
+
+  .install { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+  .cmd { display: flex; gap: 10px; align-items: center; background: var(--bg); border: 1px solid var(--border);
+         border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+  .cmd code { flex: 1; font-size: 14px; overflow-x: auto; white-space: nowrap; }
+  .cmd button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+                padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  ol { padding-left: 1.3em; margin: 8px 0 0; }
+  ol li { margin: 6px 0; }
+  kbd { font: 14px ui-monospace, Menlo, monospace; border: 1px solid var(--border); border-bottom-width: 2px;
+        border-radius: 6px; padding: 1px 6px; background: var(--surface); }
+  .keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
+  .keys dd { margin: 0; color: var(--muted); }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: 14px; padding: 36px 0 50px; border-top: 1px solid var(--border); margin-top: 20px; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation: none; } .arabic { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo"><span class="ar" lang="ar">حرفي</span><span>Harfi</span></div>
+    <nav><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard">GitHub</a></nav>
+  </header>
+
+  <div class="hero">
+    <div class="demo" aria-label="Example: kifak, shu 3am ta3mel? becomes كيفك، شو عم تعمل؟">
+      <div class="typed" aria-hidden="true"><span id="typed">kifak, shu 3am ta3mel?</span><span class="caret"></span></div>
+      <div class="arabic ar" id="arabic" lang="ar" aria-hidden="true">كيفك، شو عم تعمل؟</div>
+    </div>
+    <h1>Type Arabizi. Get Arabic.</h1>
+    <p class="lead">Harfi turns Lebanese Arabizi into Arabic as you type, in every app on your Mac. Privately: nothing you type ever leaves it.</p>
+    <a class="button" href="#install">Install for Mac</a>
+    <p class="note">Free · Apple silicon, macOS 14 or later · Windows later</p>
+  </div>
+
+  <section aria-labelledby="why">
+    <h2 id="why">Why Harfi</h2>
+    <div class="promises">
+      <div class="card"><h3>It speaks Lebanese</h3><p>Trained on how people really text: <code>ma bade 2rou7</code> becomes <span class="ar" lang="ar">ما بدي روح</span>, and your English stays English.</p></div>
+      <div class="card"><h3>Private by design</h3><p>The conversion runs on your Mac with no internet access. No account, no tracking, no cloud.</p></div>
+      <div class="card"><h3>Fix a word in a tap</h3><p>See the Arabic as you type, press <kbd>↑</kbd> to fix a word before sending, and Harfi remembers your spelling.</p></div>
+    </div>
+  </section>
+
+  <section id="install" aria-labelledby="install-title">
+    <h2 id="install-title">Install</h2>
+    <div class="install">
+      <p style="margin:0">Open <strong>Terminal</strong> (press <kbd>⌘</kbd> <kbd>Space</kbd>, type Terminal), paste this line and press Enter:</p>
+      <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash</code><button type="button" id="copy">Copy</button></div>
+      <ol>
+        <li>It installs Harfi and downloads its model (808 MB). If your connection drops, it carries on where it stopped.</li>
+        <li>Turn it on once: System Settings → Keyboard → Input Sources → Edit… → + → Arabic → Harfi.</li>
+        <li>Switch to it with <kbd>Ctrl</kbd> <kbd>Space</kbd> and type.</li>
+      </ol>
+      <p class="note">Why Terminal? Harfi is free and not signed with a paid Apple Developer ID, so a normal download would be blocked; the install line sets it up on your own Mac instead. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/INSTALL.md">Full guide</a></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="keys">
+    <h2 id="keys">The keys to know</h2>
+    <dl class="keys">
+      <dt><kbd>Enter</kbd></dt><dd>Your text becomes Arabic. Enter again sends.</dd>
+      <dt><kbd>↑</kbd></dt><dd>Fix a word before converting: ← → choose the word, a number picks its spelling.</dd>
+      <dt><kbd>⌥</kbd> <kbd>Tab</kbd></dt><dd>Fix a word right after converting.</dd>
+      <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>Your Latin text back.</dd>
+    </dl>
+  </section>
+
+  <footer>
+    Harfi is a student project (EECE 503N/798S, Fall 2026), open source on <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard">GitHub</a>.
+    Built with Llama: the conversion model is a fine-tune of Llama 3.2 1B Instruct, licensed under the Llama 3.2 Community License.
+    Arabic set in Noto Naskh Arabic (SIL Open Font License). This page uses no cookies and no trackers.
+  </footer>
+</main>
+<script>
+  // The hero types the Arabizi, then shows the Arabic, for a few examples in turn. Without scripts (or with reduced
+  // motion) the first example stays as written in the page.
+  const examples = [
+    ["kifak, shu 3am ta3mel?", "كيفك، شو عم تعمل؟"],
+    ["ma bade 2rou7 3al jam3a lyom", "ما بدي روح عالجامعة اليوم"],
+    ["yalla ntla2a ba3d el meeting", "يلا نتلاقى بعد ال meeting"],
+    ["shou rayak nrou7 3al ba7r?", "شو رأيك نروح عالبحر؟"],
+  ];
+  const typed = document.getElementById("typed"), arabic = document.getElementById("arabic");
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = ms => new Promise(done => setTimeout(done, ms));
+  async function play() {
+    for (let i = 0; ; i = (i + 1) % examples.length) {
+      const [latin, ar] = examples[i];
+      arabic.classList.add("hidden");
+      for (let n = 0; n <= latin.length; n++) { typed.textContent = latin.slice(0, n); await wait(55); }
+      await wait(350);
+      arabic.textContent = ar;
+      arabic.classList.remove("hidden");
+      await wait(2600);
+    }
+  }
+  if (!still) play();
+  document.getElementById("copy").addEventListener("click", async event => {
+    try { await navigator.clipboard.writeText(document.getElementById("cmd").textContent); event.target.textContent = "Copied"; }
+    catch { event.target.textContent = "Select and copy"; }
+    setTimeout(() => { event.target.textContent = "Copy"; }, 1800);
+  });
+</script>
+</body>
+</html>
