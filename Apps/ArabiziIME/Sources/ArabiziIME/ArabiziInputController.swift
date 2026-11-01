@@ -1,5 +1,6 @@
 import AppKit
 import ArabiziCore
+import ArabiziEngineClient
 import Carbon
 import InputMethodKit
 import os
@@ -130,7 +131,7 @@ final class ArabiziInputController: IMKInputController {
         let doubtful = Self.doubtfulWords(words, latin: String(composer.buffer.dropLast(text.typedSince)))
         let hint = text.latin.isEmpty && Settings.personality != .quiet
             && UserDefaults.standard.integer(forKey: "previewFixUses") < Self.previewFixUses ? "↑ fix a word" : nil
-        MainActor.assumeIsolated { window.show(arabic: words, doubtful: doubtful, latin: text.latin, hint: hint, above: line) }
+        _ = MainActor.assumeIsolated { window.show(arabic: words, doubtful: doubtful, latin: text.latin, hint: hint, above: line) }
     }
 
     /// Which shown words look wrong (a letter no typed key writes, in a word never seen written): dotted in the preview.

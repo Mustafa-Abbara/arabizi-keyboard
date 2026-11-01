@@ -8,8 +8,8 @@ As of 1 Nov 2026 (v0.1.0, model v3).
 
 | Failure | What the user sees | Covered by |
 |---|---|---|
-| Model file missing (not installed, not yet published) | Arabic from the rules (less accurate); the installer says the model can be added later | `withoutAModelTheRulesAnswer`, `missingModelFileThrows` (ArabiziLLM); installer: **manual** (404 path of `harfi-setup.sh`) |
-| Model file corrupt (SHA-256 differs from `config/models.json`) | Arabic from the rules; the installer deletes a damaged download and asks to run it again | `aModelFileWithTheWrongHashIsNotUsed`; installer checksum: **manual** |
+| Model file missing (not installed, not yet published) | Arabic from the rules (less accurate); the installer says the model can be added later | `withoutAModelTheRulesAnswer`, `missingModelFileThrows` (ArabiziLLM); installer: `scripts/test_harfi_setup.sh` (not published yet) |
+| Model file corrupt (SHA-256 differs from `config/models.json`) | Arabic from the rules; the installer deletes a damaged download and asks to run it again | `aModelFileWithTheWrongHashIsNotUsed`; installer: `scripts/test_harfi_setup.sh` (damaged download) |
 | Model too slow for the message's deadline (ADR 0025) | Arabic from the rules for that message | `badAnswersGiveTheRules` (deadline case), `theDeadlineGrowsWithTheMessageUpToItsCap` |
 | Model still loading after login | Arabic from the rules until it is ready (about 1.5 s) | `withoutAModelTheRulesAnswer`; load in background: **manual** (`arabizi-engine-check` status) |
 | Model answer unusable: invented Latin words, lost placeholder, runaway length, emoji changed | Repaired word by word when each word can be traced, otherwise Arabic from the rules | `badAnswersGiveTheRules`, `mixedTokensAreSplit`, `anInventedWordIsReplacedByTheRulesForItsInputWord`, `untraceableLatinStillGivesTheRules`, `aMisreadArabiziWordLeftInLatinIsConvertedByTheRules`, `emojiMustComeBackAsTyped` |
@@ -22,14 +22,14 @@ As of 1 Nov 2026 (v0.1.0, model v3).
 
 | Failure | What the user sees | Covered by |
 |---|---|---|
-| Engine service crashes or does not answer | The keyboard's own rules answer (after the deadline plus 0.5 s); the next message reconnects | **manual** (stop `ArabiziEngineXPC` while typing); `EngineClient` has no test target |
+| Engine service crashes or does not answer | The keyboard's own rules answer (after the deadline plus 0.5 s); the next message reconnects | `aServiceThatNeverAnswersGivesUpAfterTheDeadline`, `aServiceThatCrashesIsReachedAgainOnTheNextMessage` (`swift test --package-path Apps/ArabiziIME`) |
 | Engine tries the network | Refused by the sandbox (no network entitlement); nothing is sent | **manual**: `arabizi-engine-check` must report `network: blocked` |
 | Engine config unreadable | The keyboard's own rules | `committedConfigLoads` (the shipped config loads); unreadable case: **manual** |
 | Rule dictionary missing | Letter rules only | `missingDictionaryMeansLetterRulesOnly` |
 | English word list missing | The guard is off; English goes to the model, which keeps English words itself | `theGuardIsOffWithoutItsFile` |
 | Rule files missing altogether | The toy letter converter keeps typing usable | **manual** (logged as "Rule files not loaded") |
 | Correction record unreadable or its key replaced | No personal suggestions; nothing else changes | `theStoreEncryptsKeepsAndExpiresCorrections` (wrong key reads nothing) |
-| Model download drops | It resumes the part in progress, also on a later run | **manual** (`harfi-setup.sh`, 100 MiB parts) |
+| Model download drops | It resumes the part in progress, also on a later run | `scripts/test_harfi_setup.sh` (resumed part, already downloaded) |
 | App quarantined (downloaded through a browser or Homebrew) | macOS refuses to open it ("could not check it for malicious software"); the one-line installer avoids it | **manual**; documented in `docs/INSTALL.md` |
 
 ## Typing in apps
@@ -44,6 +44,5 @@ As of 1 Nov 2026 (v0.1.0, model v3).
 
 ## Gaps to close for the P7 gate
 
-1. An `EngineClient` test (a fake service that never answers, then one that crashes) for the "service crashes" row.
-2. Shell tests for `harfi-setup.sh`: missing model (404), damaged download, resumed part.
-3. The per-app matrix.
+1. The per-app matrix.
+2. The remaining manual rows: the engine's network block (`arabizi-engine-check`), the model loading in the background, positions in apps that report none, a quarantined app.
