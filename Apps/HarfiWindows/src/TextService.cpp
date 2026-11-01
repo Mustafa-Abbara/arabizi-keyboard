@@ -119,6 +119,11 @@ STDMETHODIMP TextService::Deactivate() {
         composition_->Release();
         composition_ = nullptr;
     }
+    if (context_) {
+        context_->Release();
+        context_ = nullptr;
+    }
+    chips_.Hide();
     core_.reset();
     clientId_ = TF_CLIENTID_NULL;
     return S_OK;
@@ -133,8 +138,6 @@ bool TextService::Decide(WPARAM wParam, LPARAM lParam) {
     // A key the app keeps gets no OnKeyDown: forget it, so the next press of the same key is asked again.
     decided_ = decision_.effect != "pass";
     decidedKey_ = wParam;
-    // commitAndPass inserts the text and lets the app have the key: the text is inserted here and the key eaten,
-    // so it reaches the app only on the next press (to refine with the per-app checks, ADR 0032 task 3).
     return decision_.effect != "pass";
 }
 
@@ -144,10 +147,30 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext *, WPARAM wParam, LPARAM lPar
 }
 
 STDMETHODIMP TextService::OnKeyDown(ITfContext *context, WPARAM wParam, LPARAM lParam, BOOL *eaten) {
+    if (context && context != context_) {
+        if (context_) context_->Release();
+        context_ = context;
+        context_->AddRef();
+    }
     *eaten = Decide(wParam, lParam) ? TRUE : FALSE;
     if (*eaten) Apply(context, decision_);
     decided_ = false;
+    // "Insert the text, then let the app have the key" (an arrow or a click key while typing): the text is in, so
+    // the same key is sent once more; the composer is empty now and lets it through to the app.
+    if (*eaten && decision_.effect == "commitAndPass") Resend(wParam, lParam);
     return S_OK;
+}
+
+void TextService::Resend(WPARAM wParam, LPARAM lParam) {
+    INPUT keys[2] = {};
+    for (INPUT &key : keys) {
+        key.type = INPUT_KEYBOARD;
+        key.ki.wVk = static_cast<WORD>(wParam);
+        key.ki.wScan = static_cast<WORD>((static_cast<UINT>(lParam) >> 16) & 0xFF);
+        if (lParam & (1 << 24)) key.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;  // arrows, Home, End...
+    }
+    keys[1].ki.dwFlags |= KEYEVENTF_KEYUP;
+    SendInput(2, keys, sizeof(INPUT));
 }
 
 STDMETHODIMP TextService::OnTestKeyUp(ITfContext *, WPARAM, LPARAM, BOOL *eaten) {
@@ -166,6 +189,7 @@ STDMETHODIMP TextService::OnPreservedKey(ITfContext *, REFGUID, BOOL *eaten) {
 }
 
 STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie, ITfComposition *composition) {
+    chips_.Hide();
     if (composition_ == composition) {
         composition_->Release();
         composition_ = nullptr;
@@ -173,9 +197,9 @@ STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie, ITfComposition *
     return S_OK;
 }
 
-void TextService::Apply(ITfContext *context, const Effect &effect) {
+void TextService::Apply(ITfContext *context, const Effect &effect, bool duringKey) {
     if (!context) return;
-    auto *session = new EditSession([&](TfEditCookie cookie) {
+    auto *session = new EditSession([this, context, effect](TfEditCookie cookie) {
         const std::string &kind = effect.effect;
         if (kind == "update" || kind == "suggest" || kind == "restore") {
             SetComposition(context, cookie, effect.marked);
@@ -185,10 +209,35 @@ void TextService::Apply(ITfContext *context, const Effect &effect) {
             Commit(context, cookie, effect.text);
             SetComposition(context, cookie, effect.marked);
         }
+        UpdateChips(context, cookie, effect);
     });
     HRESULT result = S_OK;
-    context->RequestEditSession(clientId_, session, TF_ES_SYNC | TF_ES_READWRITE, &result);
+    context->RequestEditSession(clientId_, session, (duringKey ? TF_ES_SYNC : TF_ES_ASYNCDONTCARE) | TF_ES_READWRITE,
+                                &result);
     session->Release();
+}
+
+void TextService::UpdateChips(ITfContext *context, TfEditCookie cookie, const Effect &effect) {
+    bool fixing = effect.effect == "suggest" && (!effect.candidates.empty() || effect.spelling);
+    ITfRange *range = nullptr;
+    ITfContextView *view = nullptr;
+    RECT text = {};
+    BOOL clipped = FALSE;
+    if (fixing && composition_ && SUCCEEDED(composition_->GetRange(&range)) &&
+        SUCCEEDED(context->GetActiveView(&view)) && SUCCEEDED(view->GetTextExt(cookie, range, &text, &clipped))) {
+        chips_.Show(
+            effect, text,
+            [this](const std::wstring &candidate) {  // a chip clicked: the same as its number key
+                if (core_ && context_) Apply(context_, core_->Pick(candidate), false);
+            },
+            [this] {  // "Spell it": the same as Alt+Tab a second time
+                if (core_ && context_) Apply(context_, core_->Key(R"({"key":"suggest"})"), false);
+            });
+    } else {
+        chips_.Hide();
+    }
+    if (view) view->Release();
+    if (range) range->Release();
 }
 
 // Shows `text` underlined at the cursor, starting a composition if there is none.

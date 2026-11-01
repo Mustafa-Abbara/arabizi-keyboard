@@ -1,5 +1,7 @@
 #include "Core.h"
 #include <windows.h>
+#include <cctype>
+#include <cstdlib>
 
 namespace {
 template <typename T> T Load(void *library, const char *name) {
@@ -90,6 +92,18 @@ std::vector<std::string> JsonStrings(const std::string &json, const std::string 
     return out;
 }
 
+int JsonInt(const std::string &json, const std::string &field, int otherwise) {
+    size_t at = FieldValue(json, field);
+    if (at == std::string::npos || at >= json.size() || !(isdigit(static_cast<unsigned char>(json[at])) || json[at] == '-'))
+        return otherwise;
+    return std::atoi(json.c_str() + at);
+}
+
+bool JsonBool(const std::string &json, const std::string &field) {
+    size_t at = FieldValue(json, field);
+    return at != std::string::npos && json.compare(at, 4, "true") == 0;
+}
+
 std::string JsonQuote(const std::string &text) {
     std::string out = "\"";
     for (unsigned char c : text) {
@@ -108,8 +122,9 @@ Core::Core(const std::wstring &folder) {
     newComposer_ = Load<decltype(newComposer_)>(library_, "harfi_composer_new");
     freeComposer_ = Load<decltype(freeComposer_)>(library_, "harfi_composer_free");
     key_ = Load<decltype(key_)>(library_, "harfi_composer_key");
+    pick_ = Load<decltype(pick_)>(library_, "harfi_composer_pick");
     free_ = Load<decltype(free_)>(library_, "harfi_free");
-    if (!open_ || !close_ || !newComposer_ || !freeComposer_ || !key_ || !free_) return;
+    if (!open_ || !close_ || !newComposer_ || !freeComposer_ || !key_ || !pick_ || !free_) return;
     core_ = open_(Narrow(folder + L"\\rules").c_str());
     if (core_) composer_ = newComposer_(core_);
 }
@@ -121,9 +136,15 @@ Core::~Core() {
 }
 
 Effect Core::Key(const std::string &keyJson) {
+    return composer_ ? Read(key_(composer_, keyJson.c_str())) : Effect{};
+}
+
+Effect Core::Pick(const std::wstring &candidate) {
+    return composer_ ? Read(pick_(composer_, Narrow(candidate).c_str())) : Effect{};
+}
+
+Effect Core::Read(char *reply) {
     Effect effect;
-    if (!composer_) return effect;
-    char *reply = key_(composer_, keyJson.c_str());
     if (!reply) return effect;
     std::string json(reply);
     free_(reply);
@@ -131,5 +152,8 @@ Effect Core::Key(const std::string &keyJson) {
     effect.marked = Widen(JsonString(json, "marked"));
     effect.text = Widen(JsonString(json, "text"));
     for (const auto &candidate : JsonStrings(json, "candidates")) effect.candidates.push_back(Widen(candidate));
+    effect.word = Widen(JsonString(json, "word"));
+    effect.choice = JsonInt(json, "choice", -1);
+    effect.spelling = JsonBool(json, "spelling");
     return effect;
 }

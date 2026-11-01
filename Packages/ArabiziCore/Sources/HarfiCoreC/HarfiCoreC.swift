@@ -7,6 +7,7 @@
 //   harfi_is_english(core, text)        -> 1 when text is plain English (left as typed), else 0
 //   harfi_composer_new(core)            -> a composer: the key-by-key typing behaviour
 //   harfi_composer_key(composer, json)  -> what to do in the app after a key, as JSON (see `effectJSON`)
+//   harfi_composer_pick(composer, text) -> the same for a spelling (or letter) clicked in the chip row
 //   harfi_composer_buffer(composer)     -> the Latin text being typed
 //   harfi_free(string), harfi_composer_free(composer), harfi_core_close(core)
 import ArabiziCore
@@ -108,11 +109,25 @@ public func harfi_composer_key(_ composer: UnsafeMutableRawPointer?,
                                _ json: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
     guard let composer, let request = KeyRequest(json: string(json)) else { return owned(#"{"effect":"pass"}"#) }
     let box = Unmanaged<ComposerBox>.fromOpaque(composer).takeUnretainedValue()
-    let effect = box.composer.handle(request.key, context: request.context)
+    return owned(reply(box, box.composer.handle(request.key, context: request.context)))
+}
+
+@_cdecl("harfi_composer_pick")
+public func harfi_composer_pick(_ composer: UnsafeMutableRawPointer?,
+                                _ candidate: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    guard let composer else { return owned(#"{"effect":"pass"}"#) }
+    let box = Unmanaged<ComposerBox>.fromOpaque(composer).takeUnretainedValue()
+    return owned(reply(box, box.composer.pick(string(candidate))))
+}
+
+/// The effect with what the chip row shows: the spellings offered, the one highlighted, the word being fixed.
+private func reply(_ box: ComposerBox, _ effect: Effect) -> String {
     var reply = effectJSON(effect)
     reply["candidates"] = box.composer.currentCandidates
     if let choice = box.composer.currentChoice { reply["choice"] = choice }
-    return owned(encode(reply))
+    if let word = box.composer.selectedText { reply["word"] = word.shown }
+    reply["spelling"] = box.composer.isSpelling
+    return encode(reply)
 }
 
 @_cdecl("harfi_free")

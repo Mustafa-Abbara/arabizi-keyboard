@@ -2,7 +2,7 @@
 
 A TSF text input processor (`HarfiTIP.dll`, C++) that uses the same core as the Mac keyboard through its C interface (`HarfiCoreC.dll`, built from `Packages/ArabiziCore`). Design and tasks: [ADR 0032](../../docs/decisions/0032-windows-port.md), issue #34.
 
-**Works now:** typing Arabizi shows it underlined; Enter turns it into Arabic with the rules (no model yet); ↑ before Enter selects a word to fix (spellings are computed, the chip row is not drawn yet); Esc keeps the Latin; plain English stays as typed.
+**Works now:** typing Arabizi shows it underlined; Enter turns it into Arabic with the rules (no model yet); ↑ before Enter (or Alt+Tab after converting) opens the chip row above the text: number keys, ←/→, ↓/↑ or a click pick a spelling, "Spell it" spells the word letter by letter; arrow keys while typing insert the text and then move the cursor; Esc keeps the Latin; plain English stays as typed.
 
 ## Try it
 
@@ -27,6 +27,5 @@ The CI job `windows` does the same and runs the core's tests on Windows.
 
 ## Known gaps
 
-- `commitAndPass` keys (an arrow while typing) commit the text but do not pass the key to the app yet.
 - Password fields are not detected yet (the Mac skips them); `restore` (Ctrl+Z after converting) only shows the Latin again.
-- No model, preview box or chip row yet (tasks 4 and 5); no installer (task 6).
+- No model or live preview box yet (tasks 4 and 5); no installer beyond `install.ps1` (task 6).
