@@ -4,14 +4,19 @@ import Foundation
 ///
 /// Latin letters are all the keyboard sees, so an English sentence looks like Arabizi. It is English when it is made
 /// mostly of common English function words (`data/rules/english_stopwords.json`) and holds nothing that looks
-/// like Arabizi: no digit inside a word (`3am`, `ba7ebak`) and no word of the rule dictionary that is not itself a
-/// function word. A sentence with any Arabizi in it goes to the model as before, which keeps English words by itself.
+/// like Arabizi: no digit inside a word (`3am`, `ba7ebak`), and at most one word of the rule dictionary that is not
+/// itself a function word per `wordsPerDictionaryWord` words (`tab` is طب in Lebanese and a key in English: one in a
+/// long English message does not make it Arabizi). A sentence with Arabizi in it goes to the model as before, which
+/// keeps English words by itself.
 public struct EnglishGuard: Sendable {
     public static let fileName = "english_stopwords.json"
     /// At least this many function words, and at least this share of the words.
     static let minimumFunctionWords = 2
     static let minimumShare = 0.4
     static let minimumWords = 3
+    /// One dictionary word is allowed per this many words. On every training and dev message (49,000+), even one per
+    /// 4 words leaves no Arabizi message unconverted (1 Nov 2026); 8 keeps a margin.
+    static let wordsPerDictionaryWord = 8
 
     let functionWords: Set<String>
     let arabizi: Set<String>
@@ -32,7 +37,7 @@ public struct EnglishGuard: Sendable {
     /// True when `text` is plain English.
     public func isEnglish(_ text: String) -> Bool {
         if text.unicodeScalars.contains(where: { $0.value >= 0x0600 && $0.value <= 0x06FF }) { return false }
-        var words = 0, function = 0
+        var words = 0, function = 0, dictionary = 0
         for token in text.split(whereSeparator: \.isWhitespace) {
             let word = Self.bare(String(token))
             guard word.unicodeScalars.count > 1,  // a lone letter (a, I, w, b) says nothing
@@ -41,12 +46,15 @@ public struct EnglishGuard: Sendable {
             words += 1
             if functionWords.contains(word) {
                 function += 1
-            } else if Self.hasDigitInside(word) || arabizi.contains(word) {
+            } else if Self.hasDigitInside(word) {
                 return false
+            } else if arabizi.contains(word) {
+                dictionary += 1
             }
         }
         return words >= Self.minimumWords && function >= Self.minimumFunctionWords
             && Double(function) / Double(words) >= Self.minimumShare
+            && dictionary <= words / Self.wordsPerDictionaryWord
     }
 
     /// Lower case, without apostrophes or the punctuation around the word.

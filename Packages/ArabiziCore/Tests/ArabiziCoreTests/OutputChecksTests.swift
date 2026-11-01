@@ -45,6 +45,9 @@ func placeholderMistakesFail(output: String) {
     let typed: Set<String> = ["shefet", "lvideo", "3alfacebook", "salon"]
     #expect(OutputChecks.isInputWord("video", typed) && OutputChecks.isInputWord("Facebook", typed))
     #expect(!OutputChecks.isInputWord("alon", typed))  // "s" is not a prefix: salon is one word
+    // A short leftover counts only when the training data keeps it in Latin: btv -> tv, but 3ajen is not 3a + jen.
+    #expect(OutputChecks.isInputWord("tv", ["btv"], keptLatin: ["tv"]) && !OutputChecks.isInputWord("tv", ["btv"]))
+    #expect(!OutputChecks.isInputWord("Jen", ["3ajen"], keptLatin: ["tv"]))
     let checks = OutputChecks()
     #expect(checks.check("شفت ال video", for: ProtectedSpans.protect("shefet lvideo")) == .success("شفت ال video"))
 }

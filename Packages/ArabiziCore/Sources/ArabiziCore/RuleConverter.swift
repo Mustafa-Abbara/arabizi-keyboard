@@ -31,6 +31,12 @@ public struct RuleConverter: Sendable {
     /// recognising Arabizi in a text.
     public var arabiziWords: Set<String> { Set(words.keys).subtracting(keepLatin) }
 
+    /// The words the training data keeps in Latin (lower case).
+    public var keptLatinWords: Set<String> { keepLatin }
+
+    /// True for a small word that joins the next one (el, w, b, la, 3al…): its Arabic depends on the word after it.
+    public func isClitic(_ word: String) -> Bool { clitics[word.lowercased()] != nil }
+
     /// Reads the two rule files from a folder (data/rules in the repo, Resources in the app). A missing
     /// dictionary means letter rules only, as in Python.
     public init(rulesDirectory: URL) throws {
@@ -70,6 +76,13 @@ public struct RuleConverter: Sendable {
         var i = 0
         while i < tokens.count {
             let token = tokens[i]
+            if let pieces = Self.emojiPieces(token.core), !Self.isUntouchedToken(token.raw) {
+                // Words glued by emoji (ya😍rayt): each word converted on its own, the emoji kept between them.
+                let glued = pieces.enumerated().map { $0.offset % 2 == 0 ? convert($0.element) : $0.element }.joined()
+                out.append(punct(token.lead) + glued + punct(token.trail))
+                i += 1
+                continue
+            }
             if isUntouched(token) {
                 let keepWhole = token.core.isEmpty || Self.isUntouchedToken(token.raw)
                 out.append(keepWhole ? token.raw : punct(token.lead) + token.core + punct(token.trail))
@@ -110,6 +123,26 @@ public struct RuleConverter: Sendable {
             i += 1
         }
         return out.joined(separator: " ")
+    }
+
+    /// A word core split at runs of emoji (scalars that are neither word characters nor ASCII, like Python's
+    /// `[^\w\x00-\x7F]+`): words and runs alternate, words first and last. nil without such a run inside, or
+    /// when a word is not ASCII or none has a Latin letter.
+    static func emojiPieces(_ core: String) -> [String]? {
+        var pieces: [[Unicode.Scalar]] = [[]]
+        var inRun = false
+        for scalar in core.unicodeScalars {
+            let run = !scalar.isPythonWord && !scalar.isASCII
+            if run != inRun {
+                pieces.append([])
+                inRun = run
+            }
+            pieces[pieces.count - 1].append(scalar)
+        }
+        let words = stride(from: 0, to: pieces.count, by: 2).map { pieces[$0] }
+        guard pieces.count > 1, words.allSatisfy({ $0.allSatisfy(\.isASCII) }),
+              words.contains(where: { $0.contains { $0.properties.isAlphabetic } }) else { return nil }
+        return pieces.map { String(String.UnicodeScalarView($0)) }
     }
 
     func word(_ core: String) -> String {

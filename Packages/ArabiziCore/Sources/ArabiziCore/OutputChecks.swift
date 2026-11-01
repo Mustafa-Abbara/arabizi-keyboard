@@ -21,6 +21,9 @@ public struct OutputChecks: Equatable, Sendable {
     public var minWordRatio: Double
     public var maxWordRatio: Double
     public var wordSlack: Int
+    /// Words the training data keeps in Latin (the rule dictionary's keep-Latin list): a short glued word must be
+    /// one of them to count as typed (`btv` -> `tv`), so a misread Arabizi word does not (`3ajen` -> `jen`).
+    public var keptLatin: Set<String> = []
 
     public init(minWordRatio: Double = 0.5, maxWordRatio: Double = 2.0, wordSlack: Int = 1) {
         self.minWordRatio = minWordRatio
@@ -38,7 +41,8 @@ public struct OutputChecks: Equatable, Sendable {
         // Both sides still masked: links and emails are placeholders here, so they never count as Latin words.
         let allowed = Set(Self.words(input.masked).map { Token($0).core.lowercased() })
         let invented = Self.words(answer).map { Token($0).core }.filter { core in
-            core.unicodeScalars.contains { $0.isASCII && $0.properties.isAlphabetic } && !Self.isInputWord(core, allowed)
+            core.unicodeScalars.contains { $0.isASCII && $0.properties.isAlphabetic }
+                && !Self.isInputWord(core, allowed, keptLatin: keptLatin)
         }
         guard invented.isEmpty else { return .failure(.newLatin(invented)) }
         let inputWords = Self.words(input.masked).count
@@ -56,11 +60,13 @@ public struct OutputChecks: Equatable, Sendable {
     public static let gluedPrefixes = ["l", "el", "il", "al", "b", "bi", "be", "bel", "bil", "w", "wel", "wil",
                                        "3a", "3al", "hal", "la", "lal"]
 
-    /// Whether a Latin word of the answer was typed: an input word itself, or one glued to an Arabizi prefix.
-    /// `inputWords` are lowercased.
-    public static func isInputWord(_ word: String, _ inputWords: Set<String>) -> Bool {
+    /// Whether a Latin word of the answer was typed: an input word itself, or one glued to an Arabizi prefix
+    /// that is at least 4 letters long or kept in Latin by the training data. `inputWords` are lowercased.
+    public static func isInputWord(_ word: String, _ inputWords: Set<String>, keptLatin: Set<String> = []) -> Bool {
         let word = word.lowercased()
-        return inputWords.contains(word) || gluedPrefixes.contains { inputWords.contains($0 + word) }
+        if inputWords.contains(word) { return true }
+        guard word.count >= 4 || keptLatin.contains(word) else { return false }
+        return gluedPrefixes.contains { inputWords.contains($0 + word) }
     }
 
     /// The emoji of a text in order, as typed (skin tones and flags kept whole).

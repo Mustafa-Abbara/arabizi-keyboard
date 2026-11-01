@@ -100,6 +100,13 @@ func mixedTokensAreSplit(input: String, answer: String, repaired: String, count:
     #expect(reason == "repaired: \(count) token(s)")
 }
 
+@Test func aMisreadArabiziWordLeftInLatinIsConvertedByTheRules() throws {
+    // `3a` + `jen` looks like a prefix glued to an English word, but `jen` is short and not kept in Latin.
+    let model = ScriptedModel { _ in finished("اللت و Jen") }
+    let response = try engine(model).convert(request("lat wel 3ajen"))
+    #expect(response.outcome == .model && response.text == "اللت و " + rules.convert("3ajen"))
+}
+
 @Test func anInventedWordIsReplacedByTheRulesForItsInputWord() throws {
     let model = ScriptedModel { _ in finished("عجبني ال program") }
     let response = try engine(model).convert(request("3ajabne l programe"))

@@ -89,6 +89,10 @@ func dictionary(_ arabic: [String]) -> [String: String] {
     let bytes = try Data(contentsOf: file)
     #expect(String(decoding: bytes, as: UTF8.self).contains("tawle") == false)  // not readable on disk
     #expect(CorrectionStore(file: file, key: SymmetricKey(size: .bits256)).all().isEmpty)  // wrong key: nothing
+    let other = Correction(latin: "Tawle", chosen: "تاولة", rejected: "طاولة", date: today)
+    try store.record(other)
+    try store.forget(latin: "TAWLE", chosen: "طاولة")
+    #expect(store.all() == [other])  // only that spelling of that word
     try store.wipe()
     #expect(store.all().isEmpty)
 }
@@ -204,7 +208,7 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     let past = [fix("sabiye", "صبية", 1), fix("Sabiye", "صبية", 2), fix("sabiye", "سابية", 3),
                 fix("kifak", "كيفك", 3), fix("sabiye", "سبية", 4)]
     let offered = Suggestions.pastFixesFirst(past, latin: "sabiye?", shown: "سبية؟",
-                                             candidates: ["سابية", "صبيه", "sabiye", "a", "b"])
+                                             candidates: ["سابية", "صبيه", "sabiye", "a", "b"], limit: 5)
     #expect(offered == ["صبية", "سابية", "صبيه", "sabiye", "a"])  // most often chosen first; no repeats; at most 5
     #expect(!offered.contains("سبية"))  // never the word already shown
     #expect(!offered.contains("كيفك"))  // another typed word's fix

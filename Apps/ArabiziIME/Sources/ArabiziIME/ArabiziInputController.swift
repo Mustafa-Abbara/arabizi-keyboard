@@ -13,20 +13,28 @@ final class ArabiziInputController: IMKInputController {
     /// in time. The rule files and config come from Resources (scripts/build_ime.sh); without them the P1 toy
     /// converter keeps the keyboard usable.
     private static let convert: @Sendable (String) -> String = {
-        let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
         let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
-        let rules: @Sendable (String) -> String
-        do {
-            let converter = try RuleConverter(rulesDirectory: resources)
-            log.info("Rule converter loaded")
-            rules = { converter.convert($0) }
-        } catch {
-            log.error("Rule files not loaded (\(String(describing: error), privacy: .public)): using the toy converter")
-            rules = ToyTransliterator.convert
-        }
+        let rules = quickConvert
         guard let engine = EngineClient(resources: resources) else { return rules }
         engine.warmUp()
         return { text in engine.convert(text) ?? rules(text) }
+    }()
+    /// The rule converter from Resources, nil without the rule files.
+    private static let ruleConverter: RuleConverter? = {
+        let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
+        do {
+            let converter = try RuleConverter(rulesDirectory: Bundle.main.resourceURL ?? Bundle.main.bundleURL)
+            log.info("Rule converter loaded")
+            return converter
+        } catch {
+            log.error("Rule files not loaded (\(String(describing: error), privacy: .public)): using the toy converter")
+            return nil
+        }
+    }()
+    /// The rules alone: instant, used as the fallback and for the first preview while the model works.
+    private static let quickConvert: @Sendable (String) -> String = {
+        guard let converter = ruleConverter else { return ToyTransliterator.convert }
+        return { converter.convert($0) }
     }()
     /// Other spellings for a converted word (⌥Tab, ADR 0027): the rules and their dictionary from Resources, and
     /// the user's picks recorded in an encrypted file on this Mac. nil without the rule files: ⌥Tab then beeps.
@@ -37,6 +45,7 @@ final class ArabiziInputController: IMKInputController {
             return nil
         }
         let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon),
+                                      arabicWords: Suggestions.arabicWords(lexicon: lexicon),
                                       rules: { rules.convert($0) })
         let store = CorrectionStore.standard()
         let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
@@ -54,17 +63,16 @@ final class ArabiziInputController: IMKInputController {
             spelling: spelling)
     }()
     /// Conversions made ahead while the user types (live preview), by the exact Latin text. Enter takes a ready one.
-    private static let previews = PreviewCache()
+    private static let previews = PreviewCache(isClitic: { ruleConverter?.isClitic($0) ?? false })
     /// One conversion at a time, off the main thread: the keyboard never waits for the engine while the user types.
     private static let previewQueue = DispatchQueue(label: "lb.aub.arabizi.preview", qos: .userInitiated)
     private static let previewDelay: DispatchTimeInterval = .milliseconds(300)
-    /// `defaults write lb.aub.arabizi.inputmethod.ArabiziIME livePreview -bool false` switches the preview off.
-    private static var livePreviewEnabled: Bool { UserDefaults.standard.object(forKey: "livePreview") as? Bool ?? true }
+    private static var livePreviewEnabled: Bool { Settings.livePreview }
     private let previewState = PreviewGeneration()
     private static let previewWork = PreviewWork()
     private var composer = Composer(convert: ArabiziInputController.convert, suggester: ArabiziInputController.suggester,
                                     ready: { ArabiziInputController.previews.arabic(for: $0) })
-    private let candidatesPanel = CandidatesPanel()
+    private let chips = CorrectionChips()
     private let previewWindow = PreviewWindow()
 
     /// Converts what is typed in the background so the Arabic can be shown under it: at once when a word is finished
@@ -73,7 +81,13 @@ final class ArabiziInputController: IMKInputController {
         let latin = composer.buffer
         let generation = previewState.next()
         guard Self.livePreviewEnabled, latin.contains(where: \.isLetter), !composer.isSuggesting else { return }
-        if latin.last?.isWhitespace == true {
+        if latin.last?.isWhitespace == true, !Self.previews.endsWithClitic(latin) {
+            // A finished word: the rules at once, then the model. After a small word (el, w, b) the next word
+            // decides its Arabic, so that waits for the next word or a pause.
+            if Self.previews.arabic(for: latin) == nil {
+                Self.previews.set(latin, Self.quickConvert(latin), final: false)
+                showPreview()
+            }
             requestPreview(latin)
             return
         }
@@ -107,11 +121,13 @@ final class ArabiziInputController: IMKInputController {
         guard !composer.isSuggesting, let client = client(),
               let text = Self.previews.display(for: composer.buffer) else { return hidePreview() }
         let marked = client.markedRange()
-        let index = marked.location == NSNotFound ? max(0, client.selectedRange().location) : marked.location
-        var line = NSRect.zero
-        _ = client.attributes(forCharacterIndex: index, lineHeightRectangle: &line)
+        let index = marked.location == NSNotFound ? client.selectedRange().location : marked.location
+        let line = lineRect(client, at: [index])
         nonisolated(unsafe) let window = previewWindow
-        MainActor.assumeIsolated { window.show(text, above: line) }
+        // Until ↑ has been used a few times, a quiet reminder that a word can be fixed before converting.
+        let hint = text.latin.isEmpty && Settings.personality != .quiet
+            && UserDefaults.standard.integer(forKey: "previewFixUses") < Self.previewFixUses ? "↑ fix a word" : nil
+        MainActor.assumeIsolated { window.show(arabic: text.arabic, latin: text.latin, hint: hint, above: line) }
     }
 
     private func hidePreview() {
@@ -119,25 +135,76 @@ final class ArabiziInputController: IMKInputController {
         MainActor.assumeIsolated { window.hide() }
     }
 
-    /// The candidate window under the selected word (hidden when there is nothing to offer). InputMethodKit calls
-    /// the controller on the main thread.
-    private func showCandidates() {
-        guard !composer.currentCandidates.isEmpty else { return hideCandidates() }
-        hidePreview()
-        nonisolated(unsafe) let panel = candidatesPanel, server = server()
+    /// The chip row above the text (hidden when there is nothing to offer and nothing to spell).
+    /// `wordStart` is where the word starts in the marked text. InputMethodKit calls the controller on the main thread.
+    private func showCandidates(wordStart: Int) {
         let candidates = composer.currentCandidates, spelling = composer.isSpelling, choice = composer.currentChoice
-        MainActor.assumeIsolated { panel.show(server: server, candidates: candidates, spelling: spelling, choice: choice) }
+        guard !candidates.isEmpty || spelling, let client = client() else { return hideCandidates() }
+        hidePreview()
+        // Above the text's first line, the same place as the live preview, lined up with the word when the app
+        // reports it on that line.
+        let marked = client.markedRange()
+        let start = marked.location == NSNotFound ? client.selectedRange().location : marked.location
+        var line = lineRect(client, at: [start])
+        if line != .zero, let word = plausibleLine(client, at: start + wordStart), abs(word.midY - line.midY) < 2 {
+            line.origin.x = word.minX
+        }
+        nonisolated(unsafe) let chips = chips, controller = self
+        MainActor.assumeIsolated {
+            chips.show(candidates: candidates, spelling: spelling, choice: choice, above: line,
+                       pick: { controller.chipPicked($0) }, spellIt: { controller.spellFromChip() })
+        }
     }
 
     private func hideCandidates() {
-        nonisolated(unsafe) let panel = candidatesPanel
-        MainActor.assumeIsolated { panel.hide() }
+        nonisolated(unsafe) let chips = chips
+        MainActor.assumeIsolated { chips.hide() }
     }
+
+    /// After a conversion, a one-line hint that ⌥Tab fixes a word: the first few times only, never in Quiet mode,
+    /// and no more once ⌥Tab has been used a few times.
+    private func showFixHint(in client: IMKTextInput) {
+        let shown = UserDefaults.standard.integer(forKey: "fixHintShown")
+        guard shown < Self.fixHintTimes, UserDefaults.standard.integer(forKey: "fixHintUses") < Self.fixHintUses,
+              Settings.personality != .quiet else { return }
+        UserDefaults.standard.set(shown + 1, forKey: "fixHintShown")
+        let cursor = client.selectedRange().location
+        let line = lineRect(client, at: [cursor - 1, cursor])
+        guard line != .zero else { return }
+        nonisolated(unsafe) let chips = chips
+        MainActor.assumeIsolated { chips.showHint("Not quite? ⌥Tab to fix a word", above: line) }
+    }
+
+    private static let fixHintTimes = 5, fixHintUses = 3, previewFixUses = 3
+
+    /// The last line position an app reported that made sense: used when the app reports none or a wrong one.
+    private var lastLine: NSRect?
+
+    /// The screen rectangle of the line holding the first of `indices` the app reports sensibly, else the last good
+    /// one, else .zero (the boxes then sit at the mouse, which only happens before any position is known).
+    private func lineRect(_ client: IMKTextInput, at indices: [Int]) -> NSRect {
+        for index in indices {
+            if let line = plausibleLine(client, at: index) {
+                lastLine = line
+                return line
+            }
+        }
+        return lastLine ?? .zero
+    }
+
+    /// The line rectangle at `index`, nil when the app gives none or one that cannot be a line of text on a screen.
+    private func plausibleLine(_ client: IMKTextInput, at index: Int) -> NSRect? {
+        guard index >= 0, index != NSNotFound else { return nil }
+        var line = NSRect.zero
+        _ = client.attributes(forCharacterIndex: index, lineHeightRectangle: &line)
+        guard line.height > 4, line.height < 200, line.origin != .zero,
+              NSScreen.screens.contains(where: { $0.frame.contains(NSPoint(x: line.minX, y: line.midY)) })
+        else { return nil }
+        return line
+    }
+
     /// Where the cursor was right after the last conversion, so ⌘Z can tell whether it moved since.
     private var conversionEnd: Int?
-    /// ↓/↑ presses handed to the candidate window whose new highlight has not been reported yet. Only these
-    /// reports are followed: the window also reports a highlight of its own when its list is reloaded.
-    private var windowMoves = 0
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
@@ -167,18 +234,7 @@ final class ArabiziInputController: IMKInputController {
             break
         }
 
-        // Once a spelling (or letter) is highlighted, ↓/↑ go to the candidate window, which moves and draws its own
-        // highlight and reports it (candidateSelectionChanged); the first ↓/↑ highlights the first line.
-        if key == .arrowDown || key == .arrowUp, composer.isSuggesting, composer.currentChoice != nil,
-           !composer.currentCandidates.isEmpty {
-            nonisolated(unsafe) let panel = candidatesPanel, keyEvent = event
-            if MainActor.assumeIsolated({ panel.forward(keyEvent) }) {
-                windowMoves += 1
-                log.notice("\(key.kind, privacy: .public) -> candidate window")
-                return true
-            }
-        }
-
+        let wasComposing = !composer.buffer.isEmpty && !composer.isSuggesting
         let effect = composer.handle(key, context: context)
         if key.isCommand {
             log.notice("\(key.kind, privacy: .public) -> \(effect.kind, privacy: .public)")
@@ -186,7 +242,14 @@ final class ArabiziInputController: IMKInputController {
         if key == .arrowLeft || key == .arrowRight || key == .suggest, let word = composer.selectedWord {
             log.notice("\(key.kind, privacy: .public): word \(word.index + 1, privacy: .public) of \(word.count, privacy: .public)")
         }
+        if key == .suggest {  // ⌥Tab used: after a few times the hint is no longer needed
+            UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "fixHintUses") + 1, forKey: "fixHintUses")
+        }
+        if key == .arrowUp, case .suggest = effect, wasComposing {  // fixing before sending
+            UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "previewFixUses") + 1, forKey: "previewFixUses")
+        }
         let handled = apply(effect, to: client, selection: selection)
+        if key == .enter, case .commit = effect, composer.lastConversion != nil { showFixHint(in: client) }
         if case .update = effect {
             schedulePreview()
             showPreview()  // the converted words stay on screen while typing
@@ -203,7 +266,6 @@ final class ArabiziInputController: IMKInputController {
             if composer.lastConversion == nil { conversionEnd = nil }
             if !composer.isSuggesting {
                 hideCandidates()
-                windowMoves = 0
                 if composer.buffer.isEmpty { hidePreview() }  // still composing: showPreview decides
             }
         }
@@ -250,7 +312,7 @@ final class ArabiziInputController: IMKInputController {
             }
             client.setMarkedText(marked, selectionRange: NSRange(location: selected.lowerBound, length: selected.count),
                                  replacementRange: range)
-            showCandidates()
+            showCandidates(wordStart: selected.lowerBound)
             return true
         case .commitAndCompose(let text, let marked):
             insert(text, into: client)
@@ -259,31 +321,46 @@ final class ArabiziInputController: IMKInputController {
         }
     }
 
-    /// The candidate window moved its highlight after a ↓/↑ it was given: show that spelling (or letter) in the
-    /// text, so Enter takes it. The window is not refreshed here, which would move its highlight again.
-    override func candidateSelectionChanged(_ candidateString: NSAttributedString!) {
-        guard windowMoves > 0, let highlighted = candidateString?.string, let client = client() else { return }
-        windowMoves -= 1
-        log.notice("candidate window highlight followed")
-        guard let effect = composer.highlight(highlighted),
-              case .suggest(let marked, let selected, _, _) = effect else { return }
-        client.setMarkedText(marked, selectionRange: NSRange(location: selected.lowerBound, length: selected.count),
-                             replacementRange: Self.notFound)
+    /// The keyboard's items in the input menu (the ع icon in the menu bar): quick toggles, and the Harfi window.
+    override func menu() -> NSMenu! {
+        let menu = NSMenu()
+        let preview = NSMenuItem(title: "Live preview", action: #selector(toggleLivePreview(_:)), keyEquivalent: "")
+        preview.state = Settings.livePreview ? .on : .off
+        menu.addItem(preview)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Your words…", action: #selector(showWords(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Harfi settings…", action: #selector(showSettings(_:)), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Help and shortcuts", action: #selector(showHelp(_:)), keyEquivalent: ""))
+        return menu
     }
 
-    /// The spellings shown in the candidate window (InputMethodKit asks for them).
-    override func candidates(_ sender: Any!) -> [Any]! {
-        composer.currentCandidates
+    @objc func toggleLivePreview(_ sender: Any?) {
+        Settings.livePreview.toggle()
+        if !Settings.livePreview { hidePreview() }
     }
 
-    /// A spelling clicked in the candidate window: the same as pressing its number. While spelling, a letter for
-    /// the last key (by its text: a number key would spell a letter there).
-    override func candidateSelected(_ candidateString: NSAttributedString!) {
-        guard let picked = candidateString?.string, let client = client() else { return }
+    @objc func showWords(_ sender: Any?) { openWindow(.words) }
+    @objc func showSettings(_ sender: Any?) { openWindow(.typing) }
+    @objc func showHelp(_ sender: Any?) { openWindow(.help) }
+
+    private func openWindow(_ tab: SettingsModel.Tab) {
+        MainActor.assumeIsolated { SettingsWindow.shared.show(tab) }
+    }
+
+    /// A chip clicked: the same as pressing its number. While spelling, a letter for the last key (by its text:
+    /// a number key would spell a letter there).
+    fileprivate func chipPicked(_ picked: String) {
+        guard let client = client() else { return }
         let effect = composer.pick(picked)
         guard effect != .consume else { return }
         _ = apply(effect, to: client)
         if !composer.isSuggesting { rememberConversionEnd(in: client) }
+    }
+
+    /// "Spell it" clicked: the same as ⌥Tab a second time.
+    fileprivate func spellFromChip() {
+        guard let client = client() else { return }
+        _ = apply(composer.handle(.suggest, context: Context(secureInput: IsSecureEventInputEnabled())), to: client)
     }
 
     /// Called when focus moves away (click elsewhere, app switch) while composing.
@@ -316,44 +393,6 @@ final class ArabiziInputController: IMKInputController {
     private func insert(_ text: String, into client: IMKTextInput, replacing range: NSRange = notFound) {
         client.insertText(text, replacementRange: range)
         log.debug("committed \(text.count) characters")
-    }
-}
-
-/// The macOS candidate window (InputMethodKit), created on first use. It asks the controller for the spellings.
-final class CandidatesPanel {
-    private var window: IMKCandidates?
-    /// What the window lists now: reloading it puts its highlight back on the first line, so it is reloaded only
-    /// when the list changes, not when ↓/↑ or Tab only move the highlight.
-    private var listed: (candidates: [String], spelling: Bool)?
-
-    /// Spellings are picked with the keys 1–5. While spelling, digits are letters, so the window has no number
-    /// keys and highlights the letter chosen for the last key (Tab/⇧Tab and ↓/↑ move it).
-    @MainActor func show(server: IMKServer?, candidates: [String], spelling: Bool, choice: Int?) {
-        if window == nil {
-            window = IMKCandidates(server: server, panelType: kIMKSingleColumnScrollingCandidatePanel)
-        }
-        guard let window else { return }
-        if listed?.candidates != candidates || listed?.spelling != spelling {
-            window.setSelectionKeys(spelling ? [] : [18, 19, 20, 21, 23].map { NSNumber(value: $0) })  // the keys 1–5
-            window.update()
-            listed = (candidates, spelling)
-        }
-        window.show(kIMKLocateCandidatesBelowHint)
-        if let choice {
-            window.selectCandidate(withIdentifier: window.candidateIdentifier(atLineNumber: choice))
-        }
-    }
-
-    @MainActor func hide() {
-        window?.hide()
-        listed = nil
-    }
-
-    /// Hands a ↓/↑ key to the visible window, which moves and draws its highlight itself; false when it is hidden.
-    @MainActor func forward(_ event: NSEvent) -> Bool {
-        guard let window, window.isVisible() else { return false }
-        window.interpretKeyEvents([event])
-        return true
     }
 }
 
@@ -420,37 +459,51 @@ extension Key {
 }
 
 
-/// The conversions made ahead for the live preview: the last few, by the exact Latin text.
+/// The conversions made ahead for the live preview: the last few, by the exact Latin text. A conversion is final
+/// (the model's, which Enter may use) or quick (the rules', shown only until the model's arrives).
 final class PreviewCache: @unchecked Sendable {  // `items` is behind `lock`
     private let lock = NSLock()
-    private var items: [(latin: String, arabic: String)] = []
+    private var items: [(latin: String, arabic: String, final: Bool)] = []
+    private let isClitic: @Sendable (String) -> Bool
 
-    func set(_ latin: String, _ arabic: String) {
+    init(isClitic: @escaping @Sendable (String) -> Bool) { self.isClitic = isClitic }
+
+    func set(_ latin: String, _ arabic: String, final: Bool = true) {
         lock.withLock {
+            if !final, items.contains(where: { $0.latin == latin && $0.final }) { return }
             items.removeAll { $0.latin == latin }
-            items.append((latin, arabic))
+            items.append((latin, arabic, final))
             if items.count > 16 { items.removeFirst() }
         }
     }
 
-    /// The Arabic for exactly this text.
+    /// The final Arabic for exactly this text.
     func arabic(for latin: String) -> String? {
-        lock.withLock { items.last { $0.latin == latin }?.arabic }
+        lock.withLock { items.last { $0.latin == latin && $0.final }?.arabic }
+    }
+
+    /// True when the last word of `latin` is a small word whose Arabic depends on the next one (el, w, b).
+    func endsWithClitic(_ latin: String) -> Bool {
+        guard let last = latin.split(whereSeparator: \.isWhitespace).last else { return false }
+        return isClitic(String(last))
     }
 
     /// What the preview window shows for the text typed so far: the Arabic of the longest converted start that ends
-    /// at a word boundary, then the Latin typed since. nil when no start of the text is converted yet.
-    func display(for buffer: String) -> String? {
+    /// at a word boundary, then the Latin typed since. A start ending in a small word (el, w, b) is not used, so
+    /// a lone ال never shows before its word. nil when no start of the text is converted yet.
+    func display(for buffer: String) -> (arabic: String, latin: String)? {
         lock.withLock {
             let starts = items.filter { item in
-                guard buffer.hasPrefix(item.latin) else { return false }
+                guard buffer.hasPrefix(item.latin), !endsWithClitic(item.latin) || item.latin.count == buffer.count
+                else { return false }
                 if item.latin.count == buffer.count || item.latin.last?.isWhitespace == true { return true }
                 return buffer[buffer.index(buffer.startIndex, offsetBy: item.latin.count)].isWhitespace
             }
-            guard let best = starts.max(by: { $0.latin.count < $1.latin.count }) else { return nil }
+            guard let best = starts.max(by: { ($0.latin.count, $0.final ? 1 : 0) < ($1.latin.count, $1.final ? 1 : 0) })
+            else { return nil }
             let head = best.arabic.trimmingCharacters(in: .whitespaces)
             let rest = String(buffer.dropFirst(best.latin.count)).trimmingCharacters(in: .whitespaces)
-            return rest.isEmpty ? head : head + " " + rest
+            return (head, rest)
         }
     }
 }
@@ -521,15 +574,9 @@ final class PreviewWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         let label = NSTextField(wrappingLabelWithString: "")
         self.label = label
-        let background = NSVisualEffectView()
-        background.material = .menu
-        background.blendingMode = .behindWindow
-        background.state = .active
-        background.wantsLayer = true
-        background.layer?.cornerRadius = 10
-        background.layer?.masksToBounds = true
+        let background = PreviewBackground()
         label.font = .systemFont(ofSize: 20)
-        label.textColor = .labelColor
+        label.textColor = Theme.text
         label.baseWritingDirection = .natural
         label.maximumNumberOfLines = 4
         label.isSelectable = false
@@ -539,11 +586,22 @@ final class PreviewWindow {
         return panel
     }
 
-    /// Shows `text` just above `line` (the line being typed, in screen coordinates; empty when the app gives none).
-    @MainActor func show(_ text: String, above line: NSRect) {
+    /// Shows the converted Arabic, then the Latin typed since in a quieter colour, just above `line` (the line being
+    /// typed, in screen coordinates; empty when the app gives none).
+    @MainActor func show(arabic: String, latin: String, hint: String? = nil, above line: NSRect) {
         let panel = ensurePanel()
         guard let label else { return }
-        label.stringValue = text
+        let text = NSMutableAttributedString(string: arabic, attributes: [.font: NSFont.systemFont(ofSize: 20),
+                                                                          .foregroundColor: Theme.text])
+        if !latin.isEmpty {
+            text.append(NSAttributedString(string: " " + latin, attributes: [
+                .font: NSFont.systemFont(ofSize: 16), .foregroundColor: Theme.textMuted]))
+        }
+        if let hint {
+            text.append(NSAttributedString(string: "   " + hint, attributes: [
+                .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.accent]))
+        }
+        label.attributedStringValue = text
         let fitted = label.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: Self.maxWidth - 2 * Self.padding.width,
                                                             height: 10_000)) ?? .zero
         let size = NSSize(width: ceil(fitted.width) + 2 * Self.padding.width,
@@ -562,5 +620,27 @@ final class PreviewWindow {
 
     @MainActor func hide() {
         panel?.orderOut(nil)
+    }
+}
+
+/// The preview box: the palette's surface with a thin border and rounded corners, redrawn when the appearance
+/// changes (layer colours do not follow it on their own).
+final class PreviewBackground: NSView {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = 10
+        layer?.borderWidth = 1
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = Theme.surface.cgColor
+            layer?.borderColor = Theme.border.cgColor
+        }
     }
 }

@@ -74,6 +74,13 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
         }
     }
 
+    /// Forgets every correction of this typed word to this spelling (the "Your words" page).
+    public func forget(latin: String, chosen: String) throws {
+        try lock.withLock {
+            try save(load().filter { $0.latin.lowercased() != latin.lowercased() || $0.chosen != chosen })
+        }
+    }
+
     /// Deletes every correction.
     public func wipe() throws {
         try lock.withLock {

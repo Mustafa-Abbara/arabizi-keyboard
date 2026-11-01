@@ -26,6 +26,36 @@ private func type(_ text: String, into composer: inout Composer) {
     #expect(c.handle(.enter) == .pass)
 }
 
+private func suggestingComposer() -> Composer {
+    let suggester = Suggester(candidates: { shown, _ in shown == "BET" ? ["بيت", "بيتي"] : [] },
+                              align: { latin, shown in latin.count == shown.count ? latin.indices.map { $0..<($0 + 1) } : [] },
+                              record: { _ in })
+    return Composer(convert: { $0.uppercased() }, suggester: suggester)
+}
+
+@Test func upWhileTypingFixesAWordBeforeAnythingIsConverted() {
+    var c = suggestingComposer()
+    type("el bet", into: &c)
+    #expect(c.handle(.arrowUp) == .suggest(marked: "EL BET", selected: 3..<6, candidates: ["بيت", "بيتي"],
+                                           replacingLength: nil))
+    #expect(c.handle(.text("2")) == .commit("EL بيتي"))  // the fix and the rest, committed together
+    #expect(c.lastConversion == Conversion(latin: "el bet", converted: "EL بيتي"))  // ⌘Z still brings it back
+}
+
+@Test func leavingTheFixBeforeSendingGoesBackToTheLatin() {
+    var c = suggestingComposer()
+    type("el bet", into: &c)
+    _ = c.handle(.arrowUp)
+    #expect(c.handle(.escape) == .update(marked: "el bet"))
+    _ = c.handle(.arrowUp)
+    #expect(c.handle(.text("e")) == .update(marked: "el bete"))  // a letter keeps typing
+    _ = c.handle(.arrowUp)
+    #expect(c.handle(.backspace) == .update(marked: "el bet"))
+    #expect(!c.isSuggesting)
+    var empty = composer()
+    #expect(empty.handle(.arrowUp) == .pass)  // nothing typed: the app's own ↑
+}
+
 @Test func escapeCommitsLatinUnchanged() {
     var c = composer()
     type("ok", into: &c)

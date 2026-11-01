@@ -15,7 +15,8 @@ let rulesDirectory = URL(filePath: "data/rules")
 let rules = try RuleConverter(rulesDirectory: rulesDirectory)
 let spelling = try SpellingOptions(rulesDirectory: rulesDirectory, rules: rules)
 let lexicon = try Data(contentsOf: rulesDirectory.appending(path: RuleConverter.lexiconFileName))
-let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon), rules: { rules.convert($0) })
+let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon),
+                              arabicWords: Suggestions.arabicWords(lexicon: lexicon), rules: { rules.convert($0) })
 
 func rows(_ path: String) throws -> [[String: Any]] {
     try String(contentsOfFile: path, encoding: .utf8).split(separator: "\n").map {

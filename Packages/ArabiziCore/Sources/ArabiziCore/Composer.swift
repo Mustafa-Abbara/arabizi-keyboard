@@ -103,6 +103,9 @@ struct SuggestionSession: Equatable {
     var speller: Speller?
     /// The candidate moved to with ↓/↑ (Enter takes it); nil until an arrow is pressed.
     var highlighted: Int?
+    /// Opened with ↑ while typing, before anything was converted into the app: Esc, Backspace or a letter go back
+    /// to the Latin text instead of committing the Arabic.
+    var beforeSending = false
 
     var text: String { words.joined(separator: " ") }
 
@@ -188,6 +191,16 @@ public struct Composer {
             guard !buffer.isEmpty else { return .pass }
             buffer.removeLast()
             return .update(marked: buffer)
+        case .arrowUp where !buffer.isEmpty:
+            // Fix before sending: the Arabic of what is typed, with the last word selected, before it is committed.
+            let latin = buffer
+            guard var started = startSuggesting(Conversion(latin: latin, converted: ready(latin) ?? convert(latin)))
+            else { return .consume }
+            started.beforeSending = true
+            buffer = ""
+            session = started
+            return .suggest(marked: started.text, selected: started.selected, candidates: started.candidates,
+                            replacingLength: nil)
         case .suggest:
             guard buffer.isEmpty else { return .commit(convertAndRemember(take())) }
             guard let previous, context.cursorAtLastConversion, let started = startSuggesting(previous) else {
@@ -257,6 +270,24 @@ public struct Composer {
             session = nil
             lastConversion = Conversion(latin: current.latin, converted: text)  // ⌘Z and ⌥Tab still work
             return text
+        }
+        if current.beforeSending {
+            func backToLatin(_ edit: (inout String) -> Void) -> Effect {
+                session = nil
+                buffer = current.latin
+                edit(&buffer)
+                return .update(marked: buffer)
+            }
+            switch key {
+            case .escape:
+                return backToLatin { _ in }
+            case .backspace:
+                return backToLatin { if !$0.isEmpty { $0.removeLast() } }
+            case .text(let character) where Int(character).map({ $0 < 1 || $0 > current.candidates.count }) ?? true:
+                return backToLatin { $0 += character }
+            default:
+                break
+            }
         }
         func take(_ chosen: String) -> Effect {
             let parts = WordParts(current.words[current.index])

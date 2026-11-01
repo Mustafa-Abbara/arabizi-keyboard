@@ -1,6 +1,6 @@
 # ADR 0031: Leave plain English alone, and repair by position
 
-- **Status:** Accepted, 29 Oct 2026
+- **Status:** Accepted, 29 Oct 2026; amended 1 Nov 2026 (decision 1)
 - **Date:** 2026-10-29
 - **Deciders:** Moustafa Abbara
 - **Stage:** P5 (engine)
@@ -13,7 +13,7 @@ Latin letters are all the keyboard sees, so a sentence typed in English looks li
 
 | # | Decision | Source |
 |---|---|---|
-| 1 | **`EnglishGuard` (ArabiziCore):** a text is plain English when it has at least 3 words, at least 2 and at least 40% of them common English function words (`data/rules/english_stopwords.json`), and nothing that looks like Arabizi: no digit inside a word (`3am`), no word of the rule dictionary that the training data does not also keep in Latin, no Arabic script. Links, emails, mentions and one-letter words are not counted. The engine returns such a text unchanged (`passthrough`, reason `english`) before the model or the rules run. | **Recommendation** |
+| 1 | **`EnglishGuard` (ArabiziCore):** a text is plain English when it has at least 3 words, at least 2 and at least 40% of them common English function words (`data/rules/english_stopwords.json`), and nothing that looks like Arabizi: no digit inside a word (`3am`), at most one word of the rule dictionary that the training data does not also keep in Latin per 8 words (amended 1 Nov 2026: `tab`, طب, made a long English message Arabizi; on all 49,000+ training and dev messages even one per 4 words leaves no Arabizi message unconverted), no Arabic script. Links, emails, mentions and one-letter words are not counted. The engine returns such a text unchanged (`passthrough`, reason `english`) before the model or the rules run. | **Recommendation** |
 | 2 | **The function words** are a short hand-written list. A word the training data converts to Arabic at least as often as it keeps it in Latin is left out (`she`, `be`, `may`, `he`, `am`, `into`, `a`, `we`, `an`, `had`, `much`, `say`: Arabizi for شي, بي, عم…); `eval/tests/test_english_stopwords.py` checks the list against the data. | **Recommendation** |
 | 3 | **Repair by position:** when the model's answer has a word that cannot be traced to one input word (ADR 0023) and has as many words as the input, that word is replaced by the rule conversion of the input word in the same position, and the model's other words are kept. Before, the whole sentence went to the rules. | **Recommendation** |
 | 4 | Mixed sentences are not changed: English words inside Arabizi are still the model's job. The guard only decides for sentences that are plain English. | **Recommendation** |
