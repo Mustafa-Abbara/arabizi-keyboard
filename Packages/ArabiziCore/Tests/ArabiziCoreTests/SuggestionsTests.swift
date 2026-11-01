@@ -1,4 +1,8 @@
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto  // swift-crypto: the same API on Windows and Linux (ADR 0032)
+#endif
 import Foundation
 import Testing
 @testable import ArabiziCore
