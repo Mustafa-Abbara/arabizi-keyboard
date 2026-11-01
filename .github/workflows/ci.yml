@@ -87,8 +87,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-6.0.3-release
-          tag: 6.0.3-RELEASE
+          branch: swift-6.2-release
+          tag: 6.2-RELEASE
       - run: swift --version
       - run: swift test --package-path Packages/ArabiziCore
       - name: the Windows keyboard (HarfiTIP.dll) and the core as a C library (HarfiCoreC.dll)
