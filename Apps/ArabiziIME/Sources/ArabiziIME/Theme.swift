@@ -10,6 +10,7 @@ enum Theme {
     static let border = color(light: 0xE4DFD4, dark: 0x2C3632)
     static let accent = color(light: 0x2F6B5A, dark: 0x7DBBA5)
     static let accentSoft = color(light: 0xE2EEE8, dark: 0x21392F)
+    static let warning = color(light: 0x9A6A1F, dark: 0xE0B062)
 
     private static func color(light: UInt32, dark: UInt32) -> NSColor {
         NSColor(name: nil) { appearance in

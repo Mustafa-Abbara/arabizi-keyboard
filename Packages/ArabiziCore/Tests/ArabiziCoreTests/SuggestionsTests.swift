@@ -222,3 +222,16 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     #expect(offered.first == "الشار")  // the main word's spelling, with ال in front
     #expect(!offered.contains("ال") && !offered.contains("الشر"))
 }
+
+@Test func aWordWithALetterNoKeyWritesIsDoubtful() throws {
+    let spelling = try SpellingOptions(rulesDirectory: rulesDirectory, rules: committedConverter)
+    #expect(spelling.canWrite("يجحش", from: "yj7sh") && !spelling.canWrite("يجهش", from: "yj7sh"))
+    #expect(spelling.canWrite("ورايي", from: "waraye") && !spelling.canWrite("ورايق", from: "waraye"))
+    #expect(spelling.canWrite("سكر", from: "sakkar") && spelling.canWrite("الله", from: "allah"))
+    #expect(spelling.canWrite("غلط", from: "3'alat"))  // a two-character key
+    let suggestions = Suggestions(dictionary: [:], arabicWords: ["قلبي": 3], rules: { $0 })
+    #expect(suggestions.isDoubtful("ورايق؟", latin: "waraye?", spelling: spelling))
+    #expect(!suggestions.isDoubtful("قلبي", latin: "albe", spelling: spelling))  // a known word: people write ق
+    #expect(!suggestions.isDoubtful("ورايي", latin: "waraye", spelling: spelling))
+    #expect(!suggestions.isDoubtful("meeting", latin: "meeting", spelling: spelling))
+}

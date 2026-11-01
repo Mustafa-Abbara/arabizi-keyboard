@@ -7,7 +7,7 @@ The keyboard is a macOS **input method**: a background app that macOS loads when
 | You do | You see |
 |---|---|
 | Type Arabizi | Your Latin text, underlined (marked text) |
-| Typing (live preview) | A small box above the text shows the Arabic for the words typed so far, then the Latin typed since; each finished word, or a short pause, converts the sentence in the background. Enter uses the ready conversion at once. Off: `defaults write lb.aub.arabizi.inputmethod.ArabiziIME livePreview -bool false` |
+| Typing (live preview) | A small box above the text shows the Arabic for the words typed so far, then the Latin typed since; each finished word, or a short pause, converts the sentence in the background. Enter uses the ready conversion at once. A word with a dotted line holds a letter nothing typed can write, in a word never seen written (80–88% of them are wrong on dev): ↑ and ⌥Tab start on it, the rules' spelling first. Off: `defaults write lb.aub.arabizi.inputmethod.ArabiziIME livePreview -bool false` |
 | **Enter** | The underlined text is replaced by Arabic; the message is **not** sent |
 | **↑ while typing** | Fix before converting: the Arabic of the typed text appears with the last word selected and its spellings as chips. ← → choose the word, a number or a click picks a spelling and converts, Enter converts as shown; Esc, Backspace or a letter go back to the Latin text |
 | **Enter** again | The app sends (WhatsApp, Slack…) |

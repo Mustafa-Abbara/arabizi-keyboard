@@ -76,17 +76,21 @@ public struct Suggester: Sendable {
     public let record: @Sendable (Correction) -> Void
     public let now: @Sendable () -> Date
     public let spelling: SpellingOptions?
+    /// Whether a shown word (with the typed words it came from) is likely wrong: suggestions start on it.
+    public let doubtful: @Sendable (_ shown: String, _ latin: String?) -> Bool
 
     public init(candidates: @escaping @Sendable (String, String?) -> [String],
                 align: @escaping @Sendable ([String], [String]) -> [Range<Int>?],
                 record: @escaping @Sendable (Correction) -> Void,
                 now: @escaping @Sendable () -> Date = { Date() },
-                spelling: SpellingOptions? = nil) {
+                spelling: SpellingOptions? = nil,
+                doubtful: @escaping @Sendable (String, String?) -> Bool = { _, _ in false }) {
         self.candidates = candidates
         self.align = align
         self.record = record
         self.now = now
         self.spelling = spelling
+        self.doubtful = doubtful
     }
 }
 
@@ -253,11 +257,13 @@ public struct Composer {
         let alignment = suggester.align(latinWords, words)
         var session = SuggestionSession(latin: conversion.latin, latinWords: latinWords, words: words,
                                         alignment: alignment, index: 0, candidates: [], original: conversion.converted)
-        // Start on the last word (the one just typed is the usual suspect), even without candidates: any word
-        // can be spelled.
-        guard let last = words.indices.last(where: { words[$0].contains(where: \.isLetter) }) else { return nil }
-        session.index = last
-        session.candidates = suggester.candidates(words[last], session.latinWord(last))
+        // Start on the first word that looks wrong, else on the last word (the one just typed is the usual
+        // suspect), even without candidates: any word can be spelled.
+        let lettered = words.indices.filter { words[$0].contains(where: \.isLetter) }
+        guard let last = lettered.last else { return nil }
+        let start = lettered.first { suggester.doubtful(words[$0], session.latinWord($0)) } ?? last
+        session.index = start
+        session.candidates = suggester.candidates(words[start], session.latinWord(start))
         return session
     }
 

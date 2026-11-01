@@ -42,6 +42,16 @@ private func suggestingComposer() -> Composer {
     #expect(c.lastConversion == Conversion(latin: "el bet", converted: "EL بيتي"))  // ⌘Z still brings it back
 }
 
+@Test func suggestionsStartOnTheWordThatLooksWrong() {
+    let suggester = Suggester(candidates: { _, _ in ["x"] },
+                              align: { latin, _ in latin.indices.map { $0..<($0 + 1) } },
+                              record: { _ in }, doubtful: { _, latin in latin == "waraye" })
+    var c = Composer(convert: { $0.uppercased() }, suggester: suggester)
+    type("ejet waraye ktir", into: &c)
+    #expect(c.handle(.arrowUp) == .suggest(marked: "EJET WARAYE KTIR", selected: 5..<11, candidates: ["x"],
+                                           replacingLength: nil))
+}
+
 @Test func leavingTheFixBeforeSendingGoesBackToTheLatin() {
     var c = suggestingComposer()
     type("el bet", into: &c)

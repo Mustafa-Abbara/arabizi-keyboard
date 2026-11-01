@@ -60,7 +60,8 @@ final class ArabiziInputController: IMKInputController {
             record: { correction in
                 do { try store?.record(correction) } catch { log.error("correction not saved") }
             },
-            spelling: spelling)
+            spelling: spelling,
+            doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false })
     }()
     /// Conversions made ahead while the user types (live preview), by the exact Latin text. Enter takes a ready one.
     private static let previews = PreviewCache(isClitic: { ruleConverter?.isClitic($0) ?? false })
@@ -125,9 +126,21 @@ final class ArabiziInputController: IMKInputController {
         let line = lineRect(client, at: [index])
         nonisolated(unsafe) let window = previewWindow
         // Until ↑ has been used a few times, a quiet reminder that a word can be fixed before converting.
+        let words = text.arabic.components(separatedBy: " ")
+        let doubtful = Self.doubtfulWords(words, latin: String(composer.buffer.dropLast(text.typedSince)))
         let hint = text.latin.isEmpty && Settings.personality != .quiet
             && UserDefaults.standard.integer(forKey: "previewFixUses") < Self.previewFixUses ? "↑ fix a word" : nil
-        MainActor.assumeIsolated { window.show(arabic: text.arabic, latin: text.latin, hint: hint, above: line) }
+        MainActor.assumeIsolated { window.show(arabic: words, doubtful: doubtful, latin: text.latin, hint: hint, above: line) }
+    }
+
+    /// Which shown words look wrong (a letter no typed key writes, in a word never seen written): dotted in the preview.
+    private static func doubtfulWords(_ words: [String], latin: String) -> Set<Int> {
+        guard let suggester else { return [] }
+        let typed = latin.split(whereSeparator: \.isWhitespace).map(String.init)
+        let alignment = suggester.align(typed, words)
+        return Set(words.indices.filter { i in
+            suggester.doubtful(words[i], alignment[i].map { typed[$0].joined(separator: " ") })
+        })
     }
 
     private func hidePreview() {
@@ -491,7 +504,7 @@ final class PreviewCache: @unchecked Sendable {  // `items` is behind `lock`
     /// What the preview window shows for the text typed so far: the Arabic of the longest converted start that ends
     /// at a word boundary, then the Latin typed since. A start ending in a small word (el, w, b) is not used, so
     /// a lone ال never shows before its word. nil when no start of the text is converted yet.
-    func display(for buffer: String) -> (arabic: String, latin: String)? {
+    func display(for buffer: String) -> (arabic: String, latin: String, typedSince: Int)? {
         lock.withLock {
             let starts = items.filter { item in
                 guard buffer.hasPrefix(item.latin), !endsWithClitic(item.latin) || item.latin.count == buffer.count
@@ -503,7 +516,7 @@ final class PreviewCache: @unchecked Sendable {  // `items` is behind `lock`
             else { return nil }
             let head = best.arabic.trimmingCharacters(in: .whitespaces)
             let rest = String(buffer.dropFirst(best.latin.count)).trimmingCharacters(in: .whitespaces)
-            return (head, rest)
+            return (head, rest, buffer.count - best.latin.count)
         }
     }
 }
@@ -588,11 +601,20 @@ final class PreviewWindow {
 
     /// Shows the converted Arabic, then the Latin typed since in a quieter colour, just above `line` (the line being
     /// typed, in screen coordinates; empty when the app gives none).
-    @MainActor func show(arabic: String, latin: String, hint: String? = nil, above line: NSRect) {
+    @MainActor func show(arabic words: [String], doubtful: Set<Int>, latin: String, hint: String? = nil,
+                         above line: NSRect) {
         let panel = ensurePanel()
         guard let label else { return }
-        let text = NSMutableAttributedString(string: arabic, attributes: [.font: NSFont.systemFont(ofSize: 20),
-                                                                          .foregroundColor: Theme.text])
+        let text = NSMutableAttributedString()
+        for (i, word) in words.enumerated() {
+            var attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 20), .foregroundColor: Theme.text]
+            if doubtful.contains(i) {  // likely wrong: a dotted line under it, and ↑ starts on it
+                attributes[.underlineStyle] = NSUnderlineStyle.single.union(.patternDot).rawValue
+                attributes[.underlineColor] = Theme.warning
+            }
+            if i > 0 { text.append(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: 20)])) }
+            text.append(NSAttributedString(string: word, attributes: attributes))
+        }
         if !latin.isEmpty {
             text.append(NSAttributedString(string: " " + latin, attributes: [
                 .font: NSFont.systemFont(ofSize: 16), .foregroundColor: Theme.textMuted]))
