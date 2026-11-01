@@ -1,6 +1,6 @@
-# Installing the Arabizi Keyboard (input method)
+# Installing Harfi from source (developers)
 
-The keyboard is a macOS **input method**: a background app that macOS loads when you pick it in the input menu, which then receives your key presses in every app. Stage P1 ships a **spike**: the real typing behaviour with a toy letter converter (`3` → ع, `7` → ح …). The fine-tuned model replaces the toy in P5–P6.
+For a normal install, see [INSTALL.md](INSTALL.md). The keyboard is a macOS **input method**: a background app that macOS loads when you pick it in the input menu, which then receives your key presses in every app. Stage P1 ships a **spike**: the real typing behaviour with a toy letter converter (`3` → ع, `7` → ح …). The fine-tuned model replaces the toy in P5–P6.
 
 ## What it does (P1)
 
@@ -37,7 +37,7 @@ This builds `build/ArabiziIME.app` (Swift package + ad-hoc signature, [ADR 0013]
 
 ## 3. Turn it on
 
-System Settings → Keyboard → Input Sources → **Edit…** → **+** → **Arabic** → **Arabizi Keyboard** → Add. Then pick it from the input menu in the menu bar (the ع icon), or switch with Ctrl+Space.
+System Settings → Keyboard → Input Sources → **Edit…** → **+** → **Arabic** → **Harfi** → Add. Then pick it from the input menu in the menu bar (the ع icon), or switch with Ctrl+Space.
 
 **First install:** if it is not in the list, log out and back in once. Other developers report that a freshly copied input method sometimes only becomes selectable after a new login.
 
@@ -82,7 +82,7 @@ Then remove it from Input Sources (**−**) if it is still listed.
 
 | Problem | Try |
 |---|---|
-| Not in the Input Sources list | Log out and back in; check `swift Apps/ArabiziIME/Tools/register.swift "$HOME/Library/Input Methods/ArabiziIME.app"` |
+| Not in the Input Sources list | Log out and back in; check `"$HOME/Library/Input Methods/ArabiziIME.app/Contents/MacOS/harfi-register" "$HOME/Library/Input Methods/ArabiziIME.app"` |
 | Selected, but typing shows nothing underlined | `/usr/bin/log stream …` above: look for "Could not start the IMK server" |
 | A key does something odd (e.g. a new line appears) | Check for a crash: `ls -t ~/Library/Logs/DiagnosticReports/ \| grep ArabiziIME`. When the keyboard crashes mid-key, macOS gives the key to the app |
 | Typing is stuck | Ctrl+Space to switch input source, or pick another source in the menu bar |

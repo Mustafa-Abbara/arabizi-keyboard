@@ -262,6 +262,7 @@ final class ArabiziInputController: IMKInputController {
         }
 
         let wasComposing = !composer.buffer.isEmpty && !composer.isSuggesting
+        let wasFixing = composer.fixingBeforeSending != nil
         let effect = composer.handle(key, context: context)
         if key.isCommand {
             log.notice("\(key.kind, privacy: .public) -> \(effect.kind, privacy: .public)")
@@ -276,7 +277,14 @@ final class ArabiziInputController: IMKInputController {
             UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "previewFixUses") + 1, forKey: "previewFixUses")
         }
         let handled = apply(effect, to: client, selection: selection)
-        if key == .enter, case .commit = effect, composer.lastConversion != nil { showFixHint(in: client) }
+        if key == .enter, case .commit = effect, composer.lastConversion != nil {
+            showFixHint(in: client)
+            Settings.complete(.converted)
+        }
+        if case .commit = effect, wasFixing {  // fixed before sending: Enter, or a spelling picked with its number
+            Settings.complete(.fixed)
+            Settings.complete(.converted)
+        }
         if case .update = effect {
             schedulePreview()
             showPreview()  // the converted words stay on screen while typing
@@ -348,6 +356,16 @@ final class ArabiziInputController: IMKInputController {
         }
     }
 
+    /// The first time the keyboard is used on this Mac, the welcome page opens (once).
+    override func activateServer(_ sender: Any!) {
+        super.activateServer(sender)
+        guard !UserDefaults.standard.bool(forKey: "welcomeShown") else { return }
+        UserDefaults.standard.set(true, forKey: "welcomeShown")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            MainActor.assumeIsolated { SettingsWindow.shared.show(.welcome) }
+        }
+    }
+
     /// The keyboard's items in the input menu (the ع icon in the menu bar): quick toggles, and the Harfi window.
     override func menu() -> NSMenu! {
         let menu = NSMenu()
@@ -355,6 +373,7 @@ final class ArabiziInputController: IMKInputController {
         preview.state = Settings.livePreview ? .on : .off
         menu.addItem(preview)
         menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Welcome and practice…", action: #selector(showWelcome(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Your words…", action: #selector(showWords(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Harfi settings…", action: #selector(showSettings(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Help and shortcuts", action: #selector(showHelp(_:)), keyEquivalent: ""))
@@ -366,6 +385,7 @@ final class ArabiziInputController: IMKInputController {
         if !Settings.livePreview { hidePreview() }
     }
 
+    @objc func showWelcome(_ sender: Any?) { openWindow(.welcome) }
     @objc func showWords(_ sender: Any?) { openWindow(.words) }
     @objc func showSettings(_ sender: Any?) { openWindow(.typing) }
     @objc func showHelp(_ sender: Any?) { openWindow(.help) }
@@ -378,6 +398,7 @@ final class ArabiziInputController: IMKInputController {
     /// a number key would spell a letter there).
     fileprivate func chipPicked(_ picked: String) {
         guard let client = client() else { return }
+        if composer.fixingBeforeSending != nil { Settings.complete(.fixed) }
         let effect = composer.pick(picked)
         guard effect != .consume else { return }
         _ = apply(effect, to: client)
@@ -620,20 +641,20 @@ final class PreviewWindow {
         let paragraph = NSMutableParagraphStyle()
         paragraph.baseWritingDirection = .natural
         let text = NSMutableAttributedString()
-        func add(_ string: String, size: CGFloat, color: NSColor, doubtful: Bool = false) {
-            var attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: size),
+        func add(_ string: String, size: CGFloat, color: NSColor, doubtful: Bool = false, arabic: Bool = false) {
+            var attributes: [NSAttributedString.Key: Any] = [.font: arabic ? Theme.arabic(size) : NSFont.systemFont(ofSize: size),
                                                              .foregroundColor: color, .paragraphStyle: paragraph]
             if doubtful { attributes[PreviewText.doubtful] = true }
             text.append(NSAttributedString(string: string, attributes: attributes))
         }
         var selectedRange: NSRange?
         for (i, word) in words.enumerated() {
-            if i > 0 { add(" ", size: 20, color: Theme.text) }
+            if i > 0 { add(" ", size: 22 * Theme.scale, color: Theme.text, arabic: true) }
             if i == selected { selectedRange = NSRange(location: text.length, length: (word as NSString).length) }
-            add(word, size: 20, color: Theme.text, doubtful: doubtful.contains(i))
+            add(word, size: 22 * Theme.scale, color: Theme.text, doubtful: doubtful.contains(i), arabic: true)
         }
-        if !latin.isEmpty { add(" " + latin, size: 16, color: Theme.textMuted) }
-        if let hint { add("   " + hint, size: 12, color: Theme.accent) }
+        if !latin.isEmpty { add(" " + latin, size: 16 * Theme.scale, color: Theme.textMuted) }
+        if let hint { add("   " + hint, size: 12 * Theme.scale, color: Theme.accent) }
         let fitted = label.set(text, maxWidth: Self.maxWidth - 2 * Self.padding.width)
         let size = NSSize(width: fitted.width + 2 * Self.padding.width, height: fitted.height + 2 * Self.padding.height)
         label.frame = NSRect(origin: NSPoint(x: Self.padding.width, y: Self.padding.height), size: fitted)

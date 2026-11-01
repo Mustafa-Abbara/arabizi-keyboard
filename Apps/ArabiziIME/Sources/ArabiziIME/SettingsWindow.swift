@@ -10,6 +10,12 @@ enum Settings {
         set { UserDefaults.standard.set(newValue, forKey: "livePreview") }
     }
 
+    /// Larger Arabic in the preview and the chips.
+    static var largerText: Bool {
+        get { UserDefaults.standard.bool(forKey: "largerText") }
+        set { UserDefaults.standard.set(newValue, forKey: "largerText") }
+    }
+
     enum Personality: String, CaseIterable, Identifiable {
         case full, calm, quiet
         var id: String { rawValue }
@@ -22,6 +28,23 @@ enum Settings {
             }
         }
     }
+
+    /// The three practice steps of the welcome page, ticked when the user does them in any app.
+    enum Practice: String, CaseIterable {
+        case converted, fixed, privacy
+        var key: String { "practice." + rawValue }
+    }
+
+    static func done(_ step: Practice) -> Bool { UserDefaults.standard.bool(forKey: step.key) }
+
+    /// Ticks a practice step; the welcome page updates if it is open.
+    static func complete(_ step: Practice) {
+        guard !done(step) else { return }
+        UserDefaults.standard.set(true, forKey: step.key)
+        NotificationCenter.default.post(name: practiceChanged, object: nil)
+    }
+
+    static let practiceChanged = Notification.Name("HarfiPracticeChanged")
 
     static var personality: Personality {
         get { UserDefaults.standard.string(forKey: "personality").flatMap(Personality.init) ?? .full }
@@ -65,7 +88,7 @@ enum Settings {
 /// What the window shows; the corrections are read from the encrypted record each time the window opens.
 @MainActor final class SettingsModel: ObservableObject {
     enum Tab: String, CaseIterable, Identifiable {
-        case typing = "Typing", words = "Your words", privacy = "Privacy", help = "Help"
+        case welcome = "Welcome", typing = "Typing", words = "Your words", privacy = "Privacy", help = "Help"
         var id: String { rawValue }
     }
 
@@ -77,13 +100,35 @@ enum Settings {
     @Published var tab: Tab = .typing
     @Published var livePreview = Settings.livePreview { didSet { Settings.livePreview = livePreview } }
     @Published var personality = Settings.personality { didSet { Settings.personality = personality } }
+    @Published var largerText = Settings.largerText { didSet { Settings.largerText = largerText } }
     @Published private(set) var words: [Word] = []
     @Published private(set) var fixes = 0
     private let store = CorrectionStore.standard()
 
+    @Published private(set) var practice: Set<Settings.Practice> = []
+    private var practiceObserver: NSObjectProtocol?
+
+    init() {
+        practiceObserver = NotificationCenter.default.addObserver(forName: Settings.practiceChanged, object: nil,
+                                                                  queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reloadPractice() }
+        }
+    }
+
+    func reloadPractice() {
+        practice = Set(Settings.Practice.allCases.filter(Settings.done))
+    }
+
+    func readPrivacy() {
+        Settings.complete(.privacy)
+        tab = .privacy
+    }
+
     func reload() {
+        reloadPractice()
         livePreview = Settings.livePreview
         personality = Settings.personality
+        largerText = Settings.largerText
         let all = store?.all() ?? []
         fixes = all.count
         var counts: [String: (latin: String, arabic: String, times: Int)] = [:]
@@ -129,7 +174,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 if let greeting = model.greeting {
-                    Text(greeting).font(.system(size: 14)).foregroundStyle(Color.muted)
+                    Text(greeting).font(Font(Theme.arabic(16))).foregroundStyle(Color.muted)
                 }
                 Text("Harfi").font(.system(size: 22, weight: .medium)).foregroundStyle(Color.ink)
             }
@@ -146,6 +191,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     switch model.tab {
+                    case .welcome: welcome
                     case .typing: typing
                     case .words: words
                     case .privacy: privacy
@@ -169,6 +215,56 @@ struct SettingsView: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.line, lineWidth: 1))
     }
 
+    private func step(_ number: Int, _ done: Bool, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                Circle().fill(done ? Color.accent : Color.accentSoft).frame(width: 28, height: 28)
+                if done {
+                    Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.surface)
+                } else {
+                    Text("\(number)").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.accent)
+                }
+            }
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).foregroundStyle(Color.ink)
+                Text(detail).font(.system(size: 12)).foregroundStyle(Color.muted).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(done ? "done" : "not done yet")
+    }
+
+    private var welcome: some View {
+        Group {
+            card {
+                Text(model.practice.count == 3 ? "You're all set. Type away." : "Welcome. Let's try it once.")
+                    .font(.system(size: 16, weight: .medium)).foregroundStyle(Color.ink)
+                Text("Do these in any app where you type. Each step ticks by itself when you do it.")
+                    .font(.system(size: 12)).foregroundStyle(Color.muted)
+                Button("Open Notes to try it") {
+                    if let notes = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Notes") {
+                        NSWorkspace.shared.openApplication(at: notes, configuration: .init())
+                    }
+                }
+            }
+            card {
+                step(1, model.practice.contains(.converted), "Type kifak, shu 3am ta3mel? and press Enter",
+                     "Your text becomes Arabic. Press Enter again to send it. ⌘Z right after brings your Latin back.")
+                Divider().overlay(Color.line)
+                step(2, model.practice.contains(.fixed), "Type a sentence, then press ↑ before Enter",
+                     "The preview opens on a word. ← → choose another word, a number picks its spelling.")
+                Divider().overlay(Color.line)
+                HStack(alignment: .top) {
+                    step(3, model.practice.contains(.privacy), "See how your words stay on this Mac",
+                         "Nothing you type is sent anywhere.")
+                    Spacer()
+                    Button("Read") { model.readPrivacy() }
+                }
+            }
+        }
+    }
+
     private var typing: some View {
         Group {
             card {
@@ -176,6 +272,16 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Live preview").foregroundStyle(Color.ink)
                         Text("A small box above your text shows the Arabic as you type.")
+                            .font(.system(size: 12)).foregroundStyle(Color.muted)
+                    }
+                }
+                .toggleStyle(.switch)
+            }
+            card {
+                Toggle(isOn: $model.largerText) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Larger text").foregroundStyle(Color.ink)
+                        Text("Bigger Arabic in the preview and the spellings.")
                             .font(.system(size: 12)).foregroundStyle(Color.muted)
                     }
                 }
@@ -212,7 +318,7 @@ struct SettingsView: View {
                             if word.times > 1 {
                                 Text("×\(word.times)").font(.system(size: 12)).foregroundStyle(Color.muted)
                             }
-                            Text(word.arabic).font(.system(size: 18)).foregroundStyle(Color.ink)
+                            Text(word.arabic).font(Font(Theme.arabic(20))).foregroundStyle(Color.ink)
                             Button { model.forget(word) } label: { Image(systemName: "xmark") }
                                 .buttonStyle(.plain).foregroundStyle(Color.muted)
                                 .accessibilityLabel("Forget \(word.latin)")
