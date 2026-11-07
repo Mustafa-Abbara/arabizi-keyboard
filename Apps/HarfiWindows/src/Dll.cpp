@@ -14,6 +14,29 @@ std::wstring ModuleFolder() {
     return slash == std::wstring::npos ? folder : folder.substr(0, slash);
 }
 
+void DebugLog(const char *event) {
+    DWORD on = 0, size = sizeof(on);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Harfi", L"DebugLog", RRF_RT_REG_DWORD, nullptr, &on, &size) !=
+            ERROR_SUCCESS || !on) return;
+    wchar_t folder[MAX_PATH] = {};
+    ExpandEnvironmentStringsW(L"%LOCALAPPDATA%\\Harfi\\debug.log", folder, MAX_PATH);
+    HANDLE file = CreateFileW(folder, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return;
+    char app[MAX_PATH] = {};
+    GetModuleFileNameA(nullptr, app, MAX_PATH);
+    const char *name = app;
+    for (const char *c = app; *c; ++c) if (*c == '\\') name = c + 1;
+    SYSTEMTIME now;
+    GetLocalTime(&now);
+    char line[512];
+    int length = wsprintfA(line, "%02d:%02d:%02d.%03d %s pid=%lu tid=%lu %s\r\n", now.wHour, now.wMinute, now.wSecond,
+                           now.wMilliseconds, name, GetCurrentProcessId(), GetCurrentThreadId(), event);
+    DWORD written = 0;
+    WriteFile(file, line, static_cast<DWORD>(length), &written, nullptr);
+    CloseHandle(file);
+}
+
 namespace {
 class ClassFactory : public IClassFactory {
 public:
@@ -31,6 +54,7 @@ public:
         if (!object) return E_INVALIDARG;
         *object = nullptr;
         if (outer) return CLASS_E_NOAGGREGATION;
+        DebugLog("CreateInstance");
         auto *service = new (std::nothrow) TextService();
         if (!service) return E_OUTOFMEMORY;
         HRESULT result = service->QueryInterface(riid, object);
@@ -50,6 +74,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_module = instance;
         DisableThreadLibraryCalls(instance);
+        DebugLog("loaded");
     }
     return TRUE;
 }
@@ -57,8 +82,11 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
 STDAPI DllGetClassObject(REFCLSID clsid, REFIID riid, void **object) {
     if (!object) return E_INVALIDARG;
     *object = nullptr;
+    DebugLog("DllGetClassObject");
     if (clsid != CLSID_HarfiTextService) return CLASS_E_CLASSNOTAVAILABLE;
     return g_factory.QueryInterface(riid, object);
 }
 
-STDAPI DllCanUnloadNow() { return g_objects == 0 ? S_OK : S_FALSE; }
+// Never: the keyboard keeps the shared core and the Swift runtime loaded for the life of the app (Core.h), and
+// its window classes must not outlive their code.
+STDAPI DllCanUnloadNow() { return S_FALSE; }

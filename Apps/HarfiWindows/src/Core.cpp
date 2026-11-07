@@ -92,6 +92,18 @@ std::vector<std::string> JsonStrings(const std::string &json, const std::string 
     return out;
 }
 
+std::vector<int> JsonInts(const std::string &json, const std::string &field) {
+    std::vector<int> out;
+    size_t at = FieldValue(json, field);
+    if (at == std::string::npos || at >= json.size() || json[at] != '[') return out;
+    for (size_t i = at + 1; i < json.size() && json[i] != ']'; ++i) {
+        if (!isdigit(static_cast<unsigned char>(json[i]))) continue;
+        out.push_back(std::atoi(json.c_str() + i));
+        while (i + 1 < json.size() && isdigit(static_cast<unsigned char>(json[i + 1]))) ++i;
+    }
+    return out;
+}
+
 int JsonInt(const std::string &json, const std::string &field, int otherwise) {
     size_t at = FieldValue(json, field);
     if (at == std::string::npos || at >= json.size() || !(isdigit(static_cast<unsigned char>(json[at])) || json[at] == '-'))
@@ -114,46 +126,107 @@ std::string JsonQuote(const std::string &text) {
     return out + "\"";
 }
 
+struct Core::Library {
+    harfi_core core = nullptr;  // the rules, opened once
+    decltype(&harfi_composer_new) newComposer = nullptr;
+    decltype(&harfi_composer_free) freeComposer = nullptr;
+    decltype(&harfi_composer_key) key = nullptr;
+    decltype(&harfi_composer_pick) pick = nullptr;
+    decltype(&harfi_composer_buffer) buffer = nullptr;
+    decltype(&harfi_preview) preview = nullptr;  // optional: without it there is no preview box
+    decltype(&harfi_habit_refuse) refuse = nullptr;  // optional: without it a habit cannot be refused here
+    decltype(&harfi_free) free = nullptr;
+};
+
 Core::Core(const std::wstring &folder) {
-    library_ = LoadLibraryW((folder + L"\\HarfiCoreC.dll").c_str());
-    if (!library_) return;
-    open_ = Load<decltype(open_)>(library_, "harfi_core_open");
-    close_ = Load<decltype(close_)>(library_, "harfi_core_close");
-    newComposer_ = Load<decltype(newComposer_)>(library_, "harfi_composer_new");
-    freeComposer_ = Load<decltype(freeComposer_)>(library_, "harfi_composer_free");
-    key_ = Load<decltype(key_)>(library_, "harfi_composer_key");
-    pick_ = Load<decltype(pick_)>(library_, "harfi_composer_pick");
-    free_ = Load<decltype(free_)>(library_, "harfi_free");
-    if (!open_ || !close_ || !newComposer_ || !freeComposer_ || !key_ || !pick_ || !free_) return;
-    core_ = open_(Narrow(folder + L"\\rules").c_str());
-    if (core_) composer_ = newComposer_(core_);
+    // Made once (thread-safe) and never freed, so it is never unloaded, not even when HarfiTIP.dll is.
+    static const Library *shared = [&]() -> const Library * {
+        // The Swift runtime DLLs next to HarfiCoreC.dll are found there, not on the PATH of the app being typed in.
+        HMODULE module = LoadLibraryExW((folder + L"\\HarfiCoreC.dll").c_str(), nullptr,
+                                        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        if (!module) return nullptr;
+        auto *library = new Library();
+        auto open = Load<decltype(&harfi_core_open)>(module, "harfi_core_open");
+        library->newComposer = Load<decltype(library->newComposer)>(module, "harfi_composer_new");
+        library->freeComposer = Load<decltype(library->freeComposer)>(module, "harfi_composer_free");
+        library->key = Load<decltype(library->key)>(module, "harfi_composer_key");
+        library->pick = Load<decltype(library->pick)>(module, "harfi_composer_pick");
+        library->buffer = Load<decltype(library->buffer)>(module, "harfi_composer_buffer");
+        library->preview = Load<decltype(library->preview)>(module, "harfi_preview");
+        library->refuse = Load<decltype(library->refuse)>(module, "harfi_habit_refuse");
+        library->free = Load<decltype(library->free)>(module, "harfi_free");
+        if (!open || !library->newComposer || !library->freeComposer || !library->key || !library->pick ||
+            !library->buffer || !library->free) return nullptr;
+        library->core = open(Narrow(folder + L"\\rules").c_str());
+        return library->core ? library : nullptr;
+    }();
+    library_ = shared;
+    if (library_) composer_ = library_->newComposer(library_->core);
 }
 
 Core::~Core() {
-    if (composer_) freeComposer_(composer_);
-    if (core_) close_(core_);
-    if (library_) FreeLibrary(static_cast<HMODULE>(library_));
+    if (composer_) library_->freeComposer(composer_);
 }
 
 Effect Core::Key(const std::string &keyJson) {
-    return composer_ ? Read(key_(composer_, keyJson.c_str())) : Effect{};
+    return composer_ ? Read(library_->key(composer_, keyJson.c_str())) : Effect{};
 }
 
 Effect Core::Pick(const std::wstring &candidate) {
-    return composer_ ? Read(pick_(composer_, Narrow(candidate).c_str())) : Effect{};
+    return composer_ ? Read(library_->pick(composer_, Narrow(candidate).c_str())) : Effect{};
+}
+
+void Core::Reset() {
+    if (!composer_) return;
+    library_->freeComposer(composer_);
+    composer_ = library_->newComposer(library_->core);
+}
+
+std::wstring Core::Buffer() {
+    return composer_ ? Widen(Take(library_->buffer(composer_))) : std::wstring();
+}
+
+Preview Core::PreviewOf(const std::wstring &latin, bool whole) {
+    Preview preview;
+    if (!library_ || !library_->preview) return preview;
+    std::string json = Take(library_->preview(library_->core, Narrow(latin).c_str(), whole ? 1 : 0));
+    for (const auto &word : JsonStrings(json, "arabic")) preview.arabic.push_back(Widen(word));
+    preview.latin = Widen(JsonString(json, "latin"));
+    preview.doubtful = JsonInts(json, "doubtful");
+    preview.pending = JsonBool(json, "pending");
+    return preview;
+}
+
+void Core::Refuse(const std::string &latin, const std::string &spelling) {
+    if (library_ && library_->refuse) library_->refuse(library_->core, latin.c_str(), spelling.c_str());
+}
+
+std::string Core::Take(char *reply) {
+    if (!reply) return {};
+    std::string text(reply);
+    library_->free(reply);
+    return text;
 }
 
 Effect Core::Read(char *reply) {
     Effect effect;
     if (!reply) return effect;
-    std::string json(reply);
-    free_(reply);
+    std::string json = Take(reply);
     effect.effect = JsonString(json, "effect");
+    if (effect.effect.empty()) effect.effect = "pass";  // a reply without an effect never swallows the key
     effect.marked = Widen(JsonString(json, "marked"));
     effect.text = Widen(JsonString(json, "text"));
+    effect.replacingLength = JsonInt(json, "replacingLength", 0);
     for (const auto &candidate : JsonStrings(json, "candidates")) effect.candidates.push_back(Widen(candidate));
     effect.word = Widen(JsonString(json, "word"));
+    effect.wordDoubtful = JsonBool(json, "wordDoubtful");
     effect.choice = JsonInt(json, "choice", -1);
     effect.spelling = JsonBool(json, "spelling");
+    for (const auto &word : JsonStrings(json, "fixingWords")) effect.fixingWords.push_back(Widen(word));
+    effect.fixingIndex = JsonInt(json, "fixingIndex", -1);
+    effect.fixingDoubtful = JsonInts(json, "fixingDoubtful");
+    effect.learnedLatin = JsonString(json, "learnedLatin");
+    effect.learnedSpelling = JsonString(json, "learnedSpelling");
+    effect.unsureWord = Widen(JsonString(json, "unsureWord"));
     return effect;
 }

@@ -1,167 +1,178 @@
 #include "ChipWindow.h"
 
 namespace {
-const wchar_t ClassName[] = L"HarfiChips";
+const UINT_PTR HintTimer = 1;
+const wchar_t SpellValue[] = L"\x01spell";
+const int Gap = 6, PadX = 10, PadY = 4, Inset = 6, MinHeight = 32, NumberGap = 6;
 
-struct Palette {
-    COLORREF surface, text, muted, border, accent, accentSoft;
-};
-
-// Cedar and sand (design/palette.json).
-Palette Colours() {
-    DWORD light = 1, size = sizeof(light);
-    RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                 L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
-    if (light) return {RGB(0xFF, 0xFF, 0xFF), RGB(0x1E, 0x2A, 0x25), RGB(0x6B, 0x75, 0x6F), RGB(0xE4, 0xDF, 0xD4),
-                       RGB(0x2F, 0x6B, 0x5A), RGB(0xE2, 0xEE, 0xE8)};
-    return {RGB(0x1D, 0x25, 0x22), RGB(0xE9, 0xEE, 0xEB), RGB(0x93, 0xA0, 0x99), RGB(0x2C, 0x36, 0x32),
-            RGB(0x7D, 0xBB, 0xA5), RGB(0x21, 0x39, 0x2F)};
-}
-
-// Latin labels ("Spell it", the spelling hint) use the Latin font; spellings and the word use the Arabic one.
-bool IsLatin(const std::wstring &label) { return label == L"Spell it" || label.rfind(L"Tab", 0) == 0; }
-
-int Scaled(int value) { return MulDiv(value, static_cast<int>(GetDpiForSystem()), 96); }
-
-const int Gap = 6, PadX = 10, PadY = 4, Margin = 6, MinHeight = 32;
+Gdiplus::Font ArabicFont() { return Gdiplus::Font(ArabicFamily(), static_cast<float>(Scaled(20)), 0, Gdiplus::UnitPixel); }
+Gdiplus::Font NumberFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(12)), 0, Gdiplus::UnitPixel); }
+Gdiplus::Font QuietFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(13)), 0, Gdiplus::UnitPixel); }
 }  // namespace
 
-ChipWindow::~ChipWindow() {
-    if (window_) DestroyWindow(window_);
-    if (arabic_) DeleteObject(arabic_);
-    if (latin_) DeleteObject(latin_);
-}
+ChipWindow::ChipWindow() : Popup(L"HarfiChips", false) {}
 
 void ChipWindow::Show(const Effect &effect, const RECT &text, Pick pick, SpellIt spellIt) {
     pick_ = std::move(pick);
     spellIt_ = std::move(spellIt);
-    if (!window_) {
-        WNDCLASSEXW type = {sizeof(type)};
-        type.lpfnWndProc = Procedure;
-        type.hInstance = g_module;
-        type.hCursor = LoadCursorW(nullptr, IDC_HAND);
-        type.lpszClassName = ClassName;
-        RegisterClassExW(&type);  // fails harmlessly when already registered by another instance
-        window_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, ClassName, L"", WS_POPUP,
-                                  0, 0, 0, 0, nullptr, nullptr, g_module, this);
-        // The Arabic font Harfi uses everywhere, from its own folder, for this process only.
-        AddFontResourceExW((ModuleFolder() + L"\\fonts\\NotoNaskhArabic-Variable.ttf").c_str(), FR_PRIVATE, nullptr);
-        arabic_ = CreateFontW(-Scaled(20), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0,
-                              L"Noto Naskh Arabic");
-        latin_ = CreateFontW(-Scaled(13), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0,
-                             L"Segoe UI");
-    }
-    if (!window_) return;
-
+    if (!Ensure()) return;
+    KillTimer(window_, HintTimer);
     chips_.clear();
-    if (!effect.word.empty() && !effect.spelling) chips_.push_back({effect.word + L"  ←", L"", false, false, true});
-    for (size_t i = 0; i < effect.candidates.size(); ++i) {
-        std::wstring label = effect.candidates[i];
-        if (!effect.spelling && i < 9) label = std::to_wstring(i + 1) + L"  " + label;
-        chips_.push_back({label, effect.candidates[i], !effect.spelling && i < 9,
-                          static_cast<int>(i) == effect.choice, false});
+    if (!effect.word.empty() && !effect.spelling) {  // the word being fixed, first (on the right)
+        Chip current;
+        current.style = Style::Current;
+        current.label = effect.word;
+        current.doubtful = effect.wordDoubtful;
+        chips_.push_back(current);
     }
-    chips_.push_back(effect.spelling ? Chip{L"Tab changes it · Enter takes it", L"", false, false, true}
-                                     : Chip{L"Spell it", L"\x01spell", false, false, true});
+    for (size_t i = 0; i < effect.candidates.size(); ++i) {
+        Chip spelling;
+        spelling.style = Style::Spelling;
+        spelling.label = spelling.value = effect.candidates[i];
+        if (!effect.spelling && i < 9) spelling.number = std::to_wstring(i + 1);
+        spelling.selected = static_cast<int>(i) == effect.choice;
+        chips_.push_back(spelling);
+    }
+    Chip last;
+    if (effect.spelling) {
+        last.label = effect.candidates.empty() ? L"Type the word" : L"Tab changes it · Enter takes it";
+    } else {
+        last.style = Style::Quiet;
+        last.label = L"Spell it";
+        last.value = SpellValue;
+    }
+    chips_.push_back(last);
+    Arrange(text);
+}
 
-    HDC dc = GetDC(window_);
-    Layout(dc);
-    ReleaseDC(window_, dc);
-
-    // Above the text, where the Mac keyboard puts its preview; below it when there is no room at the top.
-    HMONITOR monitor = MonitorFromRect(&text, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO info = {sizeof(info)};
-    GetMonitorInfoW(monitor, &info);
-    int x = text.left, y = text.top - size_.cy - Scaled(Gap);
-    if (y < info.rcWork.top) y = text.bottom + Scaled(Gap);
-    if (x + size_.cx > info.rcWork.right) x = info.rcWork.right - size_.cx - Scaled(4);
-    if (x < info.rcWork.left) x = info.rcWork.left + Scaled(4);
-    SetWindowPos(window_, HWND_TOPMOST, x, y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    HRGN shape = CreateRoundRectRgn(0, 0, size_.cx + 1, size_.cy + 1, Scaled(12), Scaled(12));
-    SetWindowRgn(window_, shape, TRUE);  // the window owns the region from here
-    InvalidateRect(window_, nullptr, TRUE);
+void ChipWindow::ShowHint(const std::wstring &hint, const RECT &text, UINT milliseconds) {
+    if (!Ensure()) return;
+    chips_.clear();
+    Chip tip;
+    tip.label = hint;
+    chips_.push_back(tip);
+    Arrange(text);
+    SetTimer(window_, HintTimer, milliseconds, nullptr);
 }
 
 void ChipWindow::Hide() {
-    if (window_) ShowWindow(window_, SW_HIDE);
+    if (window_) KillTimer(window_, HintTimer);
+    hovered_ = -1;
+    Popup::Hide();
 }
 
-// Right to left, as Arabic reads: the first chip (the word being fixed) on the right.
-void ChipWindow::Layout(HDC dc) {
-    int x = Scaled(Margin), height = Scaled(MinHeight);
-    std::vector<SIZE> sizes;
-    for (const Chip &chip : chips_) {
-        SelectObject(dc, IsLatin(chip.label) ? latin_ : arabic_);
-        SIZE text = {};
-        GetTextExtentPoint32W(dc, chip.label.c_str(), static_cast<int>(chip.label.size()), &text);
-        SIZE box = {text.cx + 2 * Scaled(PadX), max(text.cy + 2 * Scaled(PadY), height)};
-        sizes.push_back(box);
-        x += box.cx + Scaled(Gap);
+void ChipWindow::OnTimer(UINT_PTR id) {
+    if (id == HintTimer) Hide();
+}
+
+// Lays the chips out right to left (the first on the right) and shows the row above the text.
+void ChipWindow::Arrange(const RECT &text) {
+    Gdiplus::Font arabic = ArabicFont(), number = NumberFont(), quiet = QuietFont();
+    float height = static_cast<float>(Scaled(MinHeight));
+    std::vector<float> widths;
+    for (Chip &chip : chips_) {
+        bool isArabic = chip.style == Style::Spelling || chip.style == Style::Current;
+        Gdiplus::SizeF label = Measure(chip.label, isArabic ? arabic : quiet, isArabic);
+        Gdiplus::SizeF extra = {};
+        if (!chip.number.empty()) extra = Measure(chip.number, number, false);
+        if (chip.style == Style::Current) extra = Measure(L"←", quiet, false);
+        float inner = label.Width + (extra.Width > 0 ? extra.Width + Scaled(NumberGap) : 0);
+        widths.push_back(inner + 2 * Scaled(PadX));
+        float needed = label.Height + 2 * Scaled(PadY);
+        if (needed > height) height = needed;
+        // Inside a chip: the number (or the arrow) on the left, the label on the right.
+        chip.numberBox = Gdiplus::RectF(0, 0, extra.Width, 0);
+        chip.labelBox = Gdiplus::RectF(0, 0, label.Width, 0);
     }
-    size_ = {x - Scaled(Gap) + Scaled(Margin), height + 2 * Scaled(Margin)};
-    int right = size_.cx - Scaled(Margin);
+    float total = 0;
+    for (size_t i = 0; i < widths.size(); ++i) total += widths[i] + (i ? Scaled(Gap) : 0);
+    SIZE content = {static_cast<LONG>(total + 0.99f) + 2 * Scaled(Inset), static_cast<LONG>(height + 0.99f) + 2 * Scaled(Inset)};
+    float right = static_cast<float>(content.cx - Scaled(Inset)), top = static_cast<float>(Scaled(Inset));
     for (size_t i = 0; i < chips_.size(); ++i) {
-        chips_[i].box = {right - sizes[i].cx, Scaled(Margin), right, Scaled(Margin) + height};
-        right -= sizes[i].cx + Scaled(Gap);
+        Chip &chip = chips_[i];
+        chip.box = Gdiplus::RectF(right - widths[i], top, widths[i], height);
+        float labelRight = chip.box.GetRight() - Scaled(PadX);
+        chip.labelBox = Gdiplus::RectF(labelRight - chip.labelBox.Width, top, chip.labelBox.Width, height);
+        chip.numberBox = Gdiplus::RectF(chip.box.X + Scaled(PadX), top, chip.numberBox.Width, height);
+        right -= widths[i] + Scaled(Gap);
+    }
+    hovered_ = -1;
+    Present(PlaceAbove(text, content), content);
+}
+
+void ChipWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
+    Gdiplus::Font arabic = ArabicFont(), number = NumberFont(), quiet = QuietFont();
+    float radius = static_cast<float>(Scaled(8));
+    for (size_t i = 0; i < chips_.size(); ++i) {
+        const Chip &chip = chips_[i];
+        bool framed = chip.style == Style::Spelling || chip.style == Style::Quiet;
+        if (framed) {
+            bool hovered = static_cast<int>(i) == hovered_;
+            Gdiplus::RectF box = chip.box;
+            box.Inflate(-0.5f, -0.5f);
+            Gdiplus::GraphicsPath pill;
+            RoundedRect(pill, box, radius);
+            COLORREF fill = chip.selected || hovered ? colours.accentSoft : colours.surface;
+            Gdiplus::SolidBrush brush(Colour(fill, chip.selected ? 255 : hovered ? 150 : 255));
+            graphics.FillPath(&brush, &pill);
+            Gdiplus::Pen pen(chip.selected ? Colour(colours.accent) : hovered ? Colour(colours.accent, 140)
+                                                                             : Colour(colours.border),
+                             1.f);
+            graphics.DrawPath(&pen, &pill);
+        }
+        switch (chip.style) {
+            case Style::Spelling:
+                if (!chip.number.empty()) {
+                    Write(graphics, chip.number, number, chip.selected ? colours.accent : colours.muted, chip.numberBox,
+                          false);
+                }
+                Write(graphics, chip.label, arabic, chip.selected ? colours.accent : colours.text, chip.labelBox, true);
+                break;
+            case Style::Current:  // amber with a dashed line when it looks wrong
+                Write(graphics, chip.label, arabic, chip.doubtful ? colours.warning : colours.muted, chip.labelBox, true);
+                Write(graphics, L"←", quiet, colours.muted, chip.numberBox, false);
+                if (chip.doubtful) {
+                    Gdiplus::Pen dashes(Colour(colours.warning), 1.5f * Scaled(1));
+                    Gdiplus::REAL pattern[] = {2.7f, 2.f};
+                    dashes.SetDashPattern(pattern, 2);
+                    float y = chip.labelBox.GetBottom() - Scaled(4);
+                    graphics.DrawLine(&dashes, chip.labelBox.X, y, chip.labelBox.GetRight(), y);
+                }
+                break;
+            case Style::Quiet:
+            case Style::Hint:
+                Write(graphics, chip.label, quiet, colours.muted, chip.labelBox, false);
+                break;
+        }
     }
 }
 
-void ChipWindow::Paint(HDC dc) {
-    Palette colours = Colours();
-    RECT all = {0, 0, size_.cx, size_.cy};
-    HBRUSH surface = CreateSolidBrush(colours.surface);
-    FillRect(dc, &all, surface);
-    DeleteObject(surface);
-    SetBkMode(dc, TRANSPARENT);
-    for (const Chip &chip : chips_) {
-        bool framed = !(chip.quiet && chip.value.empty());
-        if (framed) {
-            HBRUSH fill = CreateSolidBrush(chip.selected ? colours.accentSoft : colours.surface);
-            HPEN pen = CreatePen(PS_SOLID, Scaled(1), chip.selected ? colours.accent : colours.border);
-            HGDIOBJ oldBrush = SelectObject(dc, fill), oldPen = SelectObject(dc, pen);
-            RoundRect(dc, chip.box.left, chip.box.top, chip.box.right, chip.box.bottom, Scaled(8), Scaled(8));
-            SelectObject(dc, oldBrush);
-            SelectObject(dc, oldPen);
-            DeleteObject(fill);
-            DeleteObject(pen);
+int ChipWindow::ChipAt(POINT at) const {
+    for (size_t i = 0; i < chips_.size(); ++i) {
+        const Chip &chip = chips_[i];
+        if (!chip.value.empty() && chip.box.Contains(static_cast<float>(at.x), static_cast<float>(at.y))) {
+            return static_cast<int>(i);
         }
-        SelectObject(dc, IsLatin(chip.label) ? latin_ : arabic_);
-        SetTextColor(dc, chip.selected ? colours.accent : (chip.quiet ? colours.muted : colours.text));
-        RECT box = chip.box;
-        DrawTextW(dc, chip.label.c_str(), static_cast<int>(chip.label.size()), &box,
-                  DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     }
+    return -1;
 }
 
 void ChipWindow::Click(POINT at) {
-    for (const Chip &chip : chips_) {
-        if (chip.value.empty() || !PtInRect(&chip.box, at)) continue;
-        if (chip.value == L"\x01spell") { if (spellIt_) spellIt_(); }
-        else if (pick_) { pick_(chip.value); }
-        return;
+    int index = ChipAt(at);
+    if (index < 0) return;
+    std::wstring value = chips_[index].value;  // the pick may replace the chips
+    if (value == SpellValue) {
+        if (spellIt_) spellIt_();
+    } else if (pick_) {
+        pick_(value);
     }
 }
 
-LRESULT CALLBACK ChipWindow::Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
-    if (message == WM_NCCREATE) {
-        auto *create = reinterpret_cast<CREATESTRUCTW *>(lParam);
-        SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create->lpCreateParams));
-    }
-    auto *self = reinterpret_cast<ChipWindow *>(GetWindowLongPtrW(window, GWLP_USERDATA));
-    switch (message) {
-        case WM_MOUSEACTIVATE:
-            return MA_NOACTIVATE;  // a click never takes the focus from the app being typed in
-        case WM_LBUTTONDOWN:
-            if (self) self->Click({static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))});
-            return 0;
-        case WM_PAINT: {
-            PAINTSTRUCT paint;
-            HDC dc = BeginPaint(window, &paint);
-            if (self) self->Paint(dc);
-            EndPaint(window, &paint);
-            return 0;
-        }
-        default:
-            return DefWindowProcW(window, message, wParam, lParam);
-    }
+void ChipWindow::Hover(POINT at) {
+    int index = at.x < 0 ? -1 : ChipAt(at);
+    if (index == hovered_) return;
+    hovered_ = index;
+    Redraw();
 }
+
+bool ChipWindow::HandAt(POINT at) { return ChipAt(at) >= 0; }
