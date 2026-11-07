@@ -5,6 +5,8 @@
 //   harfi_core_open(rules_dir)          -> core handle, or NULL when the rule files cannot be read
 //   harfi_convert(core, text)           -> the rules' Arabic for text
 //   harfi_is_english(core, text)        -> 1 when text is plain English (left as typed), else 0
+//   harfi_preview(core, text, whole)    -> what the live preview box shows for the text typed so far, as JSON
+//   harfi_habit_refuse(core, latin, sp) -> the user said no to a learned habit (ADR 0033)
 //   harfi_composer_new(core)            -> a composer: the key-by-key typing behaviour
 //   harfi_composer_key(composer, json)  -> what to do in the app after a key, as JSON (see `effectJSON`)
 //   harfi_composer_pick(composer, text) -> the same for a spelling (or letter) clicked in the chip row
@@ -18,6 +20,13 @@ final class Core: Sendable {
     let rules: RuleConverter
     let english: EnglishGuard?
     let suggester: Suggester?
+    /// The user's recorded picks and learned habits; only for the installed keyboard (a folder holding HarfiTIP.dll),
+    /// so tests and tools reading data/rules never write a record.
+    let personal: PersonalWords?
+    /// The model's words never written in training: the dictionary's spelling where it has one (ADR 0034).
+    let unsure: UnsureWords
+    /// Unsure words already pointed out in this app, so a word the user keeps is not pointed out again.
+    private let pointedOut = PointedOut()
 
     init(rulesDirectory: URL) throws {
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
@@ -28,24 +37,148 @@ final class Core: Sendable {
                                       arabicWords: Suggestions.arabicWords(lexicon: lexicon),
                                       rules: { rules.convert($0) })
         let spelling = try? SpellingOptions(rulesDirectory: rulesDirectory, rules: rules)
+        unsure = UnsureWords(known: Suggestions.arabicWords(lexicon: lexicon).keys,
+                             dictionary: Suggestions.dictionary(lexicon: lexicon))
+        let keyboard = rulesDirectory.deletingLastPathComponent()
+        let personal = FileManager.default.fileExists(atPath: keyboard.appending(path: "HarfiTIP.dll").path)
+            ? CorrectionStore.standard(folder: keyboard.appending(path: "words")).map { PersonalWords(store: $0) }
+            : nil
+        self.personal = personal
         suggester = Suggester(
-            candidates: { shown, latin in suggestions.candidates(for: shown, latin: latin) },
+            candidates: { shown, latin in  // the user's earlier fixes first, as on the Mac (ADR 0027 #8–9)
+                suggestions.personalized(for: shown, latin: latin, past: personal?.store.all() ?? [])
+            },
             align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
-            record: { _ in },
+            record: { correction in personal?.record(correction) },
             spelling: spelling,
             doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false })
+        #if os(Windows)
+        // The keyboard's folder holds rules\, config\ and harfi-engine.exe.
+        let engine = EngineClient(folder: rulesDirectory.deletingLastPathComponent())
+        self.engine = engine
+        ahead = engine.map { PreviewConversions(engine: $0) }
+        if let engine { Thread.detachNewThread { engine.warmUp() } }  // never delays the keyboard's start
+        #endif
     }
 
-    /// The text as the keyboard converts it without the model: plain English stays as typed.
+    /// The engine's conversion of exactly this text, made ahead for the preview: Enter sends it without asking again.
+    func ready(_ text: String) -> String? {
+        #if os(Windows)
+        return ahead?.arabic(for: text).map { fromModel(text, $0) }
+        #else
+        return nil
+        #endif
+    }
+
+    /// The model's answer for `latin` as the keyboard shows it: unsure words with a dictionary spelling written that
+    /// way (ADR 0034), then the user's habits over everything (ADR 0033).
+    func fromModel(_ latin: String, _ arabic: String) -> String {
+        guard let suggester else { return arabic }
+        return yours(latin, unsure.swap(latin: latin, converted: arabic, align: suggester.align))
+    }
+
+    /// The first unsure word of a text just sent, to point out: not one the user has chosen themself, and each word
+    /// once per app.
+    func toPointOut(in text: String) -> String? {
+        let words = unsure.unsure(in: text)
+        guard !words.isEmpty else { return nil }
+        let chosen = Set((personal?.store.all() ?? []).map(\.chosen))
+        return pointedOut.first(of: words.filter { !chosen.contains($0) })
+    }
+
+    /// `arabic` (a conversion of `latin`) with the user's learned habits applied, after the model (ADR 0027 #6).
+    func yours(_ latin: String, _ arabic: String) -> String {
+        guard let personal, let suggester else { return arabic }
+        return Habits.apply(personal.current(), latin: latin, converted: arabic, align: suggester.align)
+    }
+
+    /// The text as the keyboard converts it without the model: plain English stays as typed. Instant: the live
+    /// preview uses it on every key.
     func convert(_ text: String) -> String {
         english?.isEnglish(text) == true ? text : rules.convert(text)
+    }
+
+    #if os(Windows)
+    /// harfi-engine (the fine-tuned model), when it is installed next to the keyboard; nil keeps to the rules.
+    let engine: EngineClient?
+    /// Its conversions for the live preview, made in the background.
+    let ahead: PreviewConversions?
+    #endif
+
+    /// What Enter sends: the engine's answer within its deadline (the model, with its own rule fallback), else the
+    /// rules here.
+    func convertForSending(_ text: String) -> String {
+        #if os(Windows)
+        if let answer = engine?.convert(text) { return fromModel(text, answer) }
+        #endif
+        return yours(text, convert(text))
+    }
+
+    /// Which shown words look wrong (dotted in the preview), given the Latin they were converted from.
+    func doubtful(_ words: [String], latin: String) -> [Int] {
+        guard let suggester else { return [] }
+        let typed = latin.split(whereSeparator: \.isWhitespace).map(String.init)
+        let alignment = suggester.align(typed, words)
+        return words.indices.filter { i in
+            suggester.doubtful(words[i], alignment[i].map { typed[$0].joined(separator: " ") })
+        }
+    }
+
+    /// What the live preview box shows for the text typed so far, as on the Mac (PreviewCache.display): the Arabic of
+    /// the longest start that ends at a word boundary, then the Latin typed since. The word being typed counts only
+    /// when `whole` (after a pause in typing). A start ending in a small word (el, w, b) waits for the next word, so a
+    /// lone ال never shows before its word. The Arabic is the engine's once it has converted that start (asked in the
+    /// background), the rules' until then; "pending" says the engine's is coming. Empty when nothing shows yet.
+    func preview(_ buffer: String, whole: Bool) -> [String: Any] {
+        func endsWithClitic(_ text: String) -> Bool {
+            text.split(whereSeparator: \.isWhitespace).last.map { rules.isClitic(String($0)) } ?? false
+        }
+        let characters = Array(buffer)
+        var head: String?
+        for end in stride(from: characters.count, through: 1, by: -1) {
+            let start = String(characters[..<end])
+            let usable = end == characters.count
+                ? whole || (characters[end - 1].isWhitespace && !endsWithClitic(start))
+                : (characters[end - 1].isWhitespace || characters[end].isWhitespace) && !endsWithClitic(start)
+            guard usable else { continue }
+            if start.contains(where: \.isLetter) { head = start }
+            break
+        }
+        guard let head else { return [:] }
+        var arabic = ready(head)
+        var pending = false
+        #if os(Windows)
+        if arabic == nil, let ahead { pending = ahead.request(head) }
+        #endif
+        if arabic == nil { arabic = yours(head, convert(head)) }
+        let words = (arabic ?? "").trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
+        return ["arabic": words, "latin": String(buffer.dropFirst(head.count)).trimmingCharacters(in: .whitespaces),
+                "doubtful": doubtful(words, latin: head), "pending": pending]
+    }
+}
+
+/// Words already pointed out in this app (in memory only).
+final class PointedOut: @unchecked Sendable {  // `words` is behind `lock`
+    private let lock = NSLock()
+    private var words: Set<String> = []
+
+    /// The first of `candidates` not pointed out yet, now marked as pointed out.
+    func first(of candidates: [String]) -> String? {
+        lock.withLock {
+            guard let word = candidates.first(where: { !words.contains($0) }) else { return nil }
+            words.insert(word)
+            return word
+        }
     }
 }
 
 final class ComposerBox {
+    let core: Core
     var composer: Composer
     init(core: Core) {
-        composer = Composer(convert: { [core] in core.convert($0) }, suggester: core.suggester)
+        self.core = core
+        composer = Composer(convert: { [core] in core.convertForSending($0) }, suggester: core.suggester,
+                            ready: { [core] in core.ready($0) })
     }
 }
 
@@ -80,6 +213,25 @@ public func harfi_convert(_ core: UnsafeMutableRawPointer?, _ text: UnsafePointe
 public func harfi_is_english(_ core: UnsafeMutableRawPointer?, _ text: UnsafePointer<CChar>?) -> Int32 {
     guard let core else { return 0 }
     return Unmanaged<Core>.fromOpaque(core).takeUnretainedValue().english?.isEnglish(string(text)) == true ? 1 : 0
+}
+
+/// The live preview for the Latin typed so far: {"arabic": [words], "latin": the Latin typed since, "doubtful":
+/// [indices of words that look wrong]}, or {} when nothing shows yet. `whole` (nonzero after a pause in typing):
+/// the word being typed too.
+@_cdecl("harfi_preview")
+public func harfi_preview(_ core: UnsafeMutableRawPointer?, _ latin: UnsafePointer<CChar>?,
+                          _ whole: Int32) -> UnsafeMutablePointer<CChar>? {
+    guard let core else { return nil }
+    return owned(encode(Unmanaged<Core>.fromOpaque(core).takeUnretainedValue().preview(string(latin), whole: whole != 0)))
+}
+
+/// The user refused a habit the keyboard announced (Esc on the tip): it is never applied or announced again.
+@_cdecl("harfi_habit_refuse")
+public func harfi_habit_refuse(_ core: UnsafeMutableRawPointer?, _ latin: UnsafePointer<CChar>?,
+                               _ spelling: UnsafePointer<CChar>?) {
+    guard let core else { return }
+    Unmanaged<Core>.fromOpaque(core).takeUnretainedValue().personal?
+        .refuse(Habit(latin: string(latin), spelling: string(spelling)))
 }
 
 @_cdecl("harfi_composer_new")
@@ -125,8 +277,24 @@ private func reply(_ box: ComposerBox, _ effect: Effect) -> String {
     var reply = effectJSON(effect)
     reply["candidates"] = box.composer.currentCandidates
     if let choice = box.composer.currentChoice { reply["choice"] = choice }
-    if let word = box.composer.selectedText { reply["word"] = word.shown }
+    if let word = box.composer.selectedText {
+        reply["word"] = word.shown
+        reply["wordDoubtful"] = box.core.suggester?.doubtful(word.shown, word.latin) ?? false  // amber in the chip row
+    }
     reply["spelling"] = box.composer.isSpelling
+    if case .commit(let text) = effect, box.composer.lastConversion != nil,
+       let word = box.core.toPointOut(in: text) {  // a conversion was sent with a word the model was unsure of
+        reply["unsureWord"] = word
+    }
+    if let habit = box.core.personal?.takeLearned() {  // a pick just made this a habit: the keyboard says so, once
+        reply["learnedLatin"] = habit.latin
+        reply["learnedSpelling"] = habit.spelling
+    }
+    if let fix = box.composer.fixingBeforeSending {  // the preview stays on screen around the chips
+        reply["fixingWords"] = fix.words
+        reply["fixingIndex"] = fix.index
+        reply["fixingDoubtful"] = box.core.doubtful(fix.words, latin: fix.latin)
+    }
     return encode(reply)
 }
 
