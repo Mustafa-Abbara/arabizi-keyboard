@@ -6,10 +6,20 @@
 #include "Theme.h"
 
 namespace {
-// Runs `body` with an edit cookie for `context` (read-write or read-only, as requested).
+// Runs `body` with an edit cookie for a context (read-write or read-only, as requested). It holds the text service and
+// the context until it is gone: an asynchronous session can run after the keyboard was switched off or the field
+// closed, and its body must still find both.
 class EditSession : public ITfEditSession {
 public:
-    explicit EditSession(std::function<void(TfEditCookie)> body) : body_(std::move(body)) {}
+    EditSession(IUnknown *service, ITfContext *context, std::function<void(TfEditCookie)> body)
+        : service_(service), context_(context), body_(std::move(body)) {
+        if (service_) service_->AddRef();
+        if (context_) context_->AddRef();
+    }
+    virtual ~EditSession() {
+        if (context_) context_->Release();
+        if (service_) service_->Release();
+    }
     STDMETHODIMP QueryInterface(REFIID riid, void **object) override {
         if (!object) return E_INVALIDARG;
         *object = nullptr;
@@ -31,6 +41,8 @@ public:
 
 private:
     std::atomic<long> references_{1};
+    IUnknown *service_;
+    ITfContext *context_;
     std::function<void(TfEditCookie)> body_;
 };
 
@@ -276,9 +288,9 @@ void TextService::Forget(bool sync) {
     if (composition_ && context_) {
         ITfComposition *open = composition_;
         ITfContext *field = context_;
-        field->AddRef();
         composition_ = nullptr;
-        auto *session = new EditSession([this, open, field](TfEditCookie cookie) {
+        auto *session = new EditSession(static_cast<ITfTextInputProcessorEx *>(this), field,
+                                        [this, open, field](TfEditCookie cookie) {
             ITfRange *range = nullptr;
             if (SUCCEEDED(open->GetRange(&range))) {
                 Underline(field, cookie, range, false);
@@ -286,14 +298,12 @@ void TextService::Forget(bool sync) {
             }
             open->EndComposition(cookie);
             open->Release();
-            field->Release();
         });
         HRESULT result = S_OK;
-        if (FAILED(context_->RequestEditSession(clientId_, session,
-                                                (sync ? TF_ES_SYNC : TF_ES_ASYNCDONTCARE) | TF_ES_READWRITE, &result)) ||
-            FAILED(result)) {  // the session never ran: let go of what it held
+        if (FAILED(field->RequestEditSession(clientId_, session,
+                                             (sync ? TF_ES_SYNC : TF_ES_ASYNCDONTCARE) | TF_ES_READWRITE, &result)) ||
+            FAILED(result)) {  // the session never ran: let go of the composition it held
             open->Release();
-            field->Release();
         }
         session->Release();
     } else if (composition_) {
@@ -312,7 +322,7 @@ void TextService::Forget(bool sync) {
 
 TextService::Field TextService::ReadField(ITfContext *context, bool wantSelection) {
     Field field;
-    auto *session = new EditSession([&](TfEditCookie cookie) {
+    auto *session = new EditSession(static_cast<ITfTextInputProcessorEx *>(this), context, [&](TfEditCookie cookie) {
         TF_SELECTION selection = {};
         ULONG fetched = 0;
         if (FAILED(context->GetSelection(cookie, TF_DEFAULT_SELECTION, 1, &selection, &fetched)) || fetched != 1) {
@@ -457,7 +467,8 @@ STDMETHODIMP TextService::GetDisplayAttributeInfo(REFGUID guid, ITfDisplayAttrib
 
 void TextService::Apply(ITfContext *context, const Effect &effect, const std::string &key, bool duringKey) {
     if (!context) return;
-    auto *session = new EditSession([this, context, effect, key](TfEditCookie cookie) {
+    auto *session = new EditSession(static_cast<ITfTextInputProcessorEx *>(this), context,
+                                    [this, context, effect, key](TfEditCookie cookie) {
         if (lastCommitEnd_) {  // only the text inserted by this very effect counts as the last conversion
             lastCommitEnd_->Release();
             lastCommitEnd_ = nullptr;
@@ -562,7 +573,8 @@ void TextService::RefreshPreviewAfter(UINT milliseconds, bool whole) {
     preview_.AfterPause(milliseconds, [this, whole] {
         if (!context_ || !composition_) return;
         ITfContext *field = context_;
-        auto *session = new EditSession([this, field, whole](TfEditCookie cookie) { ShowPreview(field, cookie, whole); });
+        auto *session = new EditSession(static_cast<ITfTextInputProcessorEx *>(this), field,
+                                        [this, field, whole](TfEditCookie cookie) { ShowPreview(field, cookie, whole); });
         HRESULT result = S_OK;
         field->RequestEditSession(clientId_, session, TF_ES_ASYNCDONTCARE | TF_ES_READ, &result);
         session->Release();

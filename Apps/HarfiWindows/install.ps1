@@ -111,7 +111,14 @@ if ($private) {
     exit 1
 }
 # Store apps and the Start menu search box run in an app container: let them read the keyboard's files too.
-icacls $target /grant "*S-1-15-2-1:(OI)(CI)(RX)" /T /Q | Out-Null
+icacls $target /grant "*S-1-15-2-1:(OI)(CI)(RX)" /Q | Out-Null
+# ...but never the user's learned words (ADR 0033): the record and its key stay readable by this account alone. The
+# folder is made here, so it never inherits the grant above; an older install's grant on it is removed.
+$words = Join-Path $target "words"
+New-Item -ItemType Directory -Force $words | Out-Null
+$me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+icacls $words /inheritance:r /grant:r "*${me}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" /T /Q | Out-Null
+icacls $words /remove:g "*S-1-15-2-1" /T /Q | Out-Null
 if (-not (Register "/s `"$dll`"")) { Write-Host "Registration failed."; exit 1 }
 Write-Host @"
 Harfi is installed in $target.

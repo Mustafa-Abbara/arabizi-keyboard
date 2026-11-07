@@ -56,7 +56,9 @@ else { Write-Host "No running app has Harfi loaded yet (it loads when you switch
 
 # The engine (harfi-engine.exe): the conversion model runs there. The keyboard starts it when it is first used, and it
 # quits after half an hour without a request.
-$pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", "harfi-engine-$($env:USERNAME -replace '[^\w-]', '')", "InOut")
+# The pipe is named after the account's SID (EngineService.pipeName in ArabiziContracts).
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", "harfi-engine-$sid", "InOut")
 try {
     $pipe.Connect(1000)
     $writer = New-Object System.IO.StreamWriter($pipe)

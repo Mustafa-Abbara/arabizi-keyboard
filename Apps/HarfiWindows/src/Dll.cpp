@@ -73,8 +73,7 @@ ClassFactory g_factory;
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_module = instance;
-        DisableThreadLibraryCalls(instance);
-        DebugLog("loaded");
+        DisableThreadLibraryCalls(instance);  // nothing else here: DllMain runs under the loader lock
     }
     return TRUE;
 }
