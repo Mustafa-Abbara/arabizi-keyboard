@@ -1,0 +1,6 @@
+// llama.cpp built from source on Windows (Package.swift): the same `llama` module as the XCFramework on the Mac.
+module llama [system] {
+    header "shim.h"
+    link "llama"
+    export *
+}

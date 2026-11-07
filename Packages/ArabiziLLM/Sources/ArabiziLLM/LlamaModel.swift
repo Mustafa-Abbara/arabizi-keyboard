@@ -69,6 +69,15 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
         public var contextLength: Int32 = 512
         /// Layers on the GPU (Metal); a large number means all of them.
         public var gpuLayers: Int32 = 999
+        /// CPU threads for generation and the prompt; nil keeps llama.cpp's default. On Windows the model runs on the
+        /// CPU, so it gets one thread per core (half the logical processors), not llama.cpp's 4.
+        public var threads: Int32? = {
+            #if os(Windows)
+            return Int32(max(1, ProcessInfo.processInfo.activeProcessorCount / 2))
+            #else
+            return nil
+            #endif
+        }()
 
         public init() {}
     }
@@ -97,6 +106,10 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
         var contextParams = llama_context_default_params()
         contextParams.n_ctx = UInt32(settings.contextLength)
         contextParams.n_batch = UInt32(settings.contextLength)  // the whole prompt in one decode call
+        if let threads = settings.threads {
+            contextParams.n_threads = threads
+            contextParams.n_threads_batch = threads
+        }
         guard let context = llama_init_from_model(model, contextParams) else {
             llama_model_free(model)
             throw LlamaError.contextFailed

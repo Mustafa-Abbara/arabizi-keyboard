@@ -1,7 +1,11 @@
 import ArabiziContracts
 import ArabiziCore
 import ArabiziLLM
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto  // swift-crypto: CryptoKit's API on Windows (ADR 0032)
+#endif
 import Foundation
 
 /// The conversion engine (roadmap P5): one request in, one response out, never an error.
