@@ -102,14 +102,46 @@ jobs:
           cmake --build build/windows --config Release
           New-Item -ItemType Directory -Force dist/harfi-windows/rules | Out-Null
           Copy-Item build/windows/Release/HarfiTIP.dll dist/harfi-windows/
-          Copy-Item (Get-ChildItem Packages/ArabiziCore/.build -Recurse -Filter HarfiCoreC.dll | Select-Object -First 1).FullName dist/harfi-windows/
+          # The release build: `swift test` above leaves a debug HarfiCoreC.dll under .build too.
+          $bin = swift build -c release --package-path Packages/ArabiziCore --show-bin-path
+          Copy-Item "$bin/HarfiCoreC.dll" dist/harfi-windows/
+          # The user's learned words, until a settings window exists (ADR 0033).
+          swift build -c release --package-path Packages/ArabiziCore --product harfi-words -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+          Copy-Item "$bin/harfi-words.exe" dist/harfi-windows/
           Copy-Item data/rules/arabizi_to_arabic.json, data/rules/arabizi_lexicon.json, data/rules/spelling_options.json, data/rules/english_stopwords.json dist/harfi-windows/rules/
-          Copy-Item Apps/HarfiWindows/install.ps1 dist/harfi-windows/
+          Copy-Item Apps/HarfiWindows/install.ps1, Apps/HarfiWindows/status.ps1 dist/harfi-windows/
           New-Item -ItemType Directory -Force dist/harfi-windows/fonts | Out-Null
           Copy-Item Apps/ArabiziIME/Resources/Fonts/NotoNaskhArabic-Variable.ttf, Apps/ArabiziIME/Resources/Fonts/OFL.txt dist/harfi-windows/fonts/
           # The Swift runtime HarfiCoreC.dll needs, so the PC does not need a Swift toolchain.
           $runtime = Get-ChildItem "$env:LOCALAPPDATA/Programs/Swift/Runtimes" -Directory | Sort-Object Name | Select-Object -Last 1
           Copy-Item "$($runtime.FullName)/usr/bin/*.dll" dist/harfi-windows/
+      # llama.cpp at the release the Mac pins (Packages/ArabiziLLM/Package.swift), built from source: its Windows
+      # releases have no import libraries or headers. CPU only; cached by release.
+      - uses: actions/cache@v4
+        id: llama
+        with:
+          path: build/llama.cpp
+          key: llama-cpp-b11429-windows-cpu
+      - name: llama.cpp b11429
+        if: steps.llama.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git init -q build/llama.cpp
+          git -C build/llama.cpp remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C build/llama.cpp fetch -q --depth 1 origin tag b11429
+          git -C build/llama.cpp checkout -q FETCH_HEAD
+          cmake -S build/llama.cpp -B build/llama.cpp/build -A x64 -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DGGML_AVX2=ON
+          cmake --build build/llama.cpp/build --config Release --target llama
+      - name: the engine (harfi-engine.exe, the model runner as its own process)
+        shell: pwsh
+        run: |
+          swift build -c release --package-path Packages/ArabiziEngine --product harfi-engine -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+          $bin = swift build -c release --package-path Packages/ArabiziEngine --show-bin-path
+          Copy-Item "$bin/harfi-engine.exe" dist/harfi-windows/
+          Copy-Item build/llama.cpp/build/bin/Release/llama.dll, build/llama.cpp/build/bin/Release/ggml.dll, build/llama.cpp/build/bin/Release/ggml-base.dll, build/llama.cpp/build/bin/Release/ggml-cpu.dll dist/harfi-windows/
+          # The engine's settings; the model itself is downloaded by install.ps1 (808 MB, from the model release).
+          New-Item -ItemType Directory -Force dist/harfi-windows/config | Out-Null
+          Copy-Item config/engine.json, config/models.json dist/harfi-windows/config/
           Get-ChildItem dist/harfi-windows | Format-Table Name, Length
       - uses: actions/upload-artifact@v4
         with:
