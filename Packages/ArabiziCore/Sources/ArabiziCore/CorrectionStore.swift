@@ -23,8 +23,9 @@ public struct Correction: Codable, Equatable, Sendable {
     }
 }
 
-/// The user's corrections on this Mac only, encrypted at rest (AES-GCM) and kept for `lifetime` (30 days):
-/// the raw material for learned habits (ADR 0027, step 2). Never logs or sends them.
+/// The user's corrections on this computer only, encrypted at rest (AES-GCM) and kept for `lifetime` (30 days):
+/// the raw material for learned habits (ADR 0027 step 2, Habits), with the habits the user refused. Never logs or
+/// sends them.
 public final class CorrectionStore: @unchecked Sendable {  // file access is behind `lock`
     public static let lifetime: TimeInterval = 30 * 24 * 3600
     private let file: URL
@@ -86,27 +87,70 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
         }
     }
 
-    /// Deletes every correction.
+    /// Deletes every correction, and the habits the user refused.
     public func wipe() throws {
         try lock.withLock {
-            if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+            for url in [file, refusedFile] where FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
         }
     }
 
+    // MARK: - habits the user refused (ADR 0033)
+
+    /// Beside the corrections, sealed with the same key.
+    private var refusedFile: URL { file.deletingLastPathComponent().appending(path: "refused.bin") }
+
+    /// The habits the user said no to: never proposed or applied again, until allowed.
+    public func refused() -> Set<Habit> {
+        lock.withLock { Set(open([Habit].self, from: refusedFile) ?? []) }
+    }
+
+    public func refuse(_ habit: Habit) throws {
+        try lock.withLock {
+            var habits = Set(open([Habit].self, from: refusedFile) ?? [])
+            habits.insert(habit)
+            try seal(Array(habits), to: refusedFile)
+        }
+    }
+
+    public func allow(_ habit: Habit) throws {
+        try lock.withLock {
+            var habits = Set(open([Habit].self, from: refusedFile) ?? [])
+            habits.remove(habit)
+            try seal(Array(habits), to: refusedFile)
+        }
+    }
+
+    /// When the corrections or the refusals last changed (another app may have recorded one); nil for none yet.
+    public var changed: Date? {
+        [file, refusedFile].compactMap {
+            (try? FileManager.default.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date
+        }.max()
+    }
+
     private func load() -> [Correction] {
-        guard let sealed = try? Data(contentsOf: file), let box = try? AES.GCM.SealedBox(combined: sealed),
-              let data = try? AES.GCM.open(box, using: key),
-              let corrections = try? JSONDecoder().decode([Correction].self, from: data) else { return [] }
+        guard let corrections = open([Correction].self, from: file) else { return [] }
         let oldest = now().addingTimeInterval(-Self.lifetime)
         return corrections.filter { $0.date >= oldest }
     }
 
     private func save(_ corrections: [Correction]) throws {
-        let data = try JSONEncoder().encode(corrections)
+        try seal(corrections, to: file)
+    }
+
+    private func open<T: Decodable>(_ type: T.Type, from url: URL) -> T? {
+        guard let sealed = try? Data(contentsOf: url), let box = try? AES.GCM.SealedBox(combined: sealed),
+              let data = try? AES.GCM.open(box, using: key) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    private func seal<T: Encodable>(_ value: T, to url: URL) throws {
+        let data = try JSONEncoder().encode(value)
         guard let sealed = try AES.GCM.seal(data, using: key).combined else { return }
-        try sealed.write(to: file, options: [.atomic])
+        try sealed.write(to: url, options: [.atomic])
         #if !os(Windows)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         #endif
     }
 
