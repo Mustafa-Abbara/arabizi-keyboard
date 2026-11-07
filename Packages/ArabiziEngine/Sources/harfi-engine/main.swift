@@ -19,7 +19,9 @@ enum Setup {
         let length = Int(GetModuleFileNameW(nil, &path, DWORD(path.count)))
         return URL(fileURLWithPath: String(decoding: path[..<length], as: UTF16.self)).deletingLastPathComponent()
     }()
-    static let pipeName = EngineService.pipeName(user: userName())
+    /// The account this engine runs as (the same SID whether it was started from an elevated app or not).
+    static let sid = EngineService.currentSID
+    static let pipeName = sid.map(EngineService.pipeName(sid:))
     static let idleLimit: Duration = .seconds(30 * 60)
 }
 
@@ -91,18 +93,12 @@ final class Host: @unchecked Sendable {  // `engine`, `loading` and `lastUse` ar
 /// A pipe handle handed to the thread that serves it.
 struct Pipe: @unchecked Sendable { let handle: HANDLE }
 
-/// The current user's name, for a pipe of their own.
-func userName() -> String {
-    var name = [WCHAR](repeating: 0, count: 257)
-    var size = DWORD(name.count)
-    guard GetUserNameW(&name, &size), size > 0 else { return "user" }
-    return String(decoding: name[..<Int(size - 1)], as: UTF16.self)
-}
-
-/// One instance of the pipe; `first` fails when another engine already owns the name. Its owner, the system and app
-/// containers (Store apps, the Start menu search box) may connect, from low integrity too; never from the network.
+/// One instance of the pipe; `first` fails when another engine already owns the name. The account itself (by SID, so
+/// an engine started from an elevated app still serves the account's normal apps), the system and app containers
+/// (Store apps, the Start menu search box) may connect, from low integrity too; never from the network.
 func makePipe(first: Bool) -> Pipe? {
-    let rules = "D:(A;;GA;;;OW)(A;;GA;;;SY)(A;;GRGW;;;AC)S:(ML;;NW;;;LW)"
+    guard let sid = Setup.sid, let name = Setup.pipeName else { return nil }
+    let rules = "D:(A;;GA;;;\(sid))(A;;GA;;;SY)(A;;GRGW;;;AC)S:(ML;;NW;;;LW)"
     var descriptor: PSECURITY_DESCRIPTOR?
     let described = rules.withCString(encodedAs: UTF16.self) {
         ConvertStringSecurityDescriptorToSecurityDescriptorW($0, DWORD(SDDL_REVISION_1), &descriptor, nil)
@@ -113,7 +109,7 @@ func makePipe(first: Bool) -> Pipe? {
     var openMode = DWORD(PIPE_ACCESS_DUPLEX)
     if first { openMode |= DWORD(FILE_FLAG_FIRST_PIPE_INSTANCE) }
     let pipeMode = DWORD(PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS)
-    let handle = Setup.pipeName.withCString(encodedAs: UTF16.self) {
+    let handle = name.withCString(encodedAs: UTF16.self) {
         CreateNamedPipeW($0, openMode, pipeMode, DWORD(PIPE_UNLIMITED_INSTANCES), 65_536, 65_536, 0, &attributes)
     }
     guard let handle, handle != HANDLE(bitPattern: -1) else { return nil }  // INVALID_HANDLE_VALUE
@@ -162,7 +158,14 @@ do {
     exit(1)
 }
 
-guard let firstPipe = makePipe(first: true) else { exit(0) }  // another engine is already running for this user
+guard let firstPipe = makePipe(first: true) else {
+    let error = GetLastError()
+    // Taken: another engine already runs for this account. Anything else is a real failure: say which.
+    if error != DWORD(ERROR_ACCESS_DENIED) && error != DWORD(ERROR_PIPE_BUSY) {
+        log("engine cannot open its pipe (error \(error)\(Setup.sid == nil ? ", no SID" : "")): quitting")
+    }
+    exit(0)
+}
 log("engine started on the rules; loading the model in the background")
 let host = Host(rulesOnly: rulesOnly)
 
