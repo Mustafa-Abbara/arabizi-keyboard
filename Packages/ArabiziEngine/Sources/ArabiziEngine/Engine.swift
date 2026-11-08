@@ -43,15 +43,18 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     private let generator: (any TextGenerator)?
     private let template: PromptTemplate?
     private let englishGuard: EnglishGuard?
+    /// Chat abbreviations kept as typed, by the model and the rules (ADR 0035); nil without the file.
+    private let abbreviations: ChatAbbreviations?
     /// Step 4 (token repair, ADR 0023); off only to measure what it adds (arabizi-cli --no-repair).
     public let repairTokens: Bool
 
     /// For tests and hosts that build the parts themselves.
     public init(config: EngineConfig, rules: RuleConverter, generator: (any TextGenerator)?,
                 template: PromptTemplate?, modelState: ModelState, repairTokens: Bool = true,
-                englishGuard: EnglishGuard? = nil) {
+                englishGuard: EnglishGuard? = nil, abbreviations: ChatAbbreviations? = nil) {
         self.config = config
         self.englishGuard = englishGuard
+        self.abbreviations = abbreviations
         self.rules = rules
         var checks = config.outputChecks
         checks.keptLatin = rules.keptLatinWords
@@ -75,14 +78,15 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
                             verifyModelHash: Bool = true, repairTokens: Bool = true) throws -> Engine {
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
         let english = EnglishGuard(rulesDirectory: rulesDirectory, rules: rules)
+        let abbreviations = ChatAbbreviations(rulesDirectory: rulesDirectory)
         guard let model = config.model else {
             return Engine(config: config, rules: rules, generator: nil, template: nil, modelState: .off,
-                          englishGuard: english)
+                          englishGuard: english, abbreviations: abbreviations)
         }
         let path = modelsDirectory.appending(path: model.file)
         func unavailable(_ reason: String) -> Engine {
             Engine(config: config, rules: rules, generator: nil, template: nil,
-                   modelState: .unavailable(id: model.id, reason: reason), englishGuard: english)
+                   modelState: .unavailable(id: model.id, reason: reason), englishGuard: english, abbreviations: abbreviations)
         }
         guard FileManager.default.fileExists(atPath: path.path) else {
             return unavailable("model file not found: \(model.file)")
@@ -98,7 +102,7 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
             let generator = try LlamaModel(path: path.path, settings: settings)
             return Engine(config: config, rules: rules, generator: generator,
                           template: PromptTemplate(prefix: model.promptPrefix, suffix: model.promptSuffix),
-                          modelState: .ready(id: model.id), repairTokens: repairTokens, englishGuard: english)
+                          modelState: .ready(id: model.id), repairTokens: repairTokens, englishGuard: english, abbreviations: abbreviations)
         } catch {
             return unavailable("model failed to load: \(error)")
         }
@@ -128,11 +132,11 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         }
         guard let generator, let template else {
             reason = "no model"
-            return respond(rules.convert(text), .fallbackModelUnavailable)
+            return respond(ruled(text), .fallbackModelUnavailable)
         }
         guard text.count <= config.maxInputChars else {
             reason = "input longer than max_input_chars"
-            return respond(rules.convert(text), .fallbackModelUnavailable)
+            return respond(ruled(text), .fallbackModelUnavailable)
         }
         let protected = ProtectedSpans.protect(text)
         let words = protected.masked.split(whereSeparator: \.isWhitespace).count
@@ -143,33 +147,43 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
                                                 timeout: .milliseconds(request.deadlineMs))
         } catch {
             reason = "generation error: \(error)"
-            return respond(rules.convert(text), .fallbackModelUnavailable)
+            return respond(ruled(text), .fallbackModelUnavailable)
         }
         switch generation.stop {
         case .deadline:
             reason = "deadline after \(generation.generatedTokens) tokens"
-            return respond(rules.convert(text), .fallbackTimeout)
+            return respond(ruled(text), .fallbackTimeout)
         case .maxTokens:
             reason = "token limit \(limit)"
-            return respond(rules.convert(text), .fallbackCheckFailed)
+            return respond(ruled(text), .fallbackCheckFailed)
         case .endOfTurn:
             switch checks.check(Self.clean(generation.text), for: protected) {
             case .success(let converted):
-                return respond(converted, .model)
+                return respond(kept(converted, typed: text), .model)
             case .failure(.newLatin(let invented)):
                 let answer = Self.clean(generation.text)
                 if repairTokens, let (repaired, count) = Self.repair(answer, input: protected.masked, rules: rules),
                    case .success(let converted) = checks.check(repaired, for: protected) {
                     reason = "repaired: \(count) token(s)"
-                    return respond(converted, .model)
+                    return respond(kept(converted, typed: text), .model)
                 }
                 reason = Self.describe(.newLatin(invented))
-                return respond(rules.convert(text), .fallbackCheckFailed)
+                return respond(ruled(text), .fallbackCheckFailed)
             case .failure(let failure):
                 reason = Self.describe(failure)
-                return respond(rules.convert(text), .fallbackCheckFailed)
+                return respond(ruled(text), .fallbackCheckFailed)
             }
         }
+    }
+
+    /// The rules' conversion, keeping chat abbreviations as typed.
+    private func ruled(_ text: String) -> String {
+        abbreviations?.convert(text, with: rules) ?? rules.convert(text)
+    }
+
+    /// The model's checked answer with the words that come from chat abbreviations written as typed.
+    private func kept(_ answer: String, typed text: String) -> String {
+        abbreviations?.restore(in: answer, typed: text, rules: rules) ?? answer
     }
 
     /// The model's answer as the evaluation harness reads it (eval `b1.clean`): `<think>` blocks removed, the first

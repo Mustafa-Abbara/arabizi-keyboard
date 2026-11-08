@@ -33,7 +33,8 @@ func finished(_ text: String, _ stop: Generation.Stop = .endOfTurn) -> Generatio
     Generation(text: text, stop: stop, promptTokens: 10, generatedTokens: 5, elapsed: .milliseconds(5))
 }
 
-func engine(_ model: ScriptedModel?, maxInputChars: Int? = nil, english: Bool = false) throws -> Engine {
+func engine(_ model: ScriptedModel?, maxInputChars: Int? = nil, english: Bool = false,
+            abbreviations: Bool = false) throws -> Engine {
     var json = try #require(JSONSerialization.jsonObject(
         with: Data(contentsOf: configDirectory.appending(path: "engine.json"))) as? [String: Any])
     if let maxInputChars { json["max_input_chars"] = maxInputChars }
@@ -41,7 +42,8 @@ func engine(_ model: ScriptedModel?, maxInputChars: Int? = nil, english: Bool = 
                                   models: Data(contentsOf: configDirectory.appending(path: "models.json")))
     return Engine(config: config, rules: rules, generator: model, template: model == nil ? nil : template,
                   modelState: model == nil ? .off : .ready(id: "scripted"),
-                  englishGuard: english ? EnglishGuard(rulesDirectory: rulesDirectory, rules: rules) : nil)
+                  englishGuard: english ? EnglishGuard(rulesDirectory: rulesDirectory, rules: rules) : nil,
+                  abbreviations: abbreviations ? ChatAbbreviations(rulesDirectory: rulesDirectory) : nil)
 }
 
 func request(_ text: String) -> ConvertRequest { ConvertRequest(text: text, deadlineMs: 1500) }
@@ -71,6 +73,21 @@ func request(_ text: String) -> ConvertRequest { ConvertRequest(text: text, dead
     let response = try engine(model).convert(request("b3at 100$ 3a www.lau.edu"))
     #expect(model.prompts == ["<P>b3at ⟦0⟧ 3a ⟦1⟧</P>"])
     #expect(response.outcome == .model && response.text == "بعت 100$ ع www.lau.edu")
+}
+
+@Test func chatAbbreviationsTheModelWroteInArabicArePutBack() throws {
+    let model = ScriptedModel { _ in finished("إيدك شو بدك، تبح") }
+    let response = try engine(model, abbreviations: true).convert(request("idk shu badak, tbh"))
+    #expect(model.prompts == ["<P>idk shu badak, tbh</P>"])  // the model sees them as typed: no slower
+    #expect(response.outcome == .model && response.text == "idk شو بدك، tbh")
+}
+
+@Test func theRulesKeepChatAbbreviationsToo() throws {
+    let model = ScriptedModel { _ in finished("شو", .deadline) }
+    let response = try engine(model, abbreviations: true).convert(request("lol shu 3am ta3mel btw?"))
+    #expect(response.outcome == .fallbackTimeout)
+    #expect(response.text.hasPrefix("lol ") && response.text.contains(" btw"))
+    #expect(response.text.contains(rules.convert("shu 3am ta3mel")))
 }
 
 @Test(arguments: [
