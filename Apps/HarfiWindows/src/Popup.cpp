@@ -43,16 +43,52 @@ Gdiplus::FontFamily *LatinFamily() {
 
 namespace {
 // Tight, unwrapped and centred text (GDI+ formats cannot be copied, so they are set up in place).
-void Configure(Gdiplus::StringFormat &format, bool rtl) {
+void Configure(Gdiplus::StringFormat &format, bool rtl, bool top = false) {
     // Without LineLimit (part of GenericTypographic): it drops a line whose box is a rounding error too short.
     INT flags = (format.GetFormatFlags() & ~Gdiplus::StringFormatFlagsLineLimit) |
                 Gdiplus::StringFormatFlagsMeasureTrailingSpaces | Gdiplus::StringFormatFlagsNoWrap;
     if (rtl) flags |= Gdiplus::StringFormatFlagsDirectionRightToLeft;
     format.SetFormatFlags(flags);
     format.SetAlignment(Gdiplus::StringAlignmentCenter);
-    format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+    format.SetLineAlignment(top ? Gdiplus::StringAlignmentNear : Gdiplus::StringAlignmentCenter);
+}
+
+// The font's family and style, and a size in its design units scaled to the font's pixels.
+float FontUnits(const Gdiplus::Font &font, UINT16 (Gdiplus::FontFamily::*metric)(INT) const) {
+    Gdiplus::FontFamily family;
+    font.GetFamily(&family);
+    INT style = font.GetStyle();
+    UINT16 em = family.GetEmHeight(style);
+    return em ? font.GetSize() * (family.*metric)(style) / em : font.GetSize();
 }
 }  // namespace
+
+float Ascent(const Gdiplus::Font &font) { return FontUnits(font, &Gdiplus::FontFamily::GetCellAscent); }
+
+float LineHeight(const Gdiplus::Font &font) { return FontUnits(font, &Gdiplus::FontFamily::GetLineSpacing); }
+
+Gdiplus::RectF Ink(const std::wstring &text, const Gdiplus::Font &font, bool rtl, float width) {
+    Gdiplus::FontFamily family;
+    font.GetFamily(&family);
+    Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
+    Configure(format, rtl, true);
+    Gdiplus::GraphicsPath path;
+    Gdiplus::RectF layout(0, -Ascent(font), width, LineHeight(font));
+    path.AddString(text.c_str(), static_cast<INT>(text.size()), &family, font.GetStyle(), font.GetSize(), layout,
+                   &format);
+    Gdiplus::RectF bounds;
+    path.GetBounds(&bounds);
+    return bounds;
+}
+
+void WriteOnBaseline(Gdiplus::Graphics &graphics, const std::wstring &text, const Gdiplus::Font &font,
+                     COLORREF colour, float x, float width, float baseline, bool rtl) {
+    Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
+    Configure(format, rtl, true);
+    Gdiplus::SolidBrush brush(Colour(colour));
+    Gdiplus::RectF box(x, baseline - Ascent(font), width, LineHeight(font));
+    graphics.DrawString(text.c_str(), static_cast<INT>(text.size()), &font, box, &format, &brush);
+}
 
 Gdiplus::SizeF Measure(const std::wstring &text, const Gdiplus::Font &font, bool rtl) {
     Gdiplus::Bitmap one(1, 1, PixelFormat32bppPARGB);

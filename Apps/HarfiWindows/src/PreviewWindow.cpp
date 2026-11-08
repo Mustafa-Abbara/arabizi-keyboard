@@ -31,31 +31,45 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
 
     // Right to left, as Arabic reads: the first word on the right, then the Latin typed since and the hint.
     // A space, but never narrower than the highlight needs to sit around a word without touching the next one.
-    float space = Measure(L" ", arabicFont, true).Width, width = 0, height = 0;
+    // Every word sits on one baseline, and the box is centred on the letters as drawn (from the highest to the
+    // lowest), not on each font's line, which for Noto Naskh has much more room above and below than Segoe UI.
+    float space = Measure(L" ", arabicFont, true).Width, width = 0;
     if (space < Scaled(16)) space = static_cast<float>(Scaled(16));
-    std::vector<Gdiplus::SizeF> sizes;
+    float high = 0, low = 0;  // the letters' extent above (negative) and below the baseline
+    bool any = false;
+    std::vector<float> widths;
     for (const Run &run : runs_) {
         const Gdiplus::Font &font = run.kind == Kind::Arabic ? arabicFont : run.kind == Kind::Latin ? latinFont : hintFont;
-        Gdiplus::SizeF size = Measure(run.text, font, run.kind == Kind::Arabic);
-        sizes.push_back(size);
-        width += size.Width + (sizes.size() > 1 ? (run.kind == Kind::Hint ? 3 * space : space) : 0);
-        if (size.Height > height) height = size.Height;
+        bool rtl = run.kind == Kind::Arabic;
+        float w = Measure(run.text, font, rtl).Width;
+        widths.push_back(w);
+        width += w + (widths.size() > 1 ? (run.kind == Kind::Hint ? 3 * space : space) : 0);
+        Gdiplus::RectF ink = Ink(run.text, font, rtl, w);
+        if (ink.Height <= 0) continue;
+        high = any ? (ink.Y < high ? ink.Y : high) : ink.Y;
+        low = any ? (ink.GetBottom() > low ? ink.GetBottom() : low) : ink.GetBottom();
+        any = true;
     }
+    if (!any) {  // nothing drawn: the Arabic font's own line
+        high = -Ascent(arabicFont);
+        low = LineHeight(arabicFont) + high;
+    }
+    float height = low - high;
     SIZE content = {static_cast<LONG>(width + 0.99f) + 2 * Scaled(PadX),
                     static_cast<LONG>(height + 0.99f) + 2 * Scaled(PadY) + Scaled(LineGap)};
+    baseline_ = Scaled(PadY) - high;
     float right = static_cast<float>(content.cx - Scaled(PadX));
     for (size_t i = 0; i < runs_.size(); ++i) {
         if (i > 0) right -= runs_[i].kind == Kind::Hint ? 3 * space : space;
-        float top = Scaled(PadY) + (height - sizes[i].Height) / 2;
-        runs_[i].box = Gdiplus::RectF(right - sizes[i].Width, top, sizes[i].Width, sizes[i].Height);
-        right -= sizes[i].Width;
+        runs_[i].box = Gdiplus::RectF(right - widths[i], baseline_ + high, widths[i], height);
+        right -= widths[i];
     }
 
     // The highlight: fades in on the first word, then glides to the next one.
     ULONGLONG now = GetTickCount64();
     if (selected >= 0 && selected < static_cast<int>(runs_.size())) {
         Gdiplus::RectF to = runs_[selected].box;
-        to.Inflate(static_cast<float>(Scaled(4)), static_cast<float>(Scaled(2)));
+        to.Inflate(static_cast<float>(Scaled(5)), static_cast<float>(Scaled(4)));
         if (!highlight_) {
             shown_ = from_ = to_ = to;
             opacity_ = Motion() ? 0.f : 1.f;
@@ -101,10 +115,11 @@ void PreviewWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
     }
     Gdiplus::Font arabicFont = ArabicFont(), latinFont = LatinFont(), hintFont = HintFont();
     for (const Run &run : runs_) {
+        float x = run.box.X, w = run.box.Width;
         switch (run.kind) {
-            case Kind::Arabic: Write(graphics, run.text, arabicFont, colours.text, run.box, true); break;
-            case Kind::Latin: Write(graphics, run.text, latinFont, colours.muted, run.box, false); break;
-            case Kind::Hint: Write(graphics, run.text, hintFont, colours.accent, run.box, false); break;
+            case Kind::Arabic: WriteOnBaseline(graphics, run.text, arabicFont, colours.text, x, w, baseline_, true); break;
+            case Kind::Latin: WriteOnBaseline(graphics, run.text, latinFont, colours.muted, x, w, baseline_, false); break;
+            case Kind::Hint: WriteOnBaseline(graphics, run.text, hintFont, colours.accent, x, w, baseline_, false); break;
         }
         if (run.doubtful) {  // a dashed line below the lowest letters: this word may be wrong
             Gdiplus::Pen dashes(Colour(colours.warning), 1.5f * Scaled(1));

@@ -17,6 +17,14 @@ Gdiplus::SizeF Measure(const std::wstring &text, const Gdiplus::Font &font, bool
 // Draws `text` centred in `box`.
 void Write(Gdiplus::Graphics &graphics, const std::wstring &text, const Gdiplus::Font &font, COLORREF colour,
            const Gdiplus::RectF &box, bool rtl);
+// Text on a shared baseline, so Arabic (Noto Naskh) and Latin (Segoe UI) words line up: how far the font's line
+// rises above its baseline, the line's height, the letters' own outline (relative to the baseline, for `width` of
+// layout), and `text` drawn in [x, x + width] with its baseline at `baseline`.
+float Ascent(const Gdiplus::Font &font);
+float LineHeight(const Gdiplus::Font &font);
+Gdiplus::RectF Ink(const std::wstring &text, const Gdiplus::Font &font, bool rtl, float width);
+void WriteOnBaseline(Gdiplus::Graphics &graphics, const std::wstring &text, const Gdiplus::Font &font,
+                     COLORREF colour, float x, float width, float baseline, bool rtl);
 void RoundedRect(Gdiplus::GraphicsPath &path, const Gdiplus::RectF &rect, float radius);
 inline Gdiplus::Color Colour(COLORREF colour, int alpha = 255) {
     return Gdiplus::Color(static_cast<BYTE>(alpha), GetRValue(colour), GetGValue(colour), GetBValue(colour));

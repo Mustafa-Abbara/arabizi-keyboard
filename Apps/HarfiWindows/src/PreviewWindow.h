@@ -29,8 +29,9 @@ private:
         std::wstring text;
         Kind kind = Kind::Arabic;
         bool doubtful = false;
-        Gdiplus::RectF box;
+        Gdiplus::RectF box;  // the word's room in the line, from the line's highest letter to its lowest
     };
+    float baseline_ = 0;  // shared by every word, so Arabic and Latin sit on one line
 
     std::vector<Run> runs_;
     std::function<void()> paused_;

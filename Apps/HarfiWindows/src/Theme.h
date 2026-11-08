@@ -1,5 +1,5 @@
-// Cedar and sand (design/palette.json), light or dark as Windows is set, and sizes scaled for the screen: shared
-// by the preview box and the chip row.
+// Cedar and sand (design/palette.json), always the light colours whatever Windows is set to (the user's choice,
+// 8 Nov 2026), and sizes scaled for the screen: shared by the preview box and the chip row.
 #pragma once
 #include "Globals.h"
 
@@ -9,13 +9,8 @@ struct Palette {
 };
 
 inline Palette Colours() {
-    DWORD light = 1, size = sizeof(light);
-    RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                 L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
-    if (light) return {RGB(0xFF, 0xFF, 0xFF), RGB(0x1E, 0x2A, 0x25), RGB(0x6B, 0x75, 0x6F), RGB(0xE4, 0xDF, 0xD4),
-                       RGB(0x2F, 0x6B, 0x5A), RGB(0xE2, 0xEE, 0xE8), RGB(0x9A, 0x6A, 0x1F)};
-    return {RGB(0x1D, 0x25, 0x22), RGB(0xE9, 0xEE, 0xEB), RGB(0x93, 0xA0, 0x99), RGB(0x2C, 0x36, 0x32),
-            RGB(0x7D, 0xBB, 0xA5), RGB(0x21, 0x39, 0x2F), RGB(0xE0, 0xB0, 0x62), true};
+    return {RGB(0xFF, 0xFF, 0xFF), RGB(0x1E, 0x2A, 0x25), RGB(0x6B, 0x75, 0x6F), RGB(0xE4, 0xDF, 0xD4),
+            RGB(0x2F, 0x6B, 0x5A), RGB(0xE2, 0xEE, 0xE8), RGB(0x9A, 0x6A, 0x1F)};
 }
 
 // Windows' "Animation effects" setting (the Mac's Reduce Motion, the other way round).
