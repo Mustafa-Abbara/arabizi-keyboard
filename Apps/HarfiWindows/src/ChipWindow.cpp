@@ -8,6 +8,7 @@ const int Gap = 6, PadX = 10, PadY = 4, Inset = 6, MinHeight = 32, NumberGap = 6
 Gdiplus::Font ArabicFont() { return Gdiplus::Font(ArabicFamily(), static_cast<float>(Scaled(20)), 0, Gdiplus::UnitPixel); }
 Gdiplus::Font NumberFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(12)), 0, Gdiplus::UnitPixel); }
 Gdiplus::Font QuietFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(13)), 0, Gdiplus::UnitPixel); }
+const wchar_t Pencil[] = L"\uE70F";  // "Edit" in Windows' icon font, before "Spell it"
 }  // namespace
 
 ChipWindow::ChipWindow() : Popup(L"HarfiChips", false) {}
@@ -68,32 +69,60 @@ void ChipWindow::OnTimer(UINT_PTR id) {
 // Lays the chips out right to left (the first on the right) and shows the row above the text.
 void ChipWindow::Arrange(const RECT &text) {
     Gdiplus::Font arabic = ArabicFont(), number = NumberFont(), quiet = QuietFont();
-    float height = static_cast<float>(Scaled(MinHeight));
+    // One baseline for the whole row, centred on the letters as drawn (highest to lowest), so the Latin number or
+    // arrow and the Arabic word line up and sit in the middle of their chip.
+    float high = 0, low = 0;
+    bool any = false;
+    auto reach = [&](const std::wstring &text, const Gdiplus::Font &font, bool rtl, float width) {
+        Gdiplus::RectF ink = Ink(text, font, rtl ? ArabicFamily() : LatinFamily(), rtl, width);
+        if (ink.Height <= 0) return;
+        high = any ? (ink.Y < high ? ink.Y : high) : ink.Y;
+        low = any ? (ink.GetBottom() > low ? ink.GetBottom() : low) : ink.GetBottom();
+        any = true;
+    };
     std::vector<float> widths;
     for (Chip &chip : chips_) {
         bool isArabic = chip.style == Style::Spelling || chip.style == Style::Current;
-        Gdiplus::SizeF label = Measure(chip.label, isArabic ? arabic : quiet, isArabic);
+        const Gdiplus::Font &labelFont = isArabic ? arabic : quiet;
+        Gdiplus::SizeF label = Measure(chip.label, labelFont, isArabic);
+        reach(chip.label, labelFont, isArabic, label.Width);
         Gdiplus::SizeF extra = {};
-        if (!chip.number.empty()) extra = Measure(chip.number, number, false);
-        if (chip.style == Style::Current) extra = Measure(L"←", quiet, false);
+        if (!chip.number.empty()) {
+            extra = Measure(chip.number, number, false);
+            reach(chip.number, number, false, extra.Width);
+        }
+        if (chip.style == Style::Current) {
+            extra = Measure(L"←", quiet, false);
+            reach(L"←", quiet, false, extra.Width);
+        }
+        if (chip.style == Style::Quiet && IconFamily()) {  // the pencil: not in the baseline's reach, it is centred
+            Gdiplus::Font icon(IconFamily(), static_cast<float>(Scaled(13)), 0, Gdiplus::UnitPixel);
+            extra = Measure(Pencil, icon, false);
+        }
         float inner = label.Width + (extra.Width > 0 ? extra.Width + Scaled(NumberGap) : 0);
         widths.push_back(inner + 2 * Scaled(PadX));
-        float needed = label.Height + 2 * Scaled(PadY);
-        if (needed > height) height = needed;
         // Inside a chip: the number (or the arrow) on the left, the label on the right.
         chip.numberBox = Gdiplus::RectF(0, 0, extra.Width, 0);
         chip.labelBox = Gdiplus::RectF(0, 0, label.Width, 0);
     }
+    if (!any) {
+        high = -Ascent(arabic, ArabicFamily());
+        low = LineHeight(arabic, ArabicFamily()) + high;
+    }
+    float letters = low - high, height = letters + 2 * Scaled(PadY);
+    if (height < Scaled(MinHeight)) height = static_cast<float>(Scaled(MinHeight));
     float total = 0;
     for (size_t i = 0; i < widths.size(); ++i) total += widths[i] + (i ? Scaled(Gap) : 0);
     SIZE content = {static_cast<LONG>(total + 0.99f) + 2 * Scaled(Inset), static_cast<LONG>(height + 0.99f) + 2 * Scaled(Inset)};
     float right = static_cast<float>(content.cx - Scaled(Inset)), top = static_cast<float>(Scaled(Inset));
+    baseline_ = top + (height - letters) / 2 - high;
     for (size_t i = 0; i < chips_.size(); ++i) {
         Chip &chip = chips_[i];
         chip.box = Gdiplus::RectF(right - widths[i], top, widths[i], height);
         float labelRight = chip.box.GetRight() - Scaled(PadX);
-        chip.labelBox = Gdiplus::RectF(labelRight - chip.labelBox.Width, top, chip.labelBox.Width, height);
-        chip.numberBox = Gdiplus::RectF(chip.box.X + Scaled(PadX), top, chip.numberBox.Width, height);
+        float lettersTop = baseline_ + high;
+        chip.labelBox = Gdiplus::RectF(labelRight - chip.labelBox.Width, lettersTop, chip.labelBox.Width, letters);
+        chip.numberBox = Gdiplus::RectF(chip.box.X + Scaled(PadX), lettersTop, chip.numberBox.Width, letters);
         right -= widths[i] + Scaled(Gap);
     }
     hovered_ = -1;
@@ -108,41 +137,54 @@ void ChipWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
     for (size_t i = 0; lit < 0 && i < chips_.size(); ++i) {
         if (chips_[i].selected) lit = static_cast<int>(i);
     }
+    auto pill = [&](const Chip &chip, COLORREF fill, COLORREF line, bool dashed) {
+        Gdiplus::RectF box = chip.box;
+        box.Inflate(-0.5f, -0.5f);
+        Gdiplus::GraphicsPath path;
+        RoundedRect(path, box, radius);
+        Gdiplus::SolidBrush brush(Colour(fill));
+        graphics.FillPath(&brush, &path);
+        if (line == fill) return;
+        Gdiplus::Pen pen(Colour(line), dashed ? 1.25f * Scaled(1) : 1.f);
+        if (dashed) {
+            Gdiplus::REAL pattern[] = {3.f, 2.f};
+            pen.SetDashPattern(pattern, 2);
+        }
+        graphics.DrawPath(&pen, &path);
+    };
     for (size_t i = 0; i < chips_.size(); ++i) {
         const Chip &chip = chips_[i];
         bool on = static_cast<int>(i) == lit;
-        bool framed = chip.style == Style::Spelling || chip.style == Style::Quiet;
-        if (framed) {
-            Gdiplus::RectF box = chip.box;
-            box.Inflate(-0.5f, -0.5f);
-            Gdiplus::GraphicsPath pill;
-            RoundedRect(pill, box, radius);
-            Gdiplus::SolidBrush brush(Colour(on ? colours.accentSoft : colours.surface));
-            graphics.FillPath(&brush, &pill);
-            Gdiplus::Pen pen(Colour(on ? colours.accent : colours.border), 1.f);
-            graphics.DrawPath(&pen, &pill);
-        }
         switch (chip.style) {
-            case Style::Spelling:
+            case Style::Spelling:  // white on the tint; the lit one solid cedar
+                pill(chip, on ? colours.accent : colours.chip, on ? colours.accent : colours.border, false);
                 if (!chip.number.empty()) {
-                    Write(graphics, chip.number, number, on ? colours.accent : colours.muted, chip.numberBox, false);
+                    WriteOnBaseline(graphics, chip.number, number, LatinFamily(),
+                                    on ? colours.onAccentQuiet : colours.muted, chip.numberBox.X,
+                                    chip.numberBox.Width, baseline_, false);
                 }
-                Write(graphics, chip.label, arabic, on ? colours.accent : colours.text, chip.labelBox, true);
+                WriteOnBaseline(graphics, chip.label, arabic, ArabicFamily(), on ? colours.onAccent : colours.text,
+                                chip.labelBox.X, chip.labelBox.Width, baseline_, true);
                 break;
-            case Style::Current:  // amber with a dashed line when it looks wrong
-                Write(graphics, chip.label, arabic, chip.doubtful ? colours.warning : colours.muted, chip.labelBox, true);
-                Write(graphics, L"←", quiet, colours.muted, chip.numberBox, false);
-                if (chip.doubtful) {
-                    Gdiplus::Pen dashes(Colour(colours.warning), 1.5f * Scaled(1));
-                    Gdiplus::REAL pattern[] = {2.7f, 2.f};
-                    dashes.SetDashPattern(pattern, 2);
-                    float y = chip.labelBox.GetBottom() - Scaled(4);
-                    graphics.DrawLine(&dashes, chip.labelBox.X, y, chip.labelBox.GetRight(), y);
+            case Style::Current:  // the word being fixed: white with a dashed cedar outline and a cedar arrow
+                pill(chip, colours.chip, colours.accentLine, true);
+                WriteOnBaseline(graphics, chip.label, arabic, ArabicFamily(), colours.text, chip.labelBox.X,
+                                chip.labelBox.Width, baseline_, true);
+                WriteOnBaseline(graphics, L"←", quiet, LatinFamily(), colours.accent, chip.numberBox.X,
+                                chip.numberBox.Width, baseline_, false);
+                break;
+            case Style::Quiet:  // "Spell it": a soft cedar chip with a pencil; solid cedar under the mouse
+                pill(chip, on ? colours.accent : colours.accentSoft, on ? colours.accent : colours.accentLine, false);
+                if (IconFamily() && chip.numberBox.Width > 0) {
+                    Gdiplus::Font icon(IconFamily(), static_cast<float>(Scaled(13)), 0, Gdiplus::UnitPixel);
+                    Write(graphics, Pencil, icon, on ? colours.onAccent : colours.accent, chip.numberBox, false);
                 }
+                WriteOnBaseline(graphics, chip.label, quiet, LatinFamily(), on ? colours.onAccent : colours.accent,
+                                chip.labelBox.X, chip.labelBox.Width, baseline_, false);
                 break;
-            case Style::Quiet:
             case Style::Hint:
-                Write(graphics, chip.label, quiet, colours.muted, chip.labelBox, false);
+                WriteOnBaseline(graphics, chip.label, quiet, LatinFamily(), colours.muted, chip.labelBox.X,
+                                chip.labelBox.Width, baseline_, false);
                 break;
         }
     }

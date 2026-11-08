@@ -43,6 +43,7 @@ private:
     int ChipAt(POINT at) const;
 
     std::vector<Chip> chips_;
+    float baseline_ = 0;  // shared by every chip's text, so numbers, arrows and Arabic sit on one line
     int hovered_ = -1;
     Pick pick_;
     SpellIt spellIt_;

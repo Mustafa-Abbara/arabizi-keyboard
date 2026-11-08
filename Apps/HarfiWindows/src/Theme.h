@@ -1,22 +1,27 @@
-// Cedar and sand (design/palette.json), light or dark as Windows is set, and sizes scaled for the screen: shared
-// by the preview box and the chip row.
+// Cedar and sand (design/palette.json), always light whatever Windows is set to, with the cedar tint the user chose
+// (option 2, 8 Nov 2026): the boxes are pale cedar, the chips white on them, the chosen chip and the highlighted word
+// solid cedar. Sizes are scaled for the screen. Shared by the preview box and the chip row.
 #pragma once
 #include "Globals.h"
 
 struct Palette {
-    COLORREF surface, text, muted, border, accent, accentSoft, warning;
+    COLORREF surface = RGB(0xF1, 0xF6, 0xF3);      // the boxes: a pale cedar tint
+    COLORREF border = RGB(0xD3, 0xE3, 0xDB);
+    COLORREF chip = RGB(0xFF, 0xFF, 0xFF);         // a spelling, on the tint
+    COLORREF text = RGB(0x1E, 0x2A, 0x25);
+    COLORREF muted = RGB(0x6B, 0x75, 0x6F);
+    COLORREF accent = RGB(0x2F, 0x6B, 0x5A);       // cedar: the chosen chip, the highlighted word
+    COLORREF onAccent = RGB(0xFF, 0xFF, 0xFF);     // letters on cedar
+    COLORREF onAccentQuiet = RGB(0xCF, 0xE3, 0xDA);  // a number on cedar
+    COLORREF accentSoft = RGB(0xDC, 0xEB, 0xE4);   // "Spell it"
+    COLORREF accentLine = RGB(0xB7, 0xD3, 0xC6);
+    COLORREF latin = RGB(0x6B, 0x9C, 0x8A);        // the Latin typed since, in the preview
+    COLORREF warning = RGB(0x9A, 0x6A, 0x1F);      // amber: a word that may be wrong
+    COLORREF warningLine = RGB(0xC9, 0xA1, 0x5E);  // its dashed line and outline
     bool dark = false;
 };
 
-inline Palette Colours() {
-    DWORD light = 1, size = sizeof(light);
-    RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                 L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
-    if (light) return {RGB(0xFF, 0xFF, 0xFF), RGB(0x1E, 0x2A, 0x25), RGB(0x6B, 0x75, 0x6F), RGB(0xE4, 0xDF, 0xD4),
-                       RGB(0x2F, 0x6B, 0x5A), RGB(0xE2, 0xEE, 0xE8), RGB(0x9A, 0x6A, 0x1F)};
-    return {RGB(0x1D, 0x25, 0x22), RGB(0xE9, 0xEE, 0xEB), RGB(0x93, 0xA0, 0x99), RGB(0x2C, 0x36, 0x32),
-            RGB(0x7D, 0xBB, 0xA5), RGB(0x21, 0x39, 0x2F), RGB(0xE0, 0xB0, 0x62), true};
-}
+inline Palette Colours() { return Palette{}; }
 
 // Windows' "Animation effects" setting (the Mac's Reduce Motion, the other way round).
 inline bool Motion() {
