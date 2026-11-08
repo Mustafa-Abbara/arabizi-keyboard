@@ -19,6 +19,8 @@ import Foundation
 final class Core: Sendable {
     let rules: RuleConverter
     let english: EnglishGuard?
+    /// Chat abbreviations kept as typed (ADR 0035), as the engine keeps them.
+    let abbreviations: ChatAbbreviations?
     let suggester: Suggester?
     /// The user's recorded picks and learned habits; only for the installed keyboard (a folder holding HarfiTIP.dll),
     /// so tests and tools reading data/rules never write a record.
@@ -32,6 +34,7 @@ final class Core: Sendable {
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
         self.rules = rules
         english = EnglishGuard(rulesDirectory: rulesDirectory, rules: rules)
+        abbreviations = ChatAbbreviations(rulesDirectory: rulesDirectory)
         let lexicon = (try? Data(contentsOf: rulesDirectory.appending(path: RuleConverter.lexiconFileName))) ?? Data()
         let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon),
                                       arabicWords: Suggestions.arabicWords(lexicon: lexicon),
@@ -95,7 +98,8 @@ final class Core: Sendable {
     /// The text as the keyboard converts it without the model: plain English stays as typed. Instant: the live
     /// preview uses it on every key.
     func convert(_ text: String) -> String {
-        english?.isEnglish(text) == true ? text : rules.convert(text)
+        if english?.isEnglish(text) == true { return text }
+        return abbreviations?.convert(text, with: rules) ?? rules.convert(text)
     }
 
     #if os(Windows)

@@ -1,0 +1,20 @@
+{
+ "_comment": "Chat abbreviations and short English words kept exactly as typed inside Arabizi messages (ADR 0035): the engine swaps them for placeholders before the model or the rules run, so `idk`, `tbh` or `mins` never become Arabic letters. Matched as whole words, case-insensitive, without the punctuation around them. Most never appear in the training data, so the model guesses at them. Left out because they are Arabizi too: ya, min, ye, y, fyi (فيي), hb, bruh, dm (دم), fam, def, ez, eta, 2b, and single letters (u, r, k, n). eval/tests/test_chat_abbreviations.py checks that no word here is mostly converted to Arabic in the training data. Hand-made list (Recommendation, 8 Nov 2026), not generated.",
+ "version": 1,
+ "words": [
+  "2day", "2moro", "2mrw", "2nite", "4u", "abt", "afaik", "aka", "anw", "anyw", "app", "asap", "atm",
+  "b4", "bbl", "bbs", "bc", "bday", "bf", "bff", "brb", "btw",
+  "coz", "cuz", "diy", "doc", "docs", "faq", "fml",
+  "g2g", "gf", "gg", "gnight", "gr8", "gtg",
+  "hbd", "hbu", "hmu", "hny", "hrs",
+  "idc", "idek", "idk", "idrc", "idts", "iirc", "ikr", "ily", "ilysm", "imho", "imo", "irl", "istg",
+  "jk", "kk", "l8r", "lmao", "lmfao", "lmk", "lol", "luv",
+  "mins", "msg", "msgs", "nbd", "ngl", "nope", "np", "nvm",
+  "obvi", "ofc", "ok", "okay", "okk", "omfg", "omg", "oml",
+  "pdf", "pls", "plz", "plzz", "pm", "ppl", "ppt", "prob", "probs",
+  "qa", "rn", "rofl", "sec", "secs", "sis", "smh",
+  "tba", "tbd", "tbf", "tbh", "thnx", "tho", "thru", "thx", "tldr", "tmr", "tmrw", "tnx", "ttyl", "ttys", "ty", "tysm",
+  "w8", "wbu", "wknd", "wtf", "wth", "wyd", "xd", "xoxo",
+  "yea", "yeah", "yep", "yr", "yrs", "yup"
+ ]
+}

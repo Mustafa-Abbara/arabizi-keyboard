@@ -27,7 +27,7 @@ public enum ProtectedSpans {
 
     public static func protect(_ text: String) -> ProtectedText {
         let whole = NSRange(text.startIndex..., in: text)
-        var ranges: [Range<String.Index>] = patterns.flatMap { pattern in
+        let ranges: [Range<String.Index>] = patterns.flatMap { pattern in
             pattern.matches(in: text, range: whole).compactMap { match in
                 // A match that cuts a character in two (the 1 of the keycap 1️⃣) is not a span of its own.
                 guard let range = Range(match.range, in: text), range.lowerBound.samePosition(in: text) != nil,
@@ -35,7 +35,13 @@ public enum ProtectedSpans {
                 return trimmed(range, in: text)
             }
         }
-        // Earliest first, the longest of those first; drop anything inside a span already taken.
+        return mask(text, ranges: ranges)
+    }
+
+    /// `text` with each of `ranges` replaced by a placeholder: earliest first, the longest of those first, anything
+    /// inside a span already taken dropped.
+    static func mask(_ text: String, ranges: [Range<String.Index>]) -> ProtectedText {
+        var ranges = ranges
         ranges.sort { $0.lowerBound != $1.lowerBound ? $0.lowerBound < $1.lowerBound : $0.upperBound > $1.upperBound }
         var masked = ""
         var spans: [String] = []

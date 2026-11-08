@@ -53,7 +53,7 @@ cp "$XPC_PKG/Resources/Info.plist" "$XPC/Contents/Info.plist"
 plutil -lint -s "$XPC/Contents/Info.plist"
 cp -R "$XPC_BIN_DIR/llama.framework" "$XPC/Contents/Frameworks/"
 cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$ROOT/data/rules/english_stopwords.json" \
-   "$XPC/Contents/Resources/"
+   "$ROOT/data/rules/chat_abbreviations.json" "$XPC/Contents/Resources/"
 cp "$ROOT/config/engine.json" "$ROOT/config/models.json" "$XPC/Contents/Resources/"
 MODEL_FILE="$(python3 - "$ROOT/config" <<'EOF'
 import json, sys
