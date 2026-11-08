@@ -12,11 +12,23 @@
 // The fonts Harfi draws with: Noto Naskh Arabic from the keyboard's folder (for this process only) and Segoe UI.
 Gdiplus::FontFamily *ArabicFamily();
 Gdiplus::FontFamily *LatinFamily();
+// Windows' icon font (Segoe Fluent Icons, or Segoe MDL2 Assets before Windows 11), or null without either.
+Gdiplus::FontFamily *IconFamily();
 // The space `text` takes in `font`, right to left for Arabic.
 Gdiplus::SizeF Measure(const std::wstring &text, const Gdiplus::Font &font, bool rtl);
 // Draws `text` centred in `box`.
 void Write(Gdiplus::Graphics &graphics, const std::wstring &text, const Gdiplus::Font &font, COLORREF colour,
            const Gdiplus::RectF &box, bool rtl);
+// Text on a shared baseline, so Arabic (Noto Naskh) and Latin (Segoe UI) words line up: how far the font's line
+// rises above its baseline, the line's height, the letters' own outline (relative to the baseline, for `width` of
+// layout), and `text` drawn (each for the family `font` was made from) in [x, x + width] with its baseline at `baseline`.
+float Ascent(const Gdiplus::Font &font, const Gdiplus::FontFamily *family);
+float LineHeight(const Gdiplus::Font &font, const Gdiplus::FontFamily *family);
+Gdiplus::RectF Ink(const std::wstring &text, const Gdiplus::Font &font, const Gdiplus::FontFamily *family, bool rtl,
+                   float width);
+void WriteOnBaseline(Gdiplus::Graphics &graphics, const std::wstring &text, const Gdiplus::Font &font,
+                     const Gdiplus::FontFamily *family, COLORREF colour, float x, float width, float baseline,
+                     bool rtl);
 void RoundedRect(Gdiplus::GraphicsPath &path, const Gdiplus::RectF &rect, float radius);
 inline Gdiplus::Color Colour(COLORREF colour, int alpha = 255) {
     return Gdiplus::Color(static_cast<BYTE>(alpha), GetRValue(colour), GetGValue(colour), GetBValue(colour));
