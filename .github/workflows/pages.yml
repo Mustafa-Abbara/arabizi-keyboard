@@ -1,11 +1,17 @@
-# Publishes the website (site/) to GitHub Pages when it changes on main. Static files only: no build step,
-# no analytics, the font served from the site itself.
+# Publishes the website (site/) to GitHub Pages when it changes on main, and after each release (so the site shows the
+# new version). Static files only: no analytics, the font served from the site itself. One step at publish time: the
+# latest app release's version is written into the pages (where they say <!--version-->).
 name: pages
 
 on:
   push:
     branches: [main]
     paths: ["site/**", ".github/workflows/pages.yml"]
+  # A release is published by release.yml with the workflow's own token, which starts no other workflow; its finishing
+  # does.
+  workflow_run:
+    workflows: [release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +31,19 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: the latest version in the pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # App releases are tagged v<version>; model releases (model-v3...) are left out.
+          tag="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 50 --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]"))][0].tagName // empty')"
+          if [ -z "$tag" ]; then echo "No app release yet: the pages say only \"What's new\"."; exit 0; fi
+          version="${tag#v}"
+          sed -i "s|<!--version-->|Version $version · |" site/index.html
+          sed -i "s|<!--version-->|الإصدار $version · |" site/ar/index.html
+          grep -c "$version" site/index.html site/ar/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
