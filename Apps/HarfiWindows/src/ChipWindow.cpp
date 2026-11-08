@@ -103,30 +103,31 @@ void ChipWindow::Arrange(const RECT &text) {
 void ChipWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
     Gdiplus::Font arabic = ArabicFont(), number = NumberFont(), quiet = QuietFont();
     float radius = static_cast<float>(Scaled(8));
+    // One chip is lit at a time: the one under the mouse while it is over a chip, else the chosen one (the arrows').
+    int lit = hovered_;
+    for (size_t i = 0; lit < 0 && i < chips_.size(); ++i) {
+        if (chips_[i].selected) lit = static_cast<int>(i);
+    }
     for (size_t i = 0; i < chips_.size(); ++i) {
         const Chip &chip = chips_[i];
+        bool on = static_cast<int>(i) == lit;
         bool framed = chip.style == Style::Spelling || chip.style == Style::Quiet;
         if (framed) {
-            bool hovered = static_cast<int>(i) == hovered_;
             Gdiplus::RectF box = chip.box;
             box.Inflate(-0.5f, -0.5f);
             Gdiplus::GraphicsPath pill;
             RoundedRect(pill, box, radius);
-            COLORREF fill = chip.selected || hovered ? colours.accentSoft : colours.surface;
-            Gdiplus::SolidBrush brush(Colour(fill, chip.selected ? 255 : hovered ? 150 : 255));
+            Gdiplus::SolidBrush brush(Colour(on ? colours.accentSoft : colours.surface));
             graphics.FillPath(&brush, &pill);
-            Gdiplus::Pen pen(chip.selected ? Colour(colours.accent) : hovered ? Colour(colours.accent, 140)
-                                                                             : Colour(colours.border),
-                             1.f);
+            Gdiplus::Pen pen(Colour(on ? colours.accent : colours.border), 1.f);
             graphics.DrawPath(&pen, &pill);
         }
         switch (chip.style) {
             case Style::Spelling:
                 if (!chip.number.empty()) {
-                    Write(graphics, chip.number, number, chip.selected ? colours.accent : colours.muted, chip.numberBox,
-                          false);
+                    Write(graphics, chip.number, number, on ? colours.accent : colours.muted, chip.numberBox, false);
                 }
-                Write(graphics, chip.label, arabic, chip.selected ? colours.accent : colours.text, chip.labelBox, true);
+                Write(graphics, chip.label, arabic, on ? colours.accent : colours.text, chip.labelBox, true);
                 break;
             case Style::Current:  // amber with a dashed line when it looks wrong
                 Write(graphics, chip.label, arabic, chip.doubtful ? colours.warning : colours.muted, chip.labelBox, true);
