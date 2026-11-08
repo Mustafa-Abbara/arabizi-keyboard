@@ -32,6 +32,7 @@ private:
         Gdiplus::RectF box;  // the word's room in the line, from the line's highest letter to its lowest
     };
     float baseline_ = 0;  // shared by every word, so Arabic and Latin sit on one line
+    int selected_ = -1;   // the highlighted word, drawn in white on the cedar highlight
 
     std::vector<Run> runs_;
     std::function<void()> paused_;

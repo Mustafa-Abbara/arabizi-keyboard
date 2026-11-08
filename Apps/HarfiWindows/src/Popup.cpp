@@ -41,6 +41,19 @@ Gdiplus::FontFamily *LatinFamily() {
     return family;
 }
 
+Gdiplus::FontFamily *IconFamily() {
+    StartGdiplus();
+    static Gdiplus::FontFamily *family = []() -> Gdiplus::FontFamily * {
+        for (const wchar_t *name : {L"Segoe Fluent Icons", L"Segoe MDL2 Assets"}) {
+            auto *found = new Gdiplus::FontFamily(name);
+            if (found->IsAvailable()) return found;
+            delete found;
+        }
+        return nullptr;
+    }();
+    return family;
+}
+
 namespace {
 // Tight, unwrapped and centred text (GDI+ formats cannot be copied, so they are set up in place).
 void Configure(Gdiplus::StringFormat &format, bool rtl, bool top = false) {
@@ -53,28 +66,32 @@ void Configure(Gdiplus::StringFormat &format, bool rtl, bool top = false) {
     format.SetLineAlignment(top ? Gdiplus::StringAlignmentNear : Gdiplus::StringAlignmentCenter);
 }
 
-// The font's family and style, and a size in its design units scaled to the font's pixels.
-float FontUnits(const Gdiplus::Font &font, UINT16 (Gdiplus::FontFamily::*metric)(INT) const) {
-    Gdiplus::FontFamily family;
-    font.GetFamily(&family);
+// A size in the family's design units scaled to the font's pixels. The family is passed in, never asked of the font:
+// Font::GetFamily hands back the family the font uses, and freeing that copy freed it under the font (a crash in
+// Store apps, whose heap stops on a double free).
+float FontUnits(const Gdiplus::Font &font, const Gdiplus::FontFamily *family,
+                UINT16 (Gdiplus::FontFamily::*metric)(INT) const) {
     INT style = font.GetStyle();
-    UINT16 em = family.GetEmHeight(style);
-    return em ? font.GetSize() * (family.*metric)(style) / em : font.GetSize();
+    UINT16 em = family->GetEmHeight(style);
+    return em ? font.GetSize() * (family->*metric)(style) / em : font.GetSize();
 }
 }  // namespace
 
-float Ascent(const Gdiplus::Font &font) { return FontUnits(font, &Gdiplus::FontFamily::GetCellAscent); }
+float Ascent(const Gdiplus::Font &font, const Gdiplus::FontFamily *family) {
+    return FontUnits(font, family, &Gdiplus::FontFamily::GetCellAscent);
+}
 
-float LineHeight(const Gdiplus::Font &font) { return FontUnits(font, &Gdiplus::FontFamily::GetLineSpacing); }
+float LineHeight(const Gdiplus::Font &font, const Gdiplus::FontFamily *family) {
+    return FontUnits(font, family, &Gdiplus::FontFamily::GetLineSpacing);
+}
 
-Gdiplus::RectF Ink(const std::wstring &text, const Gdiplus::Font &font, bool rtl, float width) {
-    Gdiplus::FontFamily family;
-    font.GetFamily(&family);
+Gdiplus::RectF Ink(const std::wstring &text, const Gdiplus::Font &font, const Gdiplus::FontFamily *family, bool rtl,
+                   float width) {
     Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
     Configure(format, rtl, true);
     Gdiplus::GraphicsPath path;
-    Gdiplus::RectF layout(0, -Ascent(font), width, LineHeight(font));
-    path.AddString(text.c_str(), static_cast<INT>(text.size()), &family, font.GetStyle(), font.GetSize(), layout,
+    Gdiplus::RectF layout(0, -Ascent(font, family), width, LineHeight(font, family));
+    path.AddString(text.c_str(), static_cast<INT>(text.size()), family, font.GetStyle(), font.GetSize(), layout,
                    &format);
     Gdiplus::RectF bounds;
     path.GetBounds(&bounds);
@@ -82,11 +99,12 @@ Gdiplus::RectF Ink(const std::wstring &text, const Gdiplus::Font &font, bool rtl
 }
 
 void WriteOnBaseline(Gdiplus::Graphics &graphics, const std::wstring &text, const Gdiplus::Font &font,
-                     COLORREF colour, float x, float width, float baseline, bool rtl) {
+                     const Gdiplus::FontFamily *family, COLORREF colour, float x, float width, float baseline,
+                     bool rtl) {
     Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
     Configure(format, rtl, true);
     Gdiplus::SolidBrush brush(Colour(colour));
-    Gdiplus::RectF box(x, baseline - Ascent(font), width, LineHeight(font));
+    Gdiplus::RectF box(x, baseline - Ascent(font, family), width, LineHeight(font, family));
     graphics.DrawString(text.c_str(), static_cast<INT>(text.size()), &font, box, &format, &brush);
 }
 

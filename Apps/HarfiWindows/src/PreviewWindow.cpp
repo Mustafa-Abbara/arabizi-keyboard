@@ -6,7 +6,9 @@ const int PadX = 14, PadY = 8, LineGap = 5;  // LineGap: room under the text for
 const ULONGLONG GlideTime = 180;             // ms, as on the Mac
 
 Gdiplus::Font ArabicFont() { return Gdiplus::Font(ArabicFamily(), static_cast<float>(Scaled(22)), 0, Gdiplus::UnitPixel); }
-Gdiplus::Font LatinFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(16)), 0, Gdiplus::UnitPixel); }
+Gdiplus::Font LatinFont() {  // italic: the Latin typed since, not yet converted
+    return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(16)), Gdiplus::FontStyleItalic, Gdiplus::UnitPixel);
+}
 Gdiplus::Font HintFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(12)), 0, Gdiplus::UnitPixel); }
 
 bool Same(const Gdiplus::RectF &a, const Gdiplus::RectF &b) {
@@ -44,15 +46,15 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
         float w = Measure(run.text, font, rtl).Width;
         widths.push_back(w);
         width += w + (widths.size() > 1 ? (run.kind == Kind::Hint ? 3 * space : space) : 0);
-        Gdiplus::RectF ink = Ink(run.text, font, rtl, w);
+        Gdiplus::RectF ink = Ink(run.text, font, rtl ? ArabicFamily() : LatinFamily(), rtl, w);
         if (ink.Height <= 0) continue;
         high = any ? (ink.Y < high ? ink.Y : high) : ink.Y;
         low = any ? (ink.GetBottom() > low ? ink.GetBottom() : low) : ink.GetBottom();
         any = true;
     }
     if (!any) {  // nothing drawn: the Arabic font's own line
-        high = -Ascent(arabicFont);
-        low = LineHeight(arabicFont) + high;
+        high = -Ascent(arabicFont, ArabicFamily());
+        low = LineHeight(arabicFont, ArabicFamily()) + high;
     }
     float height = low - high;
     SIZE content = {static_cast<LONG>(width + 0.99f) + 2 * Scaled(PadX),
@@ -67,6 +69,7 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
 
     // The highlight: fades in on the first word, then glides to the next one.
     ULONGLONG now = GetTickCount64();
+    selected_ = selected >= 0 && selected < static_cast<int>(runs_.size()) ? selected : -1;
     if (selected >= 0 && selected < static_cast<int>(runs_.size())) {
         Gdiplus::RectF to = runs_[selected].box;
         to.Inflate(static_cast<float>(Scaled(5)), static_cast<float>(Scaled(4)));
@@ -105,24 +108,32 @@ bool PreviewWindow::Animate(ULONGLONG now) {
 }
 
 void PreviewWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
-    if (highlight_ && opacity_ > 0) {  // a clear cedar outline and fill, under the letters
+    if (highlight_ && opacity_ > 0) {  // solid cedar under the word being fixed, fading in, then gliding
         Gdiplus::GraphicsPath pill;
         RoundedRect(pill, shown_, static_cast<float>(Scaled(6)));
-        Gdiplus::SolidBrush fill(Colour(colours.accent, static_cast<int>(46 * opacity_)));
+        Gdiplus::SolidBrush fill(Colour(colours.accent, static_cast<int>(255 * opacity_)));
         graphics.FillPath(&fill, &pill);
-        Gdiplus::Pen outline(Colour(colours.accent, static_cast<int>(230 * opacity_)), 1.5f * Scaled(1));
-        graphics.DrawPath(&outline, &pill);
     }
     Gdiplus::Font arabicFont = ArabicFont(), latinFont = LatinFont(), hintFont = HintFont();
-    for (const Run &run : runs_) {
+    for (size_t i = 0; i < runs_.size(); ++i) {
+        const Run &run = runs_[i];
         float x = run.box.X, w = run.box.Width;
+        // White on the highlight once it has (nearly) arrived under the word.
+        bool onCedar = highlight_ && static_cast<int>(i) == selected_ && opacity_ > 0.5f && !gliding_;
         switch (run.kind) {
-            case Kind::Arabic: WriteOnBaseline(graphics, run.text, arabicFont, colours.text, x, w, baseline_, true); break;
-            case Kind::Latin: WriteOnBaseline(graphics, run.text, latinFont, colours.muted, x, w, baseline_, false); break;
-            case Kind::Hint: WriteOnBaseline(graphics, run.text, hintFont, colours.accent, x, w, baseline_, false); break;
+            case Kind::Arabic:
+                WriteOnBaseline(graphics, run.text, arabicFont, ArabicFamily(), onCedar ? colours.onAccent : colours.text,
+                                x, w, baseline_, true);
+                break;
+            case Kind::Latin:
+                WriteOnBaseline(graphics, run.text, latinFont, LatinFamily(), colours.latin, x, w, baseline_, false);
+                break;
+            case Kind::Hint:
+                WriteOnBaseline(graphics, run.text, hintFont, LatinFamily(), colours.accent, x, w, baseline_, false);
+                break;
         }
-        if (run.doubtful) {  // a dashed line below the lowest letters: this word may be wrong
-            Gdiplus::Pen dashes(Colour(colours.warning), 1.5f * Scaled(1));
+        if (run.doubtful && !onCedar) {  // a dashed amber line below the lowest letters: this word may be wrong
+            Gdiplus::Pen dashes(Colour(colours.warningLine), 1.5f * Scaled(1));
             Gdiplus::REAL pattern[] = {2.7f, 2.f};
             dashes.SetDashPattern(pattern, 2);
             dashes.SetDashCap(Gdiplus::DashCapRound);
