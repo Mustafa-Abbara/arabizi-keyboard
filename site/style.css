@@ -1,0 +1,117 @@
+/* Harfi's website: shared by the English page (index.html) and the Arabic one (ar/index.html). */
+@font-face { font-family: "Naskh"; src: url("fonts/NotoNaskhArabic-Variable.ttf") format("truetype"); font-display: swap; }
+:root {
+  --bg: #F6F3EC; --surface: #FFFFFF; --text: #1E2A25; --muted: #6B756F; --border: #E4DFD4;
+  --accent: #2F6B5A; --accent-soft: #E2EEE8; --on-accent: #FFFFFF;
+}
+/* Dark: the system's choice, unless the visitor picked light or dark with the header button (data-theme). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #151B19; --surface: #1D2522; --text: #E9EEEB; --muted: #93A099; --border: #2C3632;
+          --accent: #7DBBA5; --accent-soft: #21392F; --on-accent: #10201A; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #151B19; --surface: #1D2522; --text: #E9EEEB; --muted: #93A099; --border: #2C3632;
+        --accent: #7DBBA5; --accent-soft: #21392F; --on-accent: #10201A; color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); transition: background-color .25s ease, color .25s ease;
+       font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+/* The Arabic page: the system's Arabic sans for reading (SF Arabic, Segoe UI), Naskh for the Arabic on show. */
+html[lang="ar"] body { font-size: 18px; line-height: 1.75; }
+html[lang="ar"] h1, html[lang="ar"] h2 { letter-spacing: 0; }
+.ar { font-family: "Naskh", "Geeza Pro", serif; direction: rtl; }
+.ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+main { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+a { color: var(--accent); }
+code { font-size: .92em; }
+
+header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 22px 0; }
+.logo { font-weight: 600; font-size: 20px; display: flex; gap: 10px; align-items: center; color: var(--text); text-decoration: none; }
+.logo img { width: 32px; height: 32px; }
+.logo .ar { font-size: 24px; color: var(--accent); line-height: 1; }
+nav { display: flex; align-items: center; gap: 14px; }
+header nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
+header nav a:hover { color: var(--text); }
+.theme { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
+         border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 0; }
+.theme:hover { color: var(--accent); }
+.theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme svg { width: 18px; height: 18px; }
+.theme .moon, .dark-now .theme .sun { display: none; }
+.dark-now .theme .moon { display: block; }
+
+.hero { text-align: center; padding: 56px 0 40px; }
+.demo { display: inline-block; min-width: min(560px, 100%); background: var(--surface); border: 1px solid var(--border);
+        border-radius: 16px; padding: 22px 28px; box-shadow: 0 10px 30px rgba(0,0,0,.06); }
+.typed { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); font-size: 17px; min-height: 1.6em; direction: ltr; }
+.caret { display: inline-block; width: 2px; height: 1.1em; background: var(--accent); vertical-align: -0.15em;
+         margin-left: 2px; animation: blink 1s steps(1) infinite; }
+.arabic { font-size: clamp(30px, 6vw, 44px); line-height: 1.5; min-height: 1.5em; margin-top: 6px;
+          transition: opacity .35s ease, transform .35s ease; }
+.arabic.hidden { opacity: 0; transform: translateY(6px); }
+h1 { font-size: clamp(32px, 6vw, 48px); line-height: 1.15; margin: 34px 0 10px; letter-spacing: -0.02em; }
+html[lang="ar"] h1 { line-height: 1.35; }
+.lead { color: var(--muted); font-size: 19px; margin: 0 auto 28px; max-width: 34em; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.button { display: inline-block; background: var(--accent); color: var(--on-accent); border-radius: 12px;
+          padding: 13px 26px; font-weight: 600; text-decoration: none; }
+.button:hover { filter: brightness(1.06); }
+.button.secondary { background: var(--surface); color: var(--accent); border: 1px solid var(--border); }
+.note { color: var(--muted); font-size: 14px; margin-top: 10px; }
+.version a { color: var(--muted); }
+.version a:hover { color: var(--accent); }
+.badge { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent);
+         background: var(--accent-soft); border-radius: 6px; padding: 2px 7px; vertical-align: 2px; }
+
+section { padding: 34px 0; }
+h2 { font-size: 24px; margin: 0 0 18px; }
+.promises { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.card h3 { margin: 0 0 6px; font-size: 18px; }
+.card p { margin: 0; color: var(--muted); font-size: 16px; }
+.card .ar { color: var(--text); }
+
+.tabs { display: inline-flex; gap: 4px; background: var(--surface); border: 1px solid var(--border);
+        border-radius: 12px; padding: 4px; margin-bottom: 14px; }
+.tabs button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 15px; font-weight: 600;
+               border-radius: 9px; padding: 7px 16px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.js .platform[hidden] { display: none; }
+.platform + .platform { margin-top: 16px; }
+.js .platform + .platform { margin-top: 0; }
+.platform h3 { margin: 0 0 8px; font-size: 18px; }
+.js .platform h3 { display: none; }
+
+.install { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+.install > p:first-of-type { margin: 0; }
+.cmd { display: flex; gap: 10px; align-items: center; background: var(--bg); border: 1px solid var(--border);
+       border-radius: 10px; padding: 12px 14px; margin: 12px 0; direction: ltr; }
+.cmd code { flex: 1; min-width: 0; font-size: 14px; overflow-x: auto; white-space: nowrap; }
+.cmd button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+              padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+ol { padding-inline-start: 1.3em; margin: 8px 0 0; }
+ol li { margin: 6px 0; }
+/* A menu path (in English) inside Arabic text: its own left-to-right box, so it wraps in reading order. */
+.path { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+kbd { font: 14px ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--border); border-bottom-width: 2px;
+      border-radius: 6px; padding: 1px 6px; background: var(--surface); direction: ltr; unicode-bidi: isolate; }
+.keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
+.keys dd { margin: 0; color: var(--muted); }
+
+/* Questions: each answer opens under its question. */
+.faq { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.faq details { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 0 20px; }
+.faq summary { cursor: pointer; font-weight: 600; padding: 16px 0; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; color: var(--accent); font-weight: 400; font-size: 22px; line-height: 1; transition: transform .2s ease; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.faq details > *:not(summary) { margin: 0 0 16px; color: var(--muted); }
+.faq .cmd { color: var(--text); }
+
+footer { color: var(--muted); font-size: 14px; padding: 36px 0 50px; border-top: 1px solid var(--border); margin-top: 20px; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .caret { animation: none; } .arabic, body, .faq summary::after { transition: none; }
+}

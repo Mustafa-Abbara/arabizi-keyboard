@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <title>Harfi</title>
+  <clipPath id="tile"><rect width="100" height="100"/></clipPath>
+  <linearGradient id="fold" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#0F2F27"/><stop offset=".55" stop-color="#2F6B5A"/><stop offset="1" stop-color="#9FD3BF"/>
+  </linearGradient>
+  <g clip-path="url(#tile)">
+    <rect width="100" height="100" fill="#F1EADB"/>
+    <path d="M-2 -2H61C49 30 43 60 27 102H-2Z" fill="#2F6B5A"/>
+    <path d="M61 -2C49 30 43 60 27 102C43 74 60 56 72 40C68 26 64 12 61 -2Z" fill="url(#fold)"/>
+  </g>
+  <path d="M13.5 37H33.5L21.5 62" fill="none" stroke="#CFE3DA" stroke-width="5.8" stroke-linejoin="miter"/>
+  <path transform="translate(59.28 69) scale(0.04 -0.04)" d="M360 -287Q236 -287 168.5 -224.0Q101 -161 101 -42Q101 20 131.5 81.5Q162 143 216 190Q243 213 272.5 231.0Q302 249 333 261Q321 266 295.5 274.5Q270 283 242.0 290.0Q214 297 192 297Q162 297 140.5 289.5Q119 282 83 259Q77 264 72.5 274.5Q68 285 68 297Q68 335 101.5 358.0Q135 381 189 381Q232 381 273.5 370.0Q315 359 357 346Q399 333 442.0 322.0Q485 311 531 311L597 313L568 236Q559 235 549.5 234.0Q540 233 530.5 232.5Q521 232 512 232Q471 229 424.0 216.5Q377 204 332.5 184.0Q288 164 251 138Q196 100 166.0 54.0Q136 8 136 -42Q136 -94 161.0 -130.5Q186 -167 236.5 -186.0Q287 -205 363 -205Q425 -205 486.0 -197.5Q547 -190 607 -177L619 -210Q570 -237 525.5 -254.0Q481 -271 440.0 -279.0Q399 -287 360 -287Z" fill="#2F6B5A"/>
+</svg>
