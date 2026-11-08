@@ -333,6 +333,19 @@ TextService::Field TextService::ReadField(ITfContext *context, bool wantSelectio
         if (empty && lastCommitEnd_ && !composition_) {
             BOOL same = FALSE;
             lastCommitEnd_->IsEqualStart(cookie, selection.range, TF_ANCHOR_START, &same);
+            // Only while the converted text is still just before the cursor: a chat app empties its box after Enter,
+            // and ↑ there is the app's (edit the last message), with nothing left to fix.
+            ITfRange *before = nullptr;
+            if (same && !lastCommitText_.empty() && SUCCEEDED(selection.range->Clone(&before))) {
+                LONG wanted = static_cast<LONG>(lastCommitText_.size()), moved = 0;
+                WCHAR text[1024];
+                ULONG length = 0;
+                same = wanted <= static_cast<LONG>(ARRAYSIZE(text)) &&
+                       SUCCEEDED(before->ShiftStart(cookie, -wanted, &moved, nullptr)) && moved == -wanted &&
+                       SUCCEEDED(before->GetText(cookie, 0, text, ARRAYSIZE(text), &length)) &&
+                       std::wstring(text, length) == lastCommitText_;
+                before->Release();
+            }
             field.atLastConversion = same != FALSE;
         }
         if (wantSelection && !empty) {
@@ -369,13 +382,19 @@ bool TextService::Decide(ITfContext *context, WPARAM wParam, LPARAM lParam) {
     std::string key = KeyJson(wParam, lParam);
     decidedJson_ = key;
     Field field = ReadField(context, key == R"({"key":"convertSelection"})");
+    // ↑ right after a conversion, with the cursor still just after it, fixes a word in it (as Alt+Tab does; Windows
+    // keeps Alt+Tab for switching windows, so it rarely reaches a keyboard). Anywhere else ↑ is the app's.
+    bool upFixes = key == R"({"key":"arrowUp"})" && field.atLastConversion && core_->Buffer().empty() &&
+                   GetTickCount64() >= resentUpUntil_;
+    if (upFixes) key = decidedJson_ = R"({"key":"suggest"})";
     key.pop_back();  // the closing brace: the field's context goes in the same object
     if (field.secure) key += R"(,"secureInput":true)";
     if (field.atLastConversion) key += R"(,"cursorAtLastConversion":true)";
     if (!field.selected.empty()) key += R"(,"selectedText":)" + JsonQuote(Narrow(field.selected));
     wasComposing_ = !core_->Buffer().empty();
-    if (decidedJson_ == R"({"key":"suggest"})") Count(L"fixHintUses");  // Alt+Tab used: the tip is less needed
+    if (decidedJson_ == R"({"key":"suggest"})") Count(L"fixHintUses");  // ↑ or Alt+Tab used: the tip is less needed
     decision_ = core_->Key(key + "}");
+    if (upFixes && decision_.effect == "consume") decision_.effect = "pass";  // nothing to fix: the app's ↑ after all
     if (field.secure && decision_.effect == "pass") {
         // A password or PIN: never composed, but typed as the Latin key, not as the Arabic (101) layout under Harfi.
         std::string typed = JsonString(decidedJson_, "text");
@@ -406,7 +425,10 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext *context, WPARAM wParam, LPARAM l
     decided_ = false;
     // "Insert the text, then let the app have the key" (an arrow or a click key while typing): the text is in, so
     // the same key is sent once more; the composer is empty now and lets it through to the app.
-    if (*eaten && decision_.effect == "commitAndPass") Resend(wParam, lParam);
+    if (*eaten && decision_.effect == "commitAndPass") {
+        if (wParam == VK_UP) resentUpUntil_ = GetTickCount64() + 500;  // it arrives in a moment, as a new key
+        Resend(wParam, lParam);
+    }
     return S_OK;
 }
 
@@ -540,18 +562,18 @@ void TextService::UpdateBoxes(ITfContext *context, TfEditCookie cookie, const Ef
         return;
     }
     // Sent with a word the model was unsure of (ADR 0034): point at it, every time there is one, since only the user
-    // knows how a word the model never saw is written. Alt+Tab starts on the doubtful word.
+    // knows how a word the model never saw is written. ↑ (or Alt+Tab) starts on the doubtful word.
     if (key == R"({"key":"enter"})" && kind == "commit" && !effect.unsureWord.empty()) {
-        chips_.ShowHint(L"Not sure about " + effect.unsureWord + L"  ·  Alt+Tab to fix it", TextRect(context, cookie),
+        chips_.ShowHint(L"Not sure about " + effect.unsureWord + L"  ·  ↑ to fix it", TextRect(context, cookie),
                         4000);
         return;
     }
-    // After a conversion, a one-line tip that Alt+Tab fixes a word: the first few times only, and no more once
-    // Alt+Tab has been used a few times.
+    // After a conversion, a one-line tip that ↑ fixes a word: the first few times only, and no more once
+    // ↑ or Alt+Tab has fixed a word a few times.
     if (key == R"({"key":"enter"})" && kind == "commit" && Counter(L"fixHintShown") < FixHintTimes &&
         Counter(L"fixHintUses") < FixHintUses) {
         Count(L"fixHintShown");
-        chips_.ShowHint(L"Not quite? Alt+Tab to fix a word", TextRect(context, cookie));
+        chips_.ShowHint(L"Not quite? ↑ to fix a word", TextRect(context, cookie));
     }
 }
 
@@ -626,7 +648,7 @@ void TextService::Underline(ITfContext *context, TfEditCookie cookie, ITfRange *
 }
 
 // Shows `text` underlined at the cursor, starting a composition if there is none; it takes the place of the
-// `replacingLength` UTF-16 units before the cursor (the converted text, for Ctrl+Z and Alt+Tab). An empty `text`
+// `replacingLength` UTF-16 units before the cursor (the converted text, for Ctrl+Z, and ↑ or Alt+Tab after converting). An empty `text`
 // ends the composition, so the app never holds an empty one.
 void TextService::SetComposition(ITfContext *context, TfEditCookie cookie, const std::wstring &text,
                                  int replacingLength) {
@@ -703,6 +725,7 @@ void TextService::Commit(ITfContext *context, TfEditCookie cookie, const std::ws
     if (!end) return;
     if (!text.empty() && SUCCEEDED(end->Clone(&lastCommitEnd_))) {
         lastCommitEnd_->SetGravity(cookie, TF_GRAVITY_BACKWARD, TF_GRAVITY_BACKWARD);  // stays right after the text
+        lastCommitText_ = text;
     }
     end->Release();
 }
