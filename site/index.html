@@ -11,10 +11,23 @@
     --bg: #F6F3EC; --surface: #FFFFFF; --text: #1E2A25; --muted: #6B756F; --border: #E4DFD4;
     --accent: #2F6B5A; --accent-soft: #E2EEE8; --on-accent: #FFFFFF;
   }
+  /* Dark: the system's choice, unless the visitor picked light or dark with the header button (data-theme). */
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #151B19; --surface: #1D2522; --text: #E9EEEB; --muted: #93A099; --border: #2C3632;
-            --accent: #7DBBA5; --accent-soft: #21392F; --on-accent: #10201A; }
+    :root:not([data-theme="light"]) { --bg: #151B19; --surface: #1D2522; --text: #E9EEEB; --muted: #93A099; --border: #2C3632;
+            --accent: #7DBBA5; --accent-soft: #21392F; --on-accent: #10201A; color-scheme: dark; }
   }
+  :root[data-theme="dark"] { --bg: #151B19; --surface: #1D2522; --text: #E9EEEB; --muted: #93A099; --border: #2C3632;
+          --accent: #7DBBA5; --accent-soft: #21392F; --on-accent: #10201A; color-scheme: dark; }
+  :root[data-theme="light"] { color-scheme: light; }
+  body { transition: background-color .25s ease, color .25s ease; }
+  nav { display: flex; align-items: center; gap: 14px; }
+  .theme { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
+           border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 0; }
+  .theme:hover { color: var(--accent); }
+  .theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .theme svg { width: 18px; height: 18px; }
+  .theme .moon, .dark-now .theme .sun { display: none; }
+  .dark-now .theme .moon { display: block; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.6;
          font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
@@ -83,12 +96,22 @@
   @keyframes blink { 50% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .caret { animation: none; } .arabic { transition: none; } }
 </style>
+<script>
+  // Before the page is drawn: the theme the visitor picked earlier, if any (stored in this browser only).
+  try { const saved = localStorage.getItem("theme"); if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved; } catch {}
+</script>
 </head>
 <body>
 <main>
   <header>
     <div class="logo"><span class="ar" lang="ar">حرفي</span><span>Harfi</span></div>
-    <nav><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard">GitHub</a></nav>
+    <nav>
+      <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard">GitHub</a>
+      <button type="button" class="theme" id="theme" aria-label="Dark mode" aria-pressed="false" hidden>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </nav>
   </header>
 
   <div class="hero">
@@ -170,7 +193,7 @@
   <footer>
     Harfi is a student project (EECE 503N/798S, Fall 2026), open source on <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard">GitHub</a>.
     Built with Llama: the conversion model is a fine-tune of Llama 3.2 1B Instruct, licensed under the Llama 3.2 Community License.
-    Arabic set in Noto Naskh Arabic (SIL Open Font License). This page uses no cookies and no trackers.
+    Arabic set in Noto Naskh Arabic (SIL Open Font License). This page uses no cookies and no trackers; your light or dark choice is remembered in your browser only.
   </footer>
 </main>
 <script>
@@ -198,6 +221,24 @@
     }
   }
   if (!still) play();
+
+  // Light or dark: the system's choice until the visitor presses the header button, then theirs (remembered in this
+  // browser). The icon shows the theme now in use; without scripts the page follows the system.
+  const root = document.documentElement, themeButton = document.getElementById("theme");
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+  const isDark = () => root.dataset.theme ? root.dataset.theme === "dark" : systemDark.matches;
+  function paintTheme() {
+    root.classList.toggle("dark-now", isDark());
+    themeButton.setAttribute("aria-pressed", String(isDark()));
+  }
+  themeButton.hidden = false;
+  paintTheme();
+  systemDark.addEventListener("change", paintTheme);
+  themeButton.addEventListener("click", () => {
+    root.dataset.theme = isDark() ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+    paintTheme();
+  });
 
   // Mac or Windows: the install steps and keys for one at a time, chosen from the visitor's system (Mac when it is
   // neither), switched with the tabs or the hero's buttons. Without scripts both are shown, one after the other.
