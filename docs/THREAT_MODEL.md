@@ -1,6 +1,6 @@
 # Threat model
 
-Harfi is an input method: it sees every key typed while it is selected. The design goal is that what a user types never leaves their Mac and is never written down, and that a broken or tampered part fails safe (rules or Latin text, never a leak). As of 1 Nov 2026 (v0.1.0).
+Harfi is an input method: it sees every key typed while it is selected. The design goal is that what a user types never leaves their Mac and is never written down, and that a broken or tampered part fails safe (rules or Latin text, never a leak). As of 1 Nov 2026 (v0.1.0); the Windows keyboard has [its own section](#windows-adr-0032).
 
 ## What data exists, and where it goes
 
@@ -36,3 +36,44 @@ There is no telemetry, no crash reporting to a server, no update check and no ac
 ## What this model does not cover
 
 Malware with root or the user's privileges (it can read keys before any input method), a compromised macOS, and screen recording by other apps.
+
+## Windows (ADR 0032)
+
+The same goal on Windows: what a user types never leaves the PC and is never written down, and a broken or tampered part fails safe. The parts differ: the keyboard is a TSF text service (`HarfiTIP.dll`) loaded into every app the user types in, and the model runs in its own process, `harfi-engine.exe`, reached over a named pipe. As of 7 Nov 2026.
+
+### What data exists, and where it goes
+
+| Data | Where it lives | Leaves the PC? |
+|---|---|---|
+| Text being typed (Latin and its Arabic) | Memory of the keyboard in the app being typed in, and of the engine for the request; the live preview keeps the engine's last 16 conversions per app in memory | Never. Not logged, not stored |
+| Corrections, and habits the user refused (ADR 0027, 0033) | `%LOCALAPPDATA%\Harfi\words\corrections.bin` and `refused.bin`, AES-GCM encrypted (swift-crypto), entries older than 30 days dropped; the key in `corrections.key` beside them. The installer gives `words\` owner-only access (the account and SYSTEM). `install.ps1 -Uninstall` deletes them | Never. `harfi-words forget`, `refuse` and `wipe` change or delete them |
+| Tip counters | `HKCU\Software\Harfi` (how many times a tip was shown or a feature used: numbers only) | Never |
+| Engine log | `%LOCALAPPDATA%\Harfi\engine.log`: start, model state, each conversion's outcome and time | Only if the user shares it. Never the text |
+| Debug log (off unless `HKCU\Software\Harfi\DebugLog` is 1) | `%LOCALAPPDATA%\Harfi\debug.log`: lifecycle events and the app's name | Only if shared. Never the text |
+| Model and rule files | `%LOCALAPPDATA%\Harfi` | Downloaded once by `install.ps1`; nothing goes up |
+
+There is no telemetry, no crash reporting to a server, no update check and no account.
+
+### Boundaries
+
+- **Engine process:** runs as the user, **not sandboxed**. Its code makes no network calls, but unlike the Mac's XPC service nothing enforces it (an app container without the `internetClient` capability is the planned counterpart, ADR 0032).
+- **Engine pipe** `\\.\pipe\harfi-engine-<SID>`: named after the account's SID; open to that account, SYSTEM and app containers (read and write, also from low integrity), never to the network (`PIPE_REJECT_REMOTE_CLIENTS`). One engine per account.
+- **Keyboard in each app:** makes no network calls. Before writing to the pipe it checks that the process at the other end runs as this account (or, when that cannot be read, is its own `harfi-engine.exe`).
+- **Password and PIN fields:** fields whose input scope is a password or PIN are never composed; keys are typed as Latin.
+- **Installer:** the only network use. `install.ps1` downloads the model's parts from this repository's `model-v3` release over HTTPS and checks each part's SHA-256 and the whole file's against `config/models.json`.
+
+### Threats and answers
+
+| Threat | Answer | Residual risk |
+|---|---|---|
+| Typed text leaks (logs, files, network) | Nothing is logged or stored except single corrected words; the engine log and debug log hold outcomes and timings only; neither the keyboard nor the engine makes requests | The engine is not sandboxed: a future change that added a network call would not be blocked, only caught in review |
+| Another account on the PC takes the engine's pipe name to receive typed text | The pipe is named by SID, and the keyboard refuses a server that is not this account's engine; it then uses its own rules | Denial of service: that account can keep the real engine from starting, so the user gets the rules |
+| Another account, or a low-integrity process, uses the engine | Other accounts are not in the pipe's access list. Sandboxed and low-integrity processes of the same user may connect (so Store apps get the model), and can only ask for conversions | Such a process can keep the engine busy (slower conversions, no data exposed) |
+| Store apps or sandboxed processes read the corrections | `words\` is not readable by app containers (owner and SYSTEM only), though the rest of the keyboard's folder is, so the keyboard loads in Store apps | Not protected against software running as the same user: the key sits beside the record (as on the Mac; DPAPI would protect it from other accounts only) |
+| A file in the keyboard's folder replaced by software running as the user | Nothing checks the keyboard's DLLs at load; the engine checks the model's SHA-256 and refuses a different one | The folder is user-writable, and the installer also registers the keyboard machine-wide (for apps that load keyboards without COM), which elevated apps use too: same-user malware could replace `HarfiTIP.dll` and run inside an app running as administrator. Installing to Program Files (writable by administrators only) closes it: task 6, the real installer |
+| Tampered package | The `harfi-windows` package is built by GitHub Actions from the repository; the model is checked by SHA-256 | Nothing is code-signed: Windows cannot vouch for the files, SmartScreen may warn, and trust rests on the GitHub account and repository |
+| Supply chain (llama.cpp, Swift packages) | llama.cpp is built from source at release b11429 (the Mac's pin), fetched by tag; Swift packages are resolved from their repositories | A tag can be moved upstream: CI should check out commit `d81235049` itself, not the tag |
+
+### What this does not cover on Windows
+
+Malware running as the user or as administrator (it can read keys before any input method), a compromised Windows, other apps recording the screen, and backups or sync tools the user points at `%LOCALAPPDATA%` (Windows has no per-folder "exclude from backup" flag like the Mac's).
