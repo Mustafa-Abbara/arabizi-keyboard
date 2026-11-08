@@ -81,7 +81,11 @@ if ($source -ne (Resolve-Path $target).Path.TrimEnd("\")) {
     # renamed. Move those aside (and remove the ones earlier installs moved aside, once nothing uses them any more).
     Get-ChildItem $target -Recurse -File -Filter "*.old" | Remove-Item -Force -ErrorAction SilentlyContinue
     Get-ChildItem $source -Recurse -File | Where-Object { $_.Extension -notin ".log", ".old" } | ForEach-Object {
-        $existing = Join-Path $target $_.FullName.Substring($source.Length + 1)
+        $relative = $_.FullName.Substring($source.Length + 1)
+        # Never the learned words: a package holds none, and a key in a build folder (from testing there) must not
+        # replace the user's, which would make their record unreadable.
+        if ($relative -like "words\*") { return }
+        $existing = Join-Path $target $relative
         if ($_.Extension -eq ".gguf" -and (Test-Path $existing) -and (Get-Item $existing).Length -eq $_.Length) {
             return  # the same model is already there: 808 MB not copied again
         }
@@ -117,8 +121,12 @@ icacls $target /grant "*S-1-15-2-1:(OI)(CI)(RX)" /Q | Out-Null
 $words = Join-Path $target "words"
 New-Item -ItemType Directory -Force $words | Out-Null
 $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-icacls $words /inheritance:r /grant:r "*${me}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" /T /Q | Out-Null
-icacls $words /remove:g "*S-1-15-2-1" /T /Q | Out-Null
+# On the folder only: with /T, /inheritance:r also stripped the files inside, whose grants (folder flags) do not
+# apply to a file, which left the key with no access at all and nothing could be recorded. The files then take the
+# folder's access.
+icacls $words /inheritance:r /grant:r "*${me}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" /Q | Out-Null
+icacls $words /remove:g "*S-1-15-2-1" /Q | Out-Null
+if (Get-ChildItem $words -Force) { icacls (Join-Path $words "*") /reset /T /Q | Out-Null }
 if (-not (Register "/s `"$dll`"")) { Write-Host "Registration failed."; exit 1 }
 Write-Host @"
 Harfi is installed in $target.
