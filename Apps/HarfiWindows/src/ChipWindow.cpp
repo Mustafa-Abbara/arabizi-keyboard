@@ -166,15 +166,13 @@ void ChipWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
                 WriteOnBaseline(graphics, chip.label, arabic, ArabicFamily(), on ? colours.onAccent : colours.text,
                                 chip.labelBox.X, chip.labelBox.Width, baseline_, true);
                 break;
-            case Style::Current: {  // the word being fixed: white, a dashed outline, amber when it looks wrong
-                COLORREF ink = chip.doubtful ? colours.warning : colours.muted;
-                pill(chip, colours.chip, chip.doubtful ? colours.warningLine : colours.accentLine, true);
-                WriteOnBaseline(graphics, chip.label, arabic, ArabicFamily(), ink, chip.labelBox.X,
+            case Style::Current:  // the word being fixed: white with a dashed cedar outline and a cedar arrow
+                pill(chip, colours.chip, colours.accentLine, true);
+                WriteOnBaseline(graphics, chip.label, arabic, ArabicFamily(), colours.text, chip.labelBox.X,
                                 chip.labelBox.Width, baseline_, true);
-                WriteOnBaseline(graphics, L"←", quiet, LatinFamily(), ink, chip.numberBox.X, chip.numberBox.Width,
-                                baseline_, false);
+                WriteOnBaseline(graphics, L"←", quiet, LatinFamily(), colours.accent, chip.numberBox.X,
+                                chip.numberBox.Width, baseline_, false);
                 break;
-            }
             case Style::Quiet:  // "Spell it": a soft cedar chip with a pencil; solid cedar under the mouse
                 pill(chip, on ? colours.accent : colours.accentSoft, on ? colours.accent : colours.accentLine, false);
                 if (IconFamily() && chip.numberBox.Width > 0) {
