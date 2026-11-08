@@ -21,7 +21,7 @@ As on the Mac (the XPC service, ADR 0020), the model is never loaded inside the 
 
 On an x64 Windows 10 or 11 PC:
 
-1. Download the `harfi-windows` artifact from the latest CI run of the pull request (Actions → the run → Artifacts) and unzip it. It holds `HarfiTIP.dll`, `HarfiCoreC.dll`, `harfi-engine.exe`, the llama.cpp and Swift runtime DLLs, `rules\`, `config\` and `install.ps1`.
+1. Download `Harfi-Windows-x64.zip` from the [latest release](https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest) and extract it (right-click → Extract All); to try a pull request, take the `harfi-windows` artifact of its CI run instead (Actions → the run → Artifacts). It holds `HarfiTIP.dll`, `HarfiCoreC.dll`, `harfi-engine.exe`, the llama.cpp and Swift runtime DLLs, `rules\`, `config\` and `install.ps1`.
 2. Right-click `install.ps1` → **Run with PowerShell** (a normal PowerShell window, not a terminal inside a Store app such as Claude: Windows would put the files in that app's private storage, and the installer stops). It copies the files to `%LOCALAPPDATA%\Harfi`, downloads the model once (808 MB, from the `model-v3` release, each part checked), and registers the keyboard; if Windows needs administrator rights for that, it asks once.
 3. Settings → Time & language → Language & region → Arabic (Lebanon) → Language options → Add a keyboard → **Harfi**. Switch with Win+Space.
 4. Type `shu 3am ta3mel` in Notepad and press Enter: شو عم تعمل.
@@ -50,7 +50,7 @@ cd ../..
 swift build -c release --package-path Packages/ArabiziEngine --product harfi-engine -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 ```
 
-The CI job `windows` does the same, runs the core's tests on Windows, and puts the package together (without the model, which `install.ps1` downloads).
+The workflow `.github/workflows/windows.yml` does the same, runs the core's tests on Windows, and puts the package together (without the model, which `install.ps1` downloads): for every pull request as the `harfi-windows` artifact (ci.yml), and for a version tag as `Harfi-Windows-x64.zip` on its release, next to the Mac's zip (release.yml).
 
 ## Known gaps
 

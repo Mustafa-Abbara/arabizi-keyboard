@@ -97,6 +97,10 @@ if ($source -ne (Resolve-Path $target).Path.TrimEnd("\")) {
         Copy-Item -Force $_.FullName $existing
     }
 }
+# Files from a downloaded zip carry the internet's mark (Zone.Identifier), and a copy keeps it; the installed ones are
+# this user's own now.
+Get-ChildItem $target -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notlike (Join-Path $target "words\*") } | Unblock-File -ErrorAction SilentlyContinue
 $model = Get-Model $target
 if ($model) {
     $modelFile = Join-Path $target "models\$($model.file)"
