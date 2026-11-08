@@ -1,6 +1,8 @@
 # Publishes a Harfi release when a version tag (v0.1.0, ...) is pushed: the app without the model and its checksum
 # (scripts/package_release.sh). The model is published once, in its own release
 # (scripts/upload_model.sh), so app releases stay small. Ad-hoc signed, no Developer ID (docs/INSTALL.md).
+# Then the Windows keyboard (windows.yml) adds Harfi-Windows-x64.zip and its checksum to the same release; the
+# website's download link points at it (releases/latest/download/Harfi-Windows-x64.zip).
 name: release
 
 on:
@@ -30,3 +32,9 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/Harfi-*.zip dist/SHA256SUMS \
             --title "Harfi ${GITHUB_REF_NAME#v}" --notes-file docs/release-notes.md
+
+  windows:
+    needs: release
+    uses: ./.github/workflows/windows.yml
+    with:
+      release: ${{ github.ref_name }}
