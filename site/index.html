@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Harfi: type Arabizi, get Arabic</title>
-<meta name="description" content="Harfi turns Lebanese Arabizi into Arabic as you type, privately, on your Mac.">
+<meta name="description" content="Harfi turns Lebanese Arabizi into Arabic as you type, privately, on your Mac or Windows PC.">
 <style>
   @font-face { font-family: "Naskh"; src: url("fonts/NotoNaskhArabic-Variable.ttf") format("truetype"); font-display: swap; }
   :root {
@@ -41,6 +41,22 @@
             padding: 13px 26px; font-weight: 600; text-decoration: none; }
   .button:hover { filter: brightness(1.06); }
   .note { color: var(--muted); font-size: 14px; margin-top: 10px; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .button.secondary { background: var(--surface); color: var(--accent); border: 1px solid var(--border); }
+  .badge { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent);
+           background: var(--accent-soft); border-radius: 6px; padding: 2px 7px; vertical-align: 2px; }
+
+  .tabs { display: inline-flex; gap: 4px; background: var(--surface); border: 1px solid var(--border);
+          border-radius: 12px; padding: 4px; margin-bottom: 14px; }
+  .tabs button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 15px; font-weight: 600;
+                 border-radius: 9px; padding: 7px 16px; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .js .platform[hidden] { display: none; }
+  .platform + .platform { margin-top: 16px; }
+  .js .platform + .platform { margin-top: 0; }
+  .platform h3 { margin: 0 0 8px; font-size: 18px; }
+  .js .platform h3 { display: none; }
 
   section { padding: 34px 0; }
   h2 { font-size: 24px; margin: 0 0 18px; }
@@ -81,23 +97,31 @@
       <div class="arabic ar" id="arabic" lang="ar" aria-hidden="true">شو الوضع عندك</div>
     </div>
     <h1>Type Arabizi. Get Arabic.</h1>
-    <p class="lead">Harfi turns Lebanese Arabizi into Arabic as you type, in every app on your Mac. Privately: nothing you type ever leaves it.</p>
-    <a class="button" href="#install">Install for Mac</a>
-    <p class="note">Free · Apple silicon, macOS 14 or later · Windows later</p>
+    <p class="lead">Harfi turns Lebanese Arabizi into Arabic as you type, in every app on your Mac or Windows PC. Privately: nothing you type ever leaves your computer.</p>
+    <div class="actions">
+      <a class="button" href="#install" data-platform="mac">Install for Mac</a>
+      <a class="button secondary" href="#install" data-platform="windows">Install for Windows</a>
+    </div>
+    <p class="note">Free · Mac: Apple silicon, macOS 14 or later · Windows 10 or 11 (64-bit), preview</p>
   </div>
 
   <section aria-labelledby="why">
     <h2 id="why">Why Harfi</h2>
     <div class="promises">
       <div class="card"><h3>It speaks Lebanese</h3><p>Trained on how people really text: <code>Shu bdk t3ml bara</code> becomes <span class="ar" lang="ar">شو بدك تعمل برا</span>, and your English stays English.</p></div>
-      <div class="card"><h3>Private by design</h3><p>The conversion runs on your Mac with no internet access. No account, no tracking, no cloud.</p></div>
+      <div class="card"><h3>Private by design</h3><p>The conversion runs on your own computer, with no internet needed. No account, no tracking, no cloud.</p></div>
       <div class="card"><h3>Fix a word in a tap</h3><p>See the Arabic as you type, press <kbd>↑</kbd> to fix a word before sending, and Harfi remembers your spelling.</p></div>
     </div>
   </section>
 
   <section id="install" aria-labelledby="install-title">
     <h2 id="install-title">Install</h2>
-    <div class="install">
+    <div class="tabs" role="tablist" aria-label="Your computer" hidden>
+      <button type="button" role="tab" data-platform="mac" aria-selected="true">Mac</button>
+      <button type="button" role="tab" data-platform="windows" aria-selected="false">Windows</button>
+    </div>
+    <div class="install platform" data-platform="mac" role="tabpanel">
+      <h3>Mac</h3>
       <p style="margin:0">Open <strong>Terminal</strong> (press <kbd>⌘</kbd> <kbd>Space</kbd>, type Terminal), paste this line and press Enter:</p>
       <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash</code><button type="button" id="copy">Copy</button></div>
       <ol>
@@ -107,16 +131,40 @@
       </ol>
       <p class="note">Why Terminal? Harfi is free and not signed with a paid Apple Developer ID, so a normal download would be blocked; the install line sets it up on your own Mac instead. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/INSTALL.md">Full guide</a></p>
     </div>
+    <div class="install platform" data-platform="windows" role="tabpanel">
+      <h3>Windows <span class="badge">Preview</span></h3>
+      <p style="margin:0">On a 64-bit Windows 10 or 11 PC:</p>
+      <ol>
+        <li><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Windows-x64.zip">Download Harfi for Windows</a>, then right-click the zip → <strong>Extract All</strong>.</li>
+        <li>In the extracted folder, right-click <code>install.ps1</code> → <strong>Run with PowerShell</strong>. It installs Harfi for you only and downloads its model (808 MB, each part checked); if Windows asks for administrator rights, allow it once.</li>
+        <li>Turn it on once: Settings → Time &amp; language → Language &amp; region → Arabic (Lebanon) → Language options → Add a keyboard → Harfi. Add Arabic (Lebanon) first if it isn't listed.</li>
+        <li>Switch to it with <kbd>Win</kbd> <kbd>Space</kbd> and type.</li>
+      </ol>
+      <p class="note">The model runs on the processor, so the first conversion after starting takes a few seconds. To remove Harfi, run <code style="white-space:nowrap">install.ps1 -Uninstall</code>. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md">Full guide</a></p>
+    </div>
   </section>
 
   <section aria-labelledby="keys">
     <h2 id="keys">The keys to know</h2>
-    <dl class="keys">
-      <dt><kbd>Enter</kbd></dt><dd>Your text becomes Arabic. Enter again sends.</dd>
-      <dt><kbd>↑</kbd></dt><dd>Fix a word before converting: ← → choose the word, a number picks its spelling.</dd>
-      <dt><kbd>⌥</kbd> <kbd>Tab</kbd></dt><dd>Fix a word right after converting.</dd>
-      <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>Your Latin text back.</dd>
-    </dl>
+    <div class="platform" data-platform="mac">
+      <h3>Mac</h3>
+      <dl class="keys">
+        <dt><kbd>Enter</kbd></dt><dd>Your text becomes Arabic. Enter again sends.</dd>
+        <dt><kbd>↑</kbd></dt><dd>Fix a word before converting: ← → choose the word, a number picks its spelling.</dd>
+        <dt><kbd>⌥</kbd> <kbd>Tab</kbd></dt><dd>Fix a word right after converting.</dd>
+        <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>Your Latin text back.</dd>
+      </dl>
+    </div>
+    <div class="platform" data-platform="windows">
+      <h3>Windows</h3>
+      <dl class="keys">
+        <dt><kbd>Enter</kbd></dt><dd>Your text becomes Arabic. Enter again sends.</dd>
+        <dt><kbd>↑</kbd></dt><dd>Fix a word, before converting or right after: ← → choose the word, a number picks its spelling.</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Keep what you typed in Latin.</dd>
+        <dt><kbd>Ctrl</kbd> <kbd>Z</kbd></dt><dd>Your Latin text back, right after converting.</dd>
+        <dt><kbd>Alt</kbd> <kbd>Enter</kbd></dt><dd>Convert the text you selected.</dd>
+      </dl>
+    </div>
   </section>
 
   <footer>
@@ -150,6 +198,23 @@
     }
   }
   if (!still) play();
+
+  // Mac or Windows: the install steps and keys for one at a time, chosen from the visitor's system (Mac when it is
+  // neither), switched with the tabs or the hero's buttons. Without scripts both are shown, one after the other.
+  document.documentElement.classList.add("js");
+  const tabs = document.querySelector(".tabs");
+  tabs.hidden = false;
+  function show(platform) {
+    tabs.querySelectorAll("button").forEach(tab => tab.setAttribute("aria-selected", String(tab.dataset.platform === platform)));
+    document.querySelectorAll(".platform").forEach(part => { part.hidden = part.dataset.platform !== platform; });
+    document.querySelectorAll(".actions .button").forEach(button =>
+      button.classList.toggle("secondary", button.dataset.platform !== platform));
+  }
+  const system = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
+  show(/win/i.test(system) ? "windows" : "mac");
+  tabs.addEventListener("click", event => { const tab = event.target.closest("button"); if (tab) show(tab.dataset.platform); });
+  document.querySelectorAll(".actions .button").forEach(button =>
+    button.addEventListener("click", () => show(button.dataset.platform)));
   document.getElementById("copy").addEventListener("click", async event => {
     try { await navigator.clipboard.writeText(document.getElementById("cmd").textContent); event.target.textContent = "Copied"; }
     catch { event.target.textContent = "Select and copy"; }
