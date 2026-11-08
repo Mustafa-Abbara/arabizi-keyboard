@@ -79,7 +79,8 @@ private:
     TfClientId clientId_ = TF_CLIENTID_NULL;
     TfGuidAtom inputAtom_ = TF_INVALID_GUIDATOM;  // GUID_HarfiInput, as the attribute property's value
     ITfComposition *composition_ = nullptr;
-    ITfRange *lastCommitEnd_ = nullptr;  // where the last inserted text ends, for Ctrl+Z and Alt+Tab
+    ITfRange *lastCommitEnd_ = nullptr;  // where the last inserted text ends, for Ctrl+Z and ↑ (Alt+Tab) after converting
+    std::wstring lastCommitText_;        // that text, which must still be just before the cursor
     std::unique_ptr<Core> core_;
     ChipWindow chips_;
     PreviewWindow preview_;
@@ -90,6 +91,7 @@ private:
     WPARAM decidedKey_ = 0;
     std::string decidedJson_;  // the key as sent to the composer, without the field's context
     bool wasComposing_ = false;  // Latin was being typed before the key (for the ↑ hint)
+    ULONGLONG resentUpUntil_ = 0;  // the ↑ sent again after inserting the text moves the cursor, never fixes
     bool loggedKey_ = false;     // DebugLog: the first key of this activation was logged
     // The habit the tip on screen announces (ADR 0033): Esc before `habitUntil_` refuses it.
     std::string habitLatin_, habitSpelling_;

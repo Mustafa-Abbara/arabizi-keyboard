@@ -1,4 +1,4 @@
-// The row of spellings above the text while a word is fixed (↑ or Alt+Tab), as on the Mac (CorrectionChips): the
+// The row of spellings above the text while a word is fixed (↑, also right after converting, or Alt+Tab), as on the Mac (CorrectionChips): the
 // word being fixed first (amber when it looks wrong), then the spellings with their number keys, then "Spell it";
 // while spelling, the letters for the last key. Right to left, as Arabic reads. It never takes the focus; a click
 // picks a chip. It also shows the one-line tips.

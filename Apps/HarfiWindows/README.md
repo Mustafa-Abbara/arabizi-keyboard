@@ -2,11 +2,11 @@
 
 A TSF text input processor (`HarfiTIP.dll`, C++) that uses the same core as the Mac keyboard through its C interface (`HarfiCoreC.dll`, built from `Packages/ArabiziCore`), and the same conversion engine with the fine-tuned model as its own process (`harfi-engine.exe`, built from `Packages/ArabiziEngine`). Design and tasks: [ADR 0032](../../docs/decisions/0032-windows-port.md), issue #34.
 
-**Works now:** typing Arabizi shows it underlined, with the live preview box above it (the model's Arabic once it has converted what is typed, the rules' until then); Enter sends the model's Arabic (the rules if the model is not ready in time); ↑ before Enter (or Alt+Tab after converting) opens the chip row above the text: number keys, ←/→, ↓/↑ or a click pick a spelling, "Spell it" spells the word letter by letter; arrow keys while typing insert the text and then move the cursor; Esc keeps the Latin; plain English stays as typed; Ctrl+Z right after converting brings the Latin back; Alt+Enter converts the selected text; password and PIN fields are left alone. Keys are read as on a US keyboard whatever layout the language has (Arabic (101) for Arabic (Lebanon)); password fields get the Latin keys too, without composing.
+**Works now:** typing Arabizi shows it underlined, with the live preview box above it (the model's Arabic once it has converted what is typed, the rules' until then); Enter sends the model's Arabic (the rules if the model is not ready in time); ↑ before Enter, or ↑ right after converting (while the cursor is still just after the Arabic; Alt+Tab too, where Windows lets it through), opens the chip row above the text: number keys, ←/→, ↓/↑ or a click pick a spelling, "Spell it" spells the word letter by letter; arrow keys while typing insert the text and then move the cursor; Esc keeps the Latin; plain English stays as typed; Ctrl+Z right after converting brings the Latin back; Alt+Enter converts the selected text; password and PIN fields are left alone. Keys are read as on a US keyboard whatever layout the language has (Arabic (101) for Arabic (Lebanon)); password fields get the Latin keys too, without composing.
 
 ## Your words (learned habits)
 
-Every spelling you pick with ↑ or Alt+Tab is recorded on this computer only (one word per entry, encrypted, kept 30 days, never sent; `%LOCALAPPDATA%\Harfi\words`) and puts your earlier choices first among the suggestions. When you have picked the same spelling for a typed word 3 times on 2 different days (with no other choice since), it becomes a habit: a tip says "Harfi will now write flfoul as فليفلة", Esc while it shows refuses it, and from then on that word is written your way after the model, in the preview and on Enter ([ADR 0033](../../docs/decisions/0033-learned-habits.md)). To see or change them:
+Every spelling you pick from the chip row is recorded on this computer only (one word per entry, encrypted, kept 30 days, never sent; `%LOCALAPPDATA%\Harfi\words`) and puts your earlier choices first among the suggestions. When you have picked the same spelling for a typed word 3 times on 2 different days (with no other choice since), it becomes a habit: a tip says "Harfi will now write flfoul as فليفلة", Esc while it shows refuses it, and from then on that word is written your way after the model, in the preview and on Enter ([ADR 0033](../../docs/decisions/0033-learned-habits.md)). To see or change them:
 
 ```bat
 "%LOCALAPPDATA%\Harfi\harfi-words.exe"                 :: your habits, refused ones, fixes recorded
@@ -39,11 +39,11 @@ cmake -S Apps/HarfiWindows -B build/windows -A x64
 cmake --build build/windows --config Release
 ```
 
-The engine needs llama.cpp at the release the Mac pins (b11429), built from source into `build/llama.cpp` (or set `LLAMA_CPP_DIR`):
+The engine needs llama.cpp at the commit the Mac pins (release b11429, commit `d81235049`), fetched by commit because a tag can be moved, built from source into `build/llama.cpp` (or set `LLAMA_CPP_DIR`):
 
 ```bat
 git init build/llama.cpp && cd build/llama.cpp && git remote add origin https://github.com/ggml-org/llama.cpp.git
-git fetch --depth 1 origin tag b11429 && git checkout FETCH_HEAD
+git fetch --depth 1 origin d81235049384534c167caea52b85a694f6103d14 && git checkout FETCH_HEAD
 cmake -S . -B build -A x64 -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DGGML_AVX2=ON
 cmake --build build --config Release --target llama
 cd ../..
