@@ -116,20 +116,24 @@ jobs:
           $runtime = Get-ChildItem "$env:LOCALAPPDATA/Programs/Swift/Runtimes" -Directory | Sort-Object Name | Select-Object -Last 1
           Copy-Item "$($runtime.FullName)/usr/bin/*.dll" dist/harfi-windows/
       # llama.cpp at the release the Mac pins (Packages/ArabiziLLM/Package.swift), built from source: its Windows
-      # releases have no import libraries or headers. CPU only; cached by release.
+      # releases have no import libraries or headers. CPU only. Checked out by commit, not by tag (a tag can be moved
+      # upstream); the commit is the one tag b11429 named on 7 Nov 2026. Cached by commit.
       - uses: actions/cache@v4
         id: llama
         with:
           path: build/llama.cpp
-          key: llama-cpp-b11429-windows-cpu
+          key: llama-cpp-d81235049384534c167caea52b85a694f6103d14-windows-cpu
       - name: llama.cpp b11429
         if: steps.llama.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           git init -q build/llama.cpp
           git -C build/llama.cpp remote add origin https://github.com/ggml-org/llama.cpp.git
-          git -C build/llama.cpp fetch -q --depth 1 origin tag b11429
+          $commit = 'd81235049384534c167caea52b85a694f6103d14'
+          git -C build/llama.cpp fetch -q --depth 1 origin $commit
           git -C build/llama.cpp checkout -q FETCH_HEAD
+          $got = git -C build/llama.cpp rev-parse HEAD
+          if ($got -ne $commit) { throw "llama.cpp is at $got, expected $commit" }
           cmake -S build/llama.cpp -B build/llama.cpp/build -A x64 -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DGGML_AVX2=ON
           cmake --build build/llama.cpp/build --config Release --target llama
       - name: the engine (harfi-engine.exe, the model runner as its own process)

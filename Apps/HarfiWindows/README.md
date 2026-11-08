@@ -39,11 +39,11 @@ cmake -S Apps/HarfiWindows -B build/windows -A x64
 cmake --build build/windows --config Release
 ```
 
-The engine needs llama.cpp at the release the Mac pins (b11429), built from source into `build/llama.cpp` (or set `LLAMA_CPP_DIR`):
+The engine needs llama.cpp at the commit the Mac pins (release b11429, commit `d81235049`), fetched by commit because a tag can be moved, built from source into `build/llama.cpp` (or set `LLAMA_CPP_DIR`):
 
 ```bat
 git init build/llama.cpp && cd build/llama.cpp && git remote add origin https://github.com/ggml-org/llama.cpp.git
-git fetch --depth 1 origin tag b11429 && git checkout FETCH_HEAD
+git fetch --depth 1 origin d81235049384534c167caea52b85a694f6103d14 && git checkout FETCH_HEAD
 cmake -S . -B build -A x64 -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DGGML_AVX2=ON
 cmake --build build --config Release --target llama
 cd ../..
