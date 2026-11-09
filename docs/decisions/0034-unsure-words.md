@@ -33,5 +33,5 @@ A second check on 1,401 sentences no model has seen (`senzi_all.xlsx`, 4,619 com
 
 - Tests: what counts as unsure (Arabic, never in training, punctuation ignored), the swap (only dictionary words, punctuation kept, known words untouched) in ArabiziCore.
 - The gain is small (4 of 42 unsure errors on dev); the tip is the larger part: a word the model never saw is best spelled by the user, and each fix feeds their habits.
-- The Mac does not apply either yet (as for ADR 0033).
+- The Mac applies both too (8 Nov 2026). On the Mac's v3 dev outputs the swap fixed 8 words and broke 1, and on 1,401 unseen messages (`senzi`) it fixed 12 and broke 2 (`arabizi-suggestions-report --unsure`).
 - The sample is small; re-measure on the next dev runs and drop #1 if it stops paying.

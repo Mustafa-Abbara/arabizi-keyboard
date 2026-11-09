@@ -73,6 +73,12 @@ public final class EngineClient: @unchecked Sendable {  // `link` is behind `loc
     }
 
     public func convert(_ text: String) -> String? {
+        respond(text)?.text
+    }
+
+    /// The service's whole answer (its text and how it was made: the model, or the service's own rule fallback), or
+    /// nil when it did not answer in time.
+    public func respond(_ text: String) -> ConvertResponse? {
         let deadlineMs = config.deadlineMs(for: text)  // longer messages get longer (ADR 0025)
         guard let proxy = proxy(),
               let request = try? encoder.encode(ConvertRequest(text: text, deadlineMs: deadlineMs)) else { return nil }
@@ -84,7 +90,7 @@ public final class EngineClient: @unchecked Sendable {  // `link` is behind `loc
             return nil
         }
         log.info("converted by the engine: \(response.outcome.rawValue, privacy: .public) in \(response.latencyMs) ms")
-        return response.text
+        return response
     }
 }
 

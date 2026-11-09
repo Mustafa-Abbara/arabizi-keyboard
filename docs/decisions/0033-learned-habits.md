@@ -31,5 +31,5 @@ Rare or unseen words are 54% of v3's wrong words on the test sets (EVAL.md, fina
 
 - Tests: `Habits.learned` (thresholds, change of mind), `Habits.apply` (only habit words, punctuation kept), the sealed refusals (ArabiziCore), and the whole flow through the C interface: two earlier fixes, the third announces the habit once, Enter and the preview use it, a refusal undoes it (HarfiCoreCTests).
 - Each app's keyboard keeps the habits in memory and reads the record again only when its file changed, so a habit learned in one app reaches the others at their next key.
-- **The Mac** has the same core logic but does not apply habits yet: `ArabiziInputController` needs to call `Habits.apply` after the engine, and the approval UI of ADR 0027 #6 (or this tip) on the IME side. Not done here: it cannot be built or checked on Windows.
+- **The Mac** applies habits too (8 Nov 2026), with the same core code (`PersonalWords`, now in ArabiziCore): after the engine and to the live preview, the same tip (Esc refuses), and the Harfi window's Your words lists the habits with Don't / Allow again.
 - A habit applies to every occurrence of its typed word, including one where the user meant another word written the same way in Latin (`b2ellak`); the tip and `harfi-words refuse` are the way out. Watch for this in dogfooding.
