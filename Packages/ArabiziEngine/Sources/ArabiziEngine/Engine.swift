@@ -41,6 +41,8 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     /// The configured checks with the training data's kept-Latin words.
     private let checks: OutputChecks
     private let generator: (any TextGenerator)?
+    /// The model's word-guess search (ADR 0036): the generator itself when it can search.
+    private var guesser: (any WordGuessing)? { generator as? any WordGuessing }
     private let template: PromptTemplate?
     private let englishGuard: EnglishGuard?
     /// Chat abbreviations kept as typed, by the model and the rules (ADR 0035); nil without the file.
@@ -174,6 +176,66 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
                 return respond(ruled(text), .fallbackCheckFailed)
             }
         }
+    }
+
+    /// The model's other spellings for the word after `before` in its answer to `text` (ADR 0036): never an error.
+    /// No model: no guesses (`fallbackModelUnavailable`); past the deadline: none (`fallbackTimeout`). The text is
+    /// masked as for a conversion, and the spans it masked are masked in `before` too, so the model continues the
+    /// answer it wrote. Only whole Arabic words are returned, without diacritics, best first.
+    public func wordGuesses(_ request: WordGuessRequest) -> WordGuessResponse {
+        wordGuessesExplained(request).response
+    }
+
+    /// The response and, when there are no guesses, why (counts only, never text).
+    public func wordGuessesExplained(_ request: WordGuessRequest) -> (response: WordGuessResponse, reason: String?) {
+        let started = ContinuousClock.now
+        func respond(_ guesses: [WordGuessResponse.Guess], _ outcome: Outcome, _ reason: String? = nil)
+            -> (response: WordGuessResponse, reason: String?) {
+            let elapsed = ContinuousClock.now - started
+            let ms = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+            return (WordGuessResponse(id: request.id, guesses: guesses, outcome: outcome, latencyMs: ms), reason)
+        }
+        guard let guesser, let template else { return respond([], .fallbackModelUnavailable, "no model") }
+        guard request.text.count <= config.maxInputChars else {
+            return respond([], .fallbackModelUnavailable, "input longer than max_input_chars")
+        }
+        let protected = ProtectedSpans.protect(request.text)
+        var before = request.before
+        for (i, span) in protected.spans.enumerated() {
+            if let range = before.range(of: span) { before.replaceSubrange(range, with: "⟦\(i)⟧") }
+        }
+        let raw: [(word: String, logProbability: Double)]
+        do {
+            raw = try guesser.wordGuesses(template.render(protected.masked), answerSoFar: before,
+                                          count: request.count, timeout: .milliseconds(request.deadlineMs))
+        } catch {
+            return respond([], .fallbackModelUnavailable, "guess error: \(error)")
+        }
+        var guesses: [WordGuessResponse.Guess] = []
+        for (word, logProbability) in raw {
+            guard let clean = Self.arabicWord(word), !guesses.contains(where: { $0.word == clean }) else { continue }
+            guesses.append(WordGuessResponse.Guess(word: clean, logProbability: min(0, logProbability)))
+            if guesses.count == request.count { break }
+        }
+        let elapsed = ContinuousClock.now - started
+        if guesses.isEmpty, elapsed >= .milliseconds(request.deadlineMs) {
+            return respond([], .fallbackTimeout, "deadline")
+        }
+        return respond(guesses, .model, guesses.isEmpty ? "no Arabic word among the guesses" : nil)
+    }
+
+    /// A guessed word as the ↑ list takes it: no spaces, diacritics or tatweel, nothing but Arabic letters around
+    /// it, and only Arabic letters inside; nil otherwise.
+    static func arabicWord(_ raw: String) -> String? {
+        let scalars = Array(raw.unicodeScalars.filter { !(0x064B...0x0652).contains($0.value) && $0.value != 0x0670
+                                                         && $0.value != 0x0640 && !$0.properties.isWhitespace })
+        let isLetter = { (s: Unicode.Scalar) in (0x0621...0x064A).contains(s.value) }
+        guard let start = scalars.firstIndex(where: isLetter), let end = scalars.lastIndex(where: isLetter) else {
+            return nil
+        }
+        let core = scalars[start...end]
+        guard core.allSatisfy(isLetter) else { return nil }
+        return String(String.UnicodeScalarView(core))
     }
 
     /// The rules' conversion, keeping chat abbreviations as typed.

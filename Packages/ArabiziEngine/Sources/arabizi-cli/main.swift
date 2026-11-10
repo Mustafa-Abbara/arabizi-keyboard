@@ -3,6 +3,8 @@
 // The engine's status goes to stderr as one JSON line at start-up. Never prints the text it converts to stderr.
 //
 //   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--no-repair] [--keyboard-deadline]
+// A line that is a WordGuessRequest (`"kind": "wordGuesses"`) gets a WordGuessResponse: the ↑ list's model guesses
+// (ADR 0036). Conversions and guesses can be mixed, as the keyboard sends them.
 // --explain writes one line per request to stderr: why a fallback happened, or how many tokens of a model answer
 // were repaired (ADR 0023); reason null otherwise. Counts only, no text.
 import ArabiziContracts
@@ -80,6 +82,16 @@ while let line = readLine(strippingNewline: true) {
     lineNumber += 1
     guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
     do {
+        if WordGuessRequest.isWordGuessRequest(Data(line.utf8)) {  // the ↑ list's model guesses (ADR 0036)
+            let (response, reason) = engine.wordGuessesExplained(try decoder.decode(WordGuessRequest.self,
+                                                                                     from: Data(line.utf8)))
+            FileHandle.standardOutput.write(try encoder.encode(response) + Data("\n".utf8))
+            if explain {
+                let shown = reason.map(json) ?? "null"
+                FileHandle.standardError.write(Data((#"{"line": \#(lineNumber), "reason": "# + shown + "}\n").utf8))
+            }
+            continue
+        }
         var request = try decoder.decode(ConvertRequest.self, from: Data(line.utf8))
         if keyboardDeadline {  // the deadline the keyboard would give this message (ADR 0025)
             request = ConvertRequest(id: request.id, text: request.text,

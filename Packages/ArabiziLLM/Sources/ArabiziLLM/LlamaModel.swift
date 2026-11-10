@@ -49,6 +49,14 @@ public protocol TextGenerator: Sendable {
     func generate(_ prompt: String, maxTokens: Int, timeout: Duration) throws -> Generation
 }
 
+/// The model's other ways to write one word of its answer (ADR 0036, the up-arrow list's first source).
+public protocol WordGuessing: Sendable {
+    /// Up to `count` words the model would write after `answerSoFar` (its own answer, up to the word being fixed),
+    /// best first, with their log-probabilities; empty when the deadline passes first.
+    func wordGuesses(_ prompt: String, answerSoFar: String, count: Int, timeout: Duration) throws
+        -> [(word: String, logProbability: Double)]
+}
+
 public enum LlamaError: Error, Equatable {
     case modelNotFound(String)
     case loadFailed(String)
@@ -63,7 +71,7 @@ public enum LlamaError: Error, Equatable {
 /// One GGUF model loaded once and kept in memory ("warm"), generating greedily with a hard deadline
 /// (roadmap P5 step 4, ADR 0017). Uses only llama.cpp's C API. One generation runs at a time; other calls wait.
 /// Never logs prompt or output text, and llama.cpp's own logging is switched off.
-public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all mutable state is behind `lock`
+public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable {  // all mutable state is behind `lock`
     public struct Settings: Sendable {
         /// Prompt plus answer, in tokens. A keyboard message is short; 512 keeps the KV cache small on 8 GB.
         public var contextLength: Int32 = 512
@@ -79,6 +87,10 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
             #endif
         }()
 
+        /// Sequences decoded together (the word-guess branches, ADR 0036). The cache is unified, so they share the
+        /// prompt's cells and one conversion still has the whole context.
+        public var sequences: Int32 = 16
+
         public init() {}
     }
 
@@ -87,6 +99,9 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
     private let vocab: OpaquePointer
     private let sampler: UnsafeMutablePointer<llama_sampler>
     private let contextLength: Int
+    private let sequences: Int
+    /// The tokens sequence 0 of the cache holds, so the next prompt decodes only what differs (behind `lock`).
+    private var cached: [llama_token] = []
     private let lock = NSLock()
     private var freed = false
     /// Uptime in nanoseconds after which llama_decode aborts; read by the C abort callback.
@@ -106,6 +121,8 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
         var contextParams = llama_context_default_params()
         contextParams.n_ctx = UInt32(settings.contextLength)
         contextParams.n_batch = UInt32(settings.contextLength)  // the whole prompt in one decode call
+        contextParams.n_seq_max = UInt32(max(1, settings.sequences))
+        contextParams.kv_unified = true
         if let threads = settings.threads {
             contextParams.n_threads = threads
             contextParams.n_threads_batch = threads
@@ -120,6 +137,7 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
         sampler = llama_sampler_chain_init(llama_sampler_chain_default_params())
         llama_sampler_chain_add(sampler, llama_sampler_init_greedy())
         contextLength = Int(settings.contextLength)
+        sequences = Int(max(1, settings.sequences))
         abortAt.initialize(to: .max)
         llama_set_abort_callback(context, { data in
             guard let data else { return false }
@@ -159,20 +177,23 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
         defer { abortAt.pointee = .max }
         func elapsed() -> Duration { .nanoseconds(Int64(DispatchTime.now().uptimeNanoseconds - start)) }
 
-        llama_memory_clear(llama_get_memory(context), true)
         llama_sampler_reset(sampler)
-        var tokens = try tokenize(prompt)
-        let promptTokens = tokens.count
-        guard tokens.count + maxTokens <= contextLength else {
-            throw LlamaError.promptTooLong(tokens: tokens.count, limit: contextLength - maxTokens)
+        // A conversion starts from an empty cache, exactly as before word guesses existed (reusing part of it
+        // changes the arithmetic, and so a few greedy answers); it leaves its prompt and answer for the guesses.
+        llama_memory_clear(llama_get_memory(context), true)
+        cached = []
+        let prompt = try tokenize(prompt)
+        let promptTokens = prompt.count
+        guard prompt.count + maxTokens <= contextLength else {
+            throw LlamaError.promptTooLong(tokens: prompt.count, limit: contextLength - maxTokens)
         }
         var output: [UInt8] = []
         var generated = 0
         var stop = Generation.Stop.maxTokens
+        var tokens: [llama_token] = []
         while generated < maxTokens {
-            let status = tokens.withUnsafeMutableBufferPointer { buffer in
-                llama_decode(context, llama_batch_get_one(buffer.baseAddress, Int32(buffer.count)))
-            }
+            // The prompt goes through `prefill` (it reuses what the cache already holds); then one token at a time.
+            let status = tokens.isEmpty ? prefill(prompt) : decodeContinuing(tokens)
             if status == 2 {  // aborted by the deadline callback
                 stop = .deadline
                 break
@@ -196,17 +217,177 @@ public final class LlamaModel: TextGenerator, @unchecked Sendable {  // all muta
                           promptTokens: promptTokens, generatedTokens: generated, elapsed: elapsed())
     }
 
+    /// The model's other ways to write the word after `answerSoFar` (ADR 0036): a beam search over its next tokens,
+    /// the prompt and the answer so far decoded once, then one decode per step for every branch together (each
+    /// branch is a sequence that shares the prompt's cache cells). A word ends at a token that starts with a space
+    /// or a new line, or at the end of the turn. Returns raw words (as the model wrote them); the caller cleans them.
+    public func wordGuesses(_ prompt: String, answerSoFar: String, count: Int, timeout: Duration) throws
+        -> [(word: String, logProbability: Double)] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !freed else { throw LlamaError.modelClosed }
+        let width = max(1, min(count, (sequences - 1) / 2)), depth = 6
+        let start = DispatchTime.now().uptimeNanoseconds
+        let deadline = start &+ UInt64(max(0, timeout.components.seconds)) * 1_000_000_000
+            &+ UInt64(max(0, timeout.components.attoseconds / 1_000_000_000))
+        abortAt.pointee = deadline
+        defer { abortAt.pointee = .max }
+        let memory = llama_get_memory(context)
+        var tokens = try tokenize(prompt)
+        if !answerSoFar.isEmpty { tokens += try tokenize(answerSoFar, special: false) }
+        guard tokens.count + depth + 1 <= contextLength else {
+            throw LlamaError.promptTooLong(tokens: tokens.count, limit: contextLength - depth - 1)
+        }
+        let status = prefill(tokens)  // usually only the answer so far: the conversion left the prompt in the cache
+        defer { for s in 1..<sequences { _ = llama_memory_seq_rm(memory, llama_seq_id(s), -1, -1) } }
+        if status == 2 { return [] }
+        guard status == 0 else { throw LlamaError.decodeFailed(status) }
+        let prefixLength = Int32(tokens.count)
+        let vocabSize = Int(llama_vocab_n_tokens(vocab))
+        let needsSpace = !answerSoFar.isEmpty
+
+        struct Beam {
+            var logProbability: Double
+            var tokens: [llama_token]
+            var sequence: llama_seq_id
+            var row: Int32
+        }
+        // Sequence 0 holds the prompt; branches use 1...width and width+1...2*width in turns.
+        var beams = [Beam(logProbability: 0, tokens: [], sequence: 0, row: -1)]
+        var done: [String: Double] = [:]
+        var batch = llama_batch_init(Int32(width), 0, 1)
+        defer { llama_batch_free(batch) }
+        for step in 0..<depth {
+            var grown: [Beam] = []
+            for beam in beams {
+                guard let logits = llama_get_logits_ith(context, beam.row) else { continue }
+                for (token, logProbability) in Self.best(logits, vocabularySize: vocabSize, count: width * 2) {
+                    let piece = self.piece(token)
+                    let startsWord = piece.first == 0x20 || piece.first == 0x0A
+                    if llama_vocab_is_eog(vocab, token) || (!beam.tokens.isEmpty && startsWord) {
+                        if !beam.tokens.isEmpty {
+                            let word = text(of: beam.tokens)
+                            if done[word].map({ $0 < beam.logProbability }) ?? true { done[word] = beam.logProbability }
+                        }
+                        continue
+                    }
+                    if beam.tokens.isEmpty && needsSpace && !startsWord { continue }  // the next word starts here
+                    grown.append(Beam(logProbability: beam.logProbability + logProbability,
+                                      tokens: beam.tokens + [token], sequence: beam.sequence, row: -1))
+                }
+            }
+            beams = Array(grown.sorted { $0.logProbability > $1.logProbability }.prefix(width))
+            if beams.isEmpty || DispatchTime.now().uptimeNanoseconds >= deadline { break }
+            // A branch's score only falls as it grows: once `count` words are done and the best open branch is
+            // already below the weakest of them, no branch can still make the list. Most words end in 1-3 tokens.
+            let finished = done.values.sorted(by: >)
+            if finished.count >= count, let open = beams.first?.logProbability, open < finished[count - 1] {
+                beams = []
+                break
+            }
+            // Each surviving branch gets its own sequence: a copy of its parent's, plus its new token.
+            let base = llama_seq_id(1 + (step % 2) * width)
+            for i in 0..<width { _ = llama_memory_seq_rm(memory, base + llama_seq_id(i), -1, -1) }
+            batch.n_tokens = Int32(beams.count)
+            for (i, beam) in beams.enumerated() {
+                let sequence = base + llama_seq_id(i)
+                llama_memory_seq_cp(memory, beam.sequence, sequence, -1, -1)
+                batch.token[i] = beam.tokens[beam.tokens.count - 1]
+                batch.pos[i] = prefixLength + Int32(beam.tokens.count) - 1
+                batch.n_seq_id[i] = 1
+                batch.seq_id[i]![0] = sequence
+                batch.logits[i] = 1
+                beams[i].sequence = sequence
+                beams[i].row = Int32(i)
+            }
+            if step > 0 {  // the parents' sequences are no longer needed
+                let previous = llama_seq_id(1 + ((step + 1) % 2) * width)
+                for i in 0..<width { _ = llama_memory_seq_rm(memory, previous + llama_seq_id(i), -1, -1) }
+            }
+            let decoded = llama_decode(context, batch)
+            if decoded == 2 {
+                beams = []
+                break
+            }
+            guard decoded == 0 else { throw LlamaError.decodeFailed(decoded) }
+        }
+        for beam in beams where !beam.tokens.isEmpty {  // words still open after `depth` tokens
+            let word = text(of: beam.tokens)
+            if done[word] == nil { done[word] = beam.logProbability }
+        }
+        // A few spare words: the caller drops the ones that are not whole Arabic words.
+        return done.sorted { $0.value > $1.value }.prefix(count * 2).map { (word: $0.key, logProbability: $0.value) }
+    }
+
+    /// Puts `tokens` in sequence 0, decoding only what the cache does not already hold there: the longest common
+    /// start with `cached` is kept (less its last token, decoded again so its logits are fresh), the rest decoded.
+    /// Branch sequences are dropped first. After an abort or an error the cache is cleared, never trusted.
+    private func prefill(_ tokens: [llama_token]) -> Int32 {
+        let memory = llama_get_memory(context)
+        for s in 1..<sequences { _ = llama_memory_seq_rm(memory, llama_seq_id(s), -1, -1) }
+        var keep = zip(cached, tokens).prefix { $0 == $1 }.count
+        keep = max(0, min(keep, tokens.count - 1))
+        if !llama_memory_seq_rm(memory, 0, Int32(keep), -1) {
+            llama_memory_clear(memory, true)
+            keep = 0
+        }
+        cached = Array(cached.prefix(keep))
+        return decodeContinuing(Array(tokens[keep...]))
+    }
+
+    /// Decodes `tokens` after what sequence 0 holds, and records them as cached when that worked.
+    private func decodeContinuing(_ tokens: [llama_token]) -> Int32 {
+        var tokens = tokens
+        let status = tokens.withUnsafeMutableBufferPointer { buffer in
+            llama_decode(context, llama_batch_get_one(buffer.baseAddress, Int32(buffer.count)))
+        }
+        if status == 0 {
+            cached += tokens
+        } else {
+            llama_memory_clear(llama_get_memory(context), true)
+            cached = []
+        }
+        return status
+    }
+
+    private func text(of tokens: [llama_token]) -> String {
+        String(decoding: tokens.flatMap(piece), as: UTF8.self)
+    }
+
+    /// The `count` most likely next tokens of one row of logits, best first, with their log-probabilities: one pass
+    /// for the best raw scores and their maximum, one for the normaliser; no array the size of the vocabulary.
+    static func best(_ logits: UnsafeMutablePointer<Float>, vocabularySize: Int, count: Int)
+        -> [(token: llama_token, logProbability: Double)] {
+        var top: [(Float, Int)] = []
+        top.reserveCapacity(count + 1)
+        var largest = -Float.infinity
+        for i in 0..<vocabularySize {
+            let value = logits[i]
+            if value > largest { largest = value }
+            if top.count < count || value > top[top.count - 1].0 {
+                let at = top.firstIndex { value > $0.0 } ?? top.count
+                top.insert((value, i), at: at)
+                if top.count > count { top.removeLast() }
+            }
+        }
+        var sum = 0.0
+        for i in 0..<vocabularySize { sum += Foundation.exp(Double(logits[i] - largest)) }
+        let norm = Double(largest) + Foundation.log(sum)
+        return top.map { (token: llama_token($0.1), logProbability: Double($0.0) - norm) }
+    }
+
     /// The prompt's tokens exactly as llama-server's /completion makes them from text, and as training did: special
     /// tokens in the text are parsed and the model's BOS is added. A Llama 3 prompt that starts with the text
     /// `<|begin_of_text|>` therefore gets two BOS tokens, and that is right: the fine-tune was trained that way, and
     /// removing one degrades its output (MODELS.md, "Fine-tuned models").
-    func tokenize(_ text: String) throws -> [llama_token] {
+    /// With `special` false (the model's own answer so far): no BOS, and special-token text is plain text.
+    func tokenize(_ text: String, special: Bool = true) throws -> [llama_token] {
         let length = Int32(text.utf8.count)
         var tokens = [llama_token](repeating: 0, count: Int(length) + 8)
-        var count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), true, true)
+        var count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), special, special)
         if count < 0 {  // buffer too small: -count is the size needed
             tokens = [llama_token](repeating: 0, count: Int(-count))
-            count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), true, true)
+            count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), special, special)
         }
         guard count > 0 else { throw LlamaError.tokenizeFailed }
         tokens.removeLast(tokens.count - Int(count))
