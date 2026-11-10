@@ -264,7 +264,8 @@ class Candidates:
                 bi[padded[i - 2:i]] += c
         self.tri, self.bi = tri, bi
         clitics = b0._clean(self.rules.rules["clitics"])
-        self.clitics = sorted(((k, v) for k, v in clitics.items() if " " not in v), key=lambda kv: -len(kv[0]))
+        # Longest first, then alphabetical (Swift reads the rules into an unordered dictionary).
+        self.clitics = sorted(((k, v) for k, v in clitics.items() if " " not in v), key=lambda kv: (-len(kv[0]), kv[0]))
         self._typing_lp = lru_cache(maxsize=100_000)(self._typing_lp_uncached)
 
     # -- letter odds
@@ -372,17 +373,19 @@ class Candidates:
             if c and c != shown and c not in out:
                 out.append(c)
 
-        ruled = b0.ARABIC_CORE.sub("", self.rules.convert(typed))
-        if P.ARABIC_LETTER.search(ruled):
-            add(ruled)
-        near = []
-        for key, value in self.by_length[len(typed) - 1] + self.by_length[len(typed)] + self.by_length[len(typed) + 1]:
-            if key != typed and one_edit_apart(key, typed):
-                close = edit_similarity(value, shown)
-                if close >= 0.5:
-                    near.append((-close, value))
-        for _, value in sorted(near):
-            add(value)
+        if typed:  # as Suggestions.swift: no typed word, no rules' spelling and no dictionary neighbours
+            ruled = b0.ARABIC_CORE.sub("", self.rules.convert(typed))
+            if P.ARABIC_LETTER.search(ruled):
+                add(ruled)
+            near = []
+            lengths = self.by_length[len(typed) - 1] + self.by_length[len(typed)] + self.by_length[len(typed) + 1]
+            for key, value in lengths:
+                if key != typed and one_edit_apart(key, typed):
+                    close = edit_similarity(value, shown)
+                    if close >= 0.5:
+                        near.append((-close, value))
+            for _, value in sorted(near):
+                add(value)
         for v in variants(shown):
             if v in self.known:
                 add(v)
@@ -554,3 +557,49 @@ def wrong_words(row: dict, rules: b0.RuleConverter):
             else:
                 shown, before = (pred[p1] if p1 < len(pred) else ""), raw_pred[:p1] + ref[r1:k]
             yield k, kind, [typed[x] for x in sources[k]], shown, " ".join(before), ref[k]
+
+
+
+# ----------------------------------------------------------------------------------------------- Swift parity
+
+FIXTURE = P.ROOT / "Packages" / "ArabiziCore" / "Tests" / "ArabiziCoreTests" / "Fixtures" / "candidates_parity.json"
+GUESSES = P.ROOT / "eval" / "results" / "candidates" / "guesses-v3.jsonl"
+# Edge cases: a missing vowel, an unknown word with a model guess, a prefix typed joined, a run of typed words,
+# digits for letters, a doubled consonant, a word no option can write, and no typed word at all.
+FIXTURE_CASES = [
+    ("كفك", ["kfk"], []), ("فوتا", ["fota"], [("فوطة", -1.25), ("فوت", -2.5)]), ("ومن", ["wamen"], []),
+    ("وانا", ["w", "ana"], []), ("الغرض", ["l8rad"], [("الغراض", -0.9)]), ("ساكر", ["sakkar"], []),
+    ("شو", ["shu"], [("شوي", -3.0)]), ("خطر", ["5atar"], []), ("", ["xyz"], []), ("سلام", [], []),
+]
+
+
+def fixture_cases() -> list[tuple[str, list[str], list[tuple[str, float]]]]:
+    rows = [json.loads(line) for line in GUESSES.read_text("utf-8").splitlines() if line.strip()]
+    sample = rows[::max(len(rows) // 15, 1)][:15]
+    return [(r["shown"], r["typed_words"], [tuple(g) for g in r["guesses"][:5]]) for r in sample] + FIXTURE_CASES
+
+
+def write_fixture(path: Path = FIXTURE) -> dict:
+    """Every candidate and signal for each case, the order with the committed ranker, and some spellings and typing
+    likelihoods, for the Swift port (ArabiziCore CandidateList) to reproduce."""
+    cands = Candidates(ranker=load_ranker())
+    cases = []
+    for shown, typed_words, guesses in fixture_cases():
+        found, signals = cands.pool(shown, typed_words, guesses)
+        cases.append({"shown": shown, "typed_words": typed_words, "guesses": [[w, lp] for w, lp in guesses],
+                      "candidates": {w: [round(float(x), 6) for x in row]
+                                     for w, row in zip(found, signals, strict=True)},
+                      "order": cands.order(found, signals)})
+    typed = ["kfk", "fota", "kifak", "3ade", "sha3'el", "aandak", "2alle", "sakkar"]
+    fixture = {
+        "_comment": "Written by arabizi_eval.candidates.write_fixture (`pairs train-ranker` rewrites it). The Swift "
+                    "port must give the same candidates, signals (to 1e-6) and order.",
+        "features": FEATURES,
+        "cases": cases,
+        "spellings": {t: [[w, round(lp, 6)] for w, lp in cands.spellings(t)] for t in typed},
+        "typing": [[t, w, round(cands.typing_lp(t, w), 6)] for t, w in
+                   [("kifak", "كيفك"), ("kifak", "كيفاك"), ("kifak", "كفيك"), ("kfk", "كيفك"), ("2alle", "قلي")]],
+        "units": {t: units(t) for t in typed},
+    }
+    path.write_text(json.dumps(fixture, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    return fixture

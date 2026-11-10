@@ -112,3 +112,9 @@ def test_committed_ranker_is_up_to_date():
     assert committed is not None
     for key in ("features", "mean", "scale", "weights", "bias"):
         assert committed[key] == pytest.approx(fresh[key], abs=1e-5), "run `pairs train-ranker` and commit it"
+
+
+def test_swift_parity_fixture_is_up_to_date(tmp_path):
+    fresh = C.write_fixture(tmp_path / "candidates_parity.json")
+    committed = json.loads(C.FIXTURE.read_text(encoding="utf-8"))
+    assert committed == json.loads(json.dumps(fresh, ensure_ascii=False)), "run `pairs train-ranker` and commit it"
