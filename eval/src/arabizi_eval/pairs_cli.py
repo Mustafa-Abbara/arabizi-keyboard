@@ -989,6 +989,80 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+GUESSES_PATH = P.ROOT / "eval" / "results" / "candidates" / "guesses-v3.jsonl"
+RANKER_GUESSES = 5  # the engine offers the model's top 5 guesses (ADR 0036 #5)
+
+
+def _guess_rows(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text("utf-8").splitlines() if line.strip()]
+
+
+def _examples(cands, rows: list[dict], guesses: int):
+    for r in rows:
+        alts = [(w, lp) for w, lp in r["guesses"][:guesses]]
+        found, signals = cands.pool(r["shown"], r["typed_words"], alts)
+        yield r, found, signals
+
+
+def cmd_spelling_odds(args: argparse.Namespace) -> int:
+    """Rebuild data/rules/spelling_odds.json (ADR 0036) from the PUBLIC train split only."""
+    from arabizi_eval import candidates as C
+
+    train = [r for r in all_rows(include_private=False) if r.get("split") == "train"]
+    odds = C.build_odds(train)
+    C.ODDS_PATH.write_text(json.dumps(odds, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    built = odds["built_from"]
+    print(f"wrote {C.ODDS_PATH.name}: {len(odds['odds'])} unit positions from {built['traced']} of "
+          f"{built['word_pairs']} training word pairs, {len(odds['typed_spellings'])} typed words with 2+ spellings")
+    return 0
+
+
+def cmd_train_ranker(args: argparse.Namespace) -> int:
+    """Train the ↑ list's ranker (ADR 0036) on the model's guesses for public wrong words, write its weights."""
+    from arabizi_eval import candidates as C
+
+    rows = [r for r in _guess_rows(Path(args.guesses)) if r["set"] in args.sets]
+    cands = C.Candidates(ranker=None)
+    examples = [(found, signals, r["ref"]) for r, found, signals in _examples(cands, rows, RANKER_GUESSES)]
+    ranker = C.train_ranker(examples)
+    ranker["trained_on_sets"] = sorted(args.sets)
+    C.RANKER_PATH.write_text(json.dumps(ranker, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    top = sorted(zip(C.FEATURES, ranker["weights"], strict=True), key=lambda x: -abs(x[1]))[:6]
+    print(f"wrote {C.RANKER_PATH.name}: trained on {len(examples)} wrong words ({', '.join(sorted(args.sets))}); "
+          f"strongest signals: {', '.join(f'{f} {w:+.2f}' for f, w in top)}")
+    return 0
+
+
+def cmd_candidates_report(args: argparse.Namespace) -> int:
+    """How often the right word is first, in the top 3 and in the top 7 of the ↑ list: today's list (ADR 0027)
+    against v2 (ADR 0036), with and without the model's guesses. Counts only."""
+    from collections import Counter
+
+    from arabizi_eval import candidates as C
+
+    rows = _guess_rows(Path(args.guesses))
+    cands = C.Candidates(ranker=C.load_ranker())
+    by_set: dict[str, Counter] = {}
+    for r in rows:
+        c = by_set.setdefault(r["set"], Counter())
+        c["words"] += 1
+        typed = "".join(r["typed_words"])
+        lists = {"today": cands.first_list(r["shown"], typed)}
+        for label, n in (("v2, no model", 0), (f"v2, model top {RANKER_GUESSES}", RANKER_GUESSES)):
+            found, signals = cands.pool(r["shown"], r["typed_words"], [tuple(g) for g in r["guesses"][:n]])
+            lists[label] = cands.order(found, signals)
+            c[f"{label}: in the pool"] += r["ref"] in found
+        for label, ranked in lists.items():
+            for k, name in ((1, "first"), (3, "top 3"), (C.LIST_LENGTH - 1, "top 7")):
+                c[f"{label}: {name}"] += r["ref"] in ranked[:k]
+    for name, c in sorted(by_set.items()):
+        n = c.pop("words")
+        print(f"== {name}: {n} wrong words")
+        for key, value in c.items():
+            print(f"  {100 * value / n:5.1f}%  {key}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="pairs", description=__doc__,
@@ -1061,6 +1135,12 @@ def main(argv: list[str] | None = None) -> int:
     freeze.add_argument("--allow-unchecked", action="store_true", help="freeze although some rows are unchecked")
     freeze.add_argument("--others", action="store_true", help="the others held-out set (ADR 0021) and its manifest")
     sub.add_parser("validate", help="run all checks")
+    sub.add_parser("spelling-odds", help="rebuild the letter odds of word suggestions v2 from the public train split")
+    rank = sub.add_parser("train-ranker", help="train the word suggestions ranker on public wrong words (ADR 0036)")
+    rank.add_argument("--guesses", default=str(GUESSES_PATH), help="the model's guesses (model_guesses.py)")
+    rank.add_argument("--sets", nargs="+", default=["dev", "dev-others"], help="which sets of the file to train on")
+    rep = sub.add_parser("candidates-report", help="right word first / top 3 / top 7 in the up-arrow list, by set")
+    rep.add_argument("--guesses", default=str(GUESSES_PATH), help="the model's guesses (model_guesses.py)")
     args = parser.parse_args(argv)
     commands = {"add": cmd_add, "import": cmd_import, "import-batch": cmd_import_batch,
                 "import-chats": cmd_import_chats, "import-real": cmd_import_real, "split-prefixes": cmd_split_prefixes,
@@ -1068,7 +1148,9 @@ def main(argv: list[str] | None = None) -> int:
                 "lexicon": cmd_lexicon,
                 "check": cmd_check, "stats": cmd_stats, "freeze": cmd_freeze, "publish": cmd_publish,
                 "publish-all": cmd_publish_all,
-                "export-train": cmd_export_train, "validate": cmd_validate}
+                "export-train": cmd_export_train, "validate": cmd_validate,
+                "spelling-odds": cmd_spelling_odds, "train-ranker": cmd_train_ranker,
+                "candidates-report": cmd_candidates_report}
     return commands[args.command](args)
 
 

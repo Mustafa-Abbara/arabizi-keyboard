@@ -39,6 +39,18 @@ uv run --project eval pairs variants && uv run --project eval pairs lexicon
 
 | **`engine-<model id>`**, `engine-rules` | The Swift engine through `arabizi-cli` (P5): protected spans, saved prompt, model with deadline, output checks, rules on fallback; outcomes and fallback reasons recorded. Dev: `engine-arabizi-llama3.2-1b-v1` 0.770, numbers 100%, 98 model answers and 6 fallbacks ([ADR 0019](decisions/0019-engine-and-cli.md)). | `engine.py`, `Packages/ArabiziEngine` |
 
+**Word suggestions v2 (↑ list, [ADR 0036](decisions/0036-candidate-list-v2.md)).** The reference is `candidates.py`. Its generated files are rebuilt from public rows only:
+
+```bash
+uv run --project eval pairs spelling-odds      # data/rules/spelling_odds.json: letter odds from the train split
+uv run --project eval --with llama-cpp-python python -m arabizi_eval.model_guesses \
+    eval/results/<run>/predictions.jsonl --set dev --out eval/results/candidates/guesses-v3.jsonl
+uv run --project eval pairs train-ranker       # data/rules/candidate_ranker.json, from dev and dev-others
+uv run --project eval pairs candidates-report  # right word first / top 3 / top 7, today's list against v2
+```
+
+`model_guesses` needs the model file and llama-cpp-python, which is not an eval dependency. Guesses for private sheets stay outside the repo; `candidates-report --guesses FILE` scores them as counts only.
+
 Known limits of the letter rules (tested in `test_b0.py`): a medial `a` can be a long vowel (`8ali` → غلي, not غالي) and final `-e` can be ي or ة (`2alle` → قلة, not قلي). Words in the dictionary avoid both.
 
 ## Results so far (dev)
