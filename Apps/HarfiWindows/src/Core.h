@@ -15,6 +15,10 @@ struct Effect {
     bool wordDoubtful = false;    // it looks wrong: amber in the chip row
     int choice = -1;              // the highlighted spelling, -1 for none
     bool spelling = false;        // spelling letter by letter: the chips are letters
+    // The sentence as typed, shown above the chips, and the UTF-16 range of the selected word's typed part in it
+    // (typedStart -1: it cannot be traced, nothing is highlighted).
+    std::wstring typed;
+    int typedStart = -1, typedLength = 0;
     // Fixing before sending (↑ while typing): the preview's words around the chips, the selected one, doubtful ones.
     std::vector<std::wstring> fixingWords;
     int fixingIndex = -1;

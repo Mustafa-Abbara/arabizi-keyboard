@@ -10,6 +10,18 @@ Gdiplus::Font LatinFont() {  // italic: the Latin typed since, not yet converted
     return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(16)), Gdiplus::FontStyleItalic, Gdiplus::UnitPixel);
 }
 Gdiplus::Font HintFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(12)), 0, Gdiplus::UnitPixel); }
+// An English word in the converted line: upright, sized so its letters sit evenly with Noto Naskh's at 22.
+Gdiplus::Font EnglishFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(18)), 0, Gdiplus::UnitPixel); }
+
+// A converted word written in Latin letters only (kept as typed): drawn as English, not with the Arabic font.
+bool IsEnglish(const std::wstring &word) {
+    bool latin = false;
+    for (wchar_t c : word) {
+        if (c >= 0x0600 && c <= 0x06FF) return false;
+        latin = latin || (c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z');
+    }
+    return latin;
+}
 
 bool Same(const Gdiplus::RectF &a, const Gdiplus::RectF &b) {
     return a.X == b.X && a.Y == b.Y && a.Width == b.Width && a.Height == b.Height;
@@ -21,12 +33,14 @@ PreviewWindow::PreviewWindow() : Popup(L"HarfiPreview", true) {}
 RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vector<int> &doubtful, int selected,
                          const std::wstring &latin, const std::wstring &hint, const RECT &text) {
     if (!Ensure()) return text;
-    Gdiplus::Font arabicFont = ArabicFont(), latinFont = LatinFont(), hintFont = HintFont();
+    Gdiplus::Font arabicFont = ArabicFont(), latinFont = LatinFont(), hintFont = HintFont(), englishFont = EnglishFont();
     runs_.clear();
+    bool anyDotted = false;
     for (size_t i = 0; i < arabic.size(); ++i) {
         bool dotted = false;
         for (int index : doubtful) dotted = dotted || index == static_cast<int>(i);
-        runs_.push_back({arabic[i], Kind::Arabic, dotted});
+        anyDotted = anyDotted || dotted;
+        runs_.push_back({arabic[i], IsEnglish(arabic[i]) ? Kind::English : Kind::Arabic, dotted});
     }
     if (!latin.empty()) runs_.push_back({latin, Kind::Latin});
     if (!hint.empty()) runs_.push_back({hint, Kind::Hint});
@@ -40,8 +54,12 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
     float high = 0, low = 0;  // the letters' extent above (negative) and below the baseline
     bool any = false;
     std::vector<float> widths;
+    auto fontOf = [&](Kind kind) -> const Gdiplus::Font & {
+        return kind == Kind::Arabic ? arabicFont : kind == Kind::English ? englishFont
+             : kind == Kind::Latin ? latinFont : hintFont;
+    };
     for (const Run &run : runs_) {
-        const Gdiplus::Font &font = run.kind == Kind::Arabic ? arabicFont : run.kind == Kind::Latin ? latinFont : hintFont;
+        const Gdiplus::Font &font = fontOf(run.kind);
         bool rtl = run.kind == Kind::Arabic;
         float w = Measure(run.text, font, rtl).Width;
         widths.push_back(w);
@@ -57,8 +75,9 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
         low = LineHeight(arabicFont, ArabicFamily()) + high;
     }
     float height = low - high;
+    // Room under the letters only when a word has the dashed line; otherwise the words sit in the middle.
     SIZE content = {static_cast<LONG>(width + 0.99f) + 2 * Scaled(PadX),
-                    static_cast<LONG>(height + 0.99f) + 2 * Scaled(PadY) + Scaled(LineGap)};
+                    static_cast<LONG>(height + 0.99f) + 2 * Scaled(PadY) + (anyDotted ? Scaled(LineGap) : 0)};
     baseline_ = Scaled(PadY) - high;
     float right = static_cast<float>(content.cx - Scaled(PadX));
     for (size_t i = 0; i < runs_.size(); ++i) {
@@ -114,7 +133,7 @@ void PreviewWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
         Gdiplus::SolidBrush fill(Colour(colours.accent, static_cast<int>(255 * opacity_)));
         graphics.FillPath(&fill, &pill);
     }
-    Gdiplus::Font arabicFont = ArabicFont(), latinFont = LatinFont(), hintFont = HintFont();
+    Gdiplus::Font arabicFont = ArabicFont(), latinFont = LatinFont(), hintFont = HintFont(), englishFont = EnglishFont();
     for (size_t i = 0; i < runs_.size(); ++i) {
         const Run &run = runs_[i];
         float x = run.box.X, w = run.box.Width;
@@ -124,6 +143,10 @@ void PreviewWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
             case Kind::Arabic:
                 WriteOnBaseline(graphics, run.text, arabicFont, ArabicFamily(), onCedar ? colours.onAccent : colours.text,
                                 x, w, baseline_, true);
+                break;
+            case Kind::English:
+                WriteOnBaseline(graphics, run.text, englishFont, LatinFamily(), onCedar ? colours.onAccent : colours.text,
+                                x, w, baseline_, false);
                 break;
             case Kind::Latin:
                 WriteOnBaseline(graphics, run.text, latinFont, LatinFamily(), colours.latin, x, w, baseline_, false);

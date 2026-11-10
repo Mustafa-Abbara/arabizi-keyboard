@@ -222,6 +222,9 @@ Effect Core::Read(char *reply) {
     effect.wordDoubtful = JsonBool(json, "wordDoubtful");
     effect.choice = JsonInt(json, "choice", -1);
     effect.spelling = JsonBool(json, "spelling");
+    effect.typed = Widen(JsonString(json, "typed"));
+    effect.typedStart = JsonInt(json, "typedStart", -1);
+    effect.typedLength = JsonInt(json, "typedLength", 0);
     for (const auto &word : JsonStrings(json, "fixingWords")) effect.fixingWords.push_back(Widen(word));
     effect.fixingIndex = JsonInt(json, "fixingIndex", -1);
     effect.fixingDoubtful = JsonInts(json, "fixingDoubtful");

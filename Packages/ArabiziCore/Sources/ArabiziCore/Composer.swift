@@ -78,19 +78,24 @@ public struct Suggester: Sendable {
     public let spelling: SpellingOptions?
     /// Whether a shown word (with the typed words it came from) is likely wrong: suggestions start on it.
     public let doubtful: @Sendable (_ shown: String, _ latin: String?) -> Bool
+    /// How sure the model was of each word of a converted text (the engine's `wordConfidence`), or nil when unknown.
+    /// When known, suggestions start on the least sure word.
+    public let confidence: @Sendable (_ converted: String) -> [Double]?
 
     public init(candidates: @escaping @Sendable (String, String?) -> [String],
                 align: @escaping @Sendable ([String], [String]) -> [Range<Int>?],
                 record: @escaping @Sendable (Correction) -> Void,
                 now: @escaping @Sendable () -> Date = { Date() },
                 spelling: SpellingOptions? = nil,
-                doubtful: @escaping @Sendable (String, String?) -> Bool = { _, _ in false }) {
+                doubtful: @escaping @Sendable (String, String?) -> Bool = { _, _ in false },
+                confidence: @escaping @Sendable (String) -> [Double]? = { _ in nil }) {
         self.candidates = candidates
         self.align = align
         self.record = record
         self.now = now
         self.spelling = spelling
         self.doubtful = doubtful
+        self.confidence = confidence
     }
 }
 
@@ -150,6 +155,20 @@ public struct Composer {
             words[current.index] = WordParts(words[current.index]).with(current.candidates[highlighted])
         }
         return (words, current.index, current.latin)
+    }
+    /// While suggestions are shown: the sentence as typed (words joined by one space), and the UTF-16 range of the
+    /// typed word(s) the selected word came from (nil when it cannot be traced), so the chip row can show what the
+    /// user wrote and where they are in it.
+    public var typedSentence: (text: String, selected: Range<Int>?)? {
+        guard let current = session else { return nil }
+        let text = current.latinWords.joined(separator: " ")
+        guard current.index < current.alignment.count, let source = current.alignment[current.index],
+              source.lowerBound < current.latinWords.count, source.upperBound <= current.latinWords.count else {
+            return (text, nil)
+        }
+        let start = current.latinWords[..<source.lowerBound].reduce(0) { $0 + $1.utf16.count + 1 }
+        let length = current.latinWords[source].joined(separator: " ").utf16.count
+        return (text, start..<(start + length))
     }
     /// True while the selected word is spelled letter by letter.
     public var isSpelling: Bool { session?.speller != nil }
@@ -266,16 +285,24 @@ public struct Composer {
 
     private func startSuggesting(_ conversion: Conversion) -> SuggestionSession? {
         guard let suggester else { return nil }
-        let words = conversion.converted.components(separatedBy: " ")
+        // The words without direction marks; they are put back when the fixed text is committed.
+        let words = DirectionMarks.removed(conversion.converted).components(separatedBy: " ")
         let latinWords = conversion.latin.split(whereSeparator: \.isWhitespace).map(String.init)
         let alignment = suggester.align(latinWords, words)
         var session = SuggestionSession(latin: conversion.latin, latinWords: latinWords, words: words,
                                         alignment: alignment, index: 0, candidates: [], original: conversion.converted)
-        // Start on the first word that looks wrong, else on the last word (the one just typed is the usual
-        // suspect), even without candidates: any word can be spelled.
+        // Start on the word the model was least sure of, when the engine said; else on the first word that looks
+        // wrong, else on the last word (the one just typed is the usual suspect), even without candidates: any
+        // word can be spelled.
         let lettered = words.indices.filter { words[$0].contains(where: \.isLetter) }
         guard let last = lettered.last else { return nil }
-        let start = lettered.first { suggester.doubtful(words[$0], session.latinWord($0)) } ?? last
+        let start: Int
+        if let sure = suggester.confidence(words.joined(separator: " ")), sure.count == words.count,
+           let leastSure = lettered.min(by: { sure[$0] != sure[$1] ? sure[$0] < sure[$1] : $0 < $1 }) {
+            start = leastSure
+        } else {
+            start = lettered.first { suggester.doubtful(words[$0], session.latinWord($0)) } ?? last
+        }
         session.index = start
         session.candidates = suggester.candidates(words[start], session.latinWord(start))
         return session
@@ -288,8 +315,9 @@ public struct Composer {
         }
         func finish(_ text: String) -> String {
             session = nil
-            lastConversion = Conversion(latin: current.latin, converted: text)  // ⌘Z and ⌥Tab still work
-            return text
+            let committed = DirectionMarks.marked(text)  // the fixed text keeps its reading order in the app too
+            lastConversion = Conversion(latin: current.latin, converted: committed)  // ⌘Z and ⌥Tab still work
+            return committed
         }
         if current.beforeSending {
             func backToLatin(_ edit: (inout String) -> Void) -> Effect {
@@ -389,8 +417,9 @@ public struct Composer {
         }
         func finish(_ text: String) -> String {
             session = nil
-            lastConversion = Conversion(latin: current.latin, converted: text)
-            return text
+            let committed = DirectionMarks.marked(text)
+            lastConversion = Conversion(latin: current.latin, converted: committed)
+            return committed
         }
         switch key {
         case .text(let character):
@@ -441,13 +470,15 @@ public struct Composer {
         lastConversion = nil
         if let current = session {
             session = nil
-            return current.text
+            return DirectionMarks.marked(current.text)
         }
         return buffer.isEmpty ? nil : take()
     }
 
+    /// Converts and remembers what is committed: with direction marks when it mixes Arabic and English, so ⌘Z and ↑
+    /// after converting find exactly the text the app holds.
     private mutating func convertAndRemember(_ latin: String) -> String {
-        let converted = ready(latin) ?? convert(latin)
+        let converted = DirectionMarks.marked(ready(latin) ?? convert(latin))
         lastConversion = Conversion(latin: latin, converted: converted)
         return converted
     }

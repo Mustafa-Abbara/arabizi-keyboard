@@ -224,3 +224,20 @@ func realEngineConvertsWithTheFineTunedModel() throws {
     #expect(response.outcome == .model)
     #expect(response.text == "كيفك يا سبيقة؟ شو هالجمال اليوم؟")
 }
+
+private func sure(_ text: String, _ confidence: [Double]) -> Generation {
+    Generation(text: text, stop: .endOfTurn, promptTokens: 10, generatedTokens: 5, elapsed: .milliseconds(5),
+               wordConfidence: confidence)
+}
+
+@Test func theAnswerSaysHowSureTheModelWasOfEachWord() throws {
+    let model = ScriptedModel { _ in sure("شو عم تعمل", [0.9, 0.95, 0.4]) }
+    let response = try engine(model).convert(request("shu 3am ta3mel"))
+    #expect(response.outcome == .model && response.wordConfidence == [0.9, 0.95, 0.4])
+}
+
+@Test func noConfidenceWhenTheWordsDoNotLineUp() throws {
+    let model = ScriptedModel { _ in sure("شو عم تعمل", [0.9, 0.4]) }
+    let response = try engine(model).convert(request("shu 3am ta3mel"))
+    #expect(response.outcome == .model && response.wordConfidence == nil)
+}

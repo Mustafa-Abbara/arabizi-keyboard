@@ -249,7 +249,7 @@ let spellingLastWord = ("كيفك يا " as String).utf16.count..<spellingConver
     #expect(composer.currentChoice == 0)
     _ = composer.handle(.arrowUp)  // round
     #expect(composer.currentChoice == 1)
-    #expect(composer.handle(.enter) == .commit("كيفك يا sabiye؟"))  // punctuation kept
+    #expect(composer.handle(.enter) == .commit(DirectionMarks.marked("كيفك يا sabiye؟")))  // punctuation kept
     #expect(recorded.all.map(\.chosen) == ["sabiye"])
 }
 
@@ -274,7 +274,7 @@ let spellingLastWord = ("كيفك يا " as String).utf16.count..<spellingConver
     #expect(composer.highlight("sabiye") == .suggest(marked: shown, selected: spellingLastWord.lowerBound..<shown.utf16.count,
                                                      candidates: ["صبيه", "sabiye"], replacingLength: nil))
     #expect(composer.highlight("sabiye") == nil)  // already highlighted
-    #expect(composer.handle(.enter) == .commit(shown))
+    #expect(composer.handle(.enter) == .commit(DirectionMarks.marked(shown)))
     #expect(recorded.all.map(\.chosen) == ["sabiye"])
 
     typeAndConvert(&composer, "kifak ya sabiye")

@@ -15,6 +15,8 @@
       "description": "Which path produced the text: the model, the rule fallback with its reason, or unchanged.",
       "enum": ["model", "fallbackTimeout", "fallbackCheckFailed", "fallbackModelUnavailable", "passthrough"]
     },
-    "latencyMs": {"description": "Time from receiving the request to answering it.", "type": "integer", "minimum": 0}
+    "latencyMs": {"description": "Time from receiving the request to answering it.", "type": "integer", "minimum": 0},
+    "wordConfidence": {"description": "Optional, for a model answer: how sure the model was of each word of text (split at spaces), 0 to 1; the keyboard's up arrow starts on the least sure word.",
+                       "type": "array", "items": {"type": "number", "minimum": 0, "maximum": 1}}
   }
 }

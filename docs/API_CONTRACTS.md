@@ -36,6 +36,7 @@ The Swift tests decode and re-encode the examples byte for byte; `eval/tests/tes
 | `text` | What to insert: Arabic script, with links, numbers and emoji exactly as typed (links and numbers through placeholders, emoji checked; ADR 0025). |
 | `outcome` | Which path made `text` (below). |
 | `latencyMs` | From receiving the request to answering it. |
+| `wordConfidence` | Optional, for a `model` answer: how sure the model was of each word of `text` (split at spaces), 0 to 1 (the lowest token probability in the word). Absent when unknown, or when the answer's words no longer line up with the model's. The keyboard's ↑ starts on the least sure word. |
 
 | `outcome` | When |
 |---|---|

@@ -15,6 +15,32 @@
 import ArabiziCore
 import Foundation
 
+/// How sure the model was of each word of the last few conversions, by the text shown (words joined by one space):
+/// the engine's `wordConfidence`, kept while the user may still press ↑. Only when the counts match the words.
+final class Confidences: @unchecked Sendable {  // `items` is behind `lock`
+    private let lock = NSLock()
+    private var items: [(text: String, confidence: [Double])] = []
+
+    func remember(_ shown: String, _ confidence: [Double]?) {
+        let key = Self.key(shown)
+        guard let confidence, confidence.count == key.split(separator: " ").count else { return }
+        lock.withLock {
+            items.removeAll { $0.text == key }
+            items.append((key, confidence))
+            if items.count > 32 { items.removeFirst() }
+        }
+    }
+
+    func of(_ converted: String) -> [Double]? {
+        let key = Self.key(converted)
+        return lock.withLock { items.last { $0.text == key }?.confidence }
+    }
+
+    private static func key(_ text: String) -> String {
+        DirectionMarks.removed(text).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+}
+
 /// The rules, the English guard and what suggestions need, read once from a rules folder.
 final class Core: Sendable {
     let rules: RuleConverter
@@ -29,8 +55,12 @@ final class Core: Sendable {
     let unsure: UnsureWords
     /// Unsure words already pointed out in this app, so a word the user keeps is not pointed out again.
     private let pointedOut = PointedOut()
+    /// How sure the model was of each word of the last conversions, by the text shown: ↑ starts on the least sure.
+    let confidences: Confidences
 
     init(rulesDirectory: URL) throws {
+        let confidences = Confidences()
+        self.confidences = confidences
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
         self.rules = rules
         english = EnglishGuard(rulesDirectory: rulesDirectory, rules: rules)
@@ -58,7 +88,8 @@ final class Core: Sendable {
             align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
             record: { correction in personal?.record(correction) },
             spelling: spelling,
-            doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false })
+            doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false },
+            confidence: { [confidences] converted in confidences.of(converted) })
         #if os(Windows)
         // The keyboard's folder holds rules\, config\ and harfi-engine.exe.
         let engine = EngineClient(folder: rulesDirectory.deletingLastPathComponent())
@@ -71,7 +102,10 @@ final class Core: Sendable {
     /// The engine's conversion of exactly this text, made ahead for the preview: Enter sends it without asking again.
     func ready(_ text: String) -> String? {
         #if os(Windows)
-        return ahead?.arabic(for: text).map { fromModel(text, $0) }
+        guard let made = ahead?.answer(for: text) else { return nil }
+        let shown = fromModel(text, made.arabic)
+        confidences.remember(shown, made.confidence)
+        return shown
         #else
         return nil
         #endif
@@ -117,7 +151,11 @@ final class Core: Sendable {
     /// rules here.
     func convertForSending(_ text: String) -> String {
         #if os(Windows)
-        if let answer = engine?.convert(text) { return fromModel(text, answer) }
+        if let answer = engine?.answer(text) {
+            let shown = fromModel(text, answer.text)
+            confidences.remember(shown, answer.wordConfidence)
+            return shown
+        }
         #endif
         return yours(text, convert(text))
     }
@@ -275,6 +313,13 @@ private func reply(_ box: ComposerBox, _ effect: Effect) -> String {
         reply["wordDoubtful"] = box.core.suggester?.doubtful(word.shown, word.latin) ?? false  // amber in the chip row
     }
     reply["spelling"] = box.composer.isSpelling
+    if let typed = box.composer.typedSentence {  // the sentence as typed, the selected word's part highlighted
+        reply["typed"] = typed.text
+        if let selected = typed.selected {
+            reply["typedStart"] = selected.lowerBound
+            reply["typedLength"] = selected.count
+        }
+    }
     if case .commit(let text) = effect, box.composer.lastConversion != nil,
        let word = box.core.toPointOut(in: text) {  // a conversion was sent with a word the model was unsure of
         reply["unsureWord"] = word

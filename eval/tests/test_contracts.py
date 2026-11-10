@@ -35,6 +35,8 @@ def test_examples_match_their_schema(name):
     ("convert_request", {"extra": True}),
     ("convert_response", {"outcome": "guess"}),
     ("convert_response", {"latencyMs": -1}),
+    ("convert_response", {"wordConfidence": [1.5]}),
+    ("convert_response", {"wordConfidence": "high"}),
     ("word_guess_request", {"kind": "convert"}),
     ("word_guess_request", {"count": 0}),
     ("word_guess_request", {"count": 11}),
@@ -43,3 +45,7 @@ def test_examples_match_their_schema(name):
 ])
 def test_bad_messages_fail_the_schema(name, change):
     assert not validator(name).is_valid(example(name) | change)
+
+
+def test_a_response_may_say_how_sure_the_model_was_of_each_word():
+    validator("convert_response").validate(example("convert_response") | {"wordConfidence": [0.98, 0.41, 1.0]})
