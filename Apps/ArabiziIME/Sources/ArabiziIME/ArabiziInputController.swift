@@ -727,7 +727,8 @@ final class PreviewWindow {
         let panel = ensurePanel()
         guard let label else { return panel.frame }
         let paragraph = NSMutableParagraphStyle()
-        paragraph.baseWritingDirection = .natural
+        // Right to left when any word is Arabic (a mixed sentence is sent right to left too), else left to right.
+        paragraph.baseWritingDirection = words.allSatisfy(Self.isEnglish) ? .leftToRight : .rightToLeft
         let text = NSMutableAttributedString()
         func add(_ string: String, size: CGFloat, color: NSColor, doubtful: Bool = false, arabic: Bool = false) {
             var attributes: [NSAttributedString.Key: Any] = [.font: arabic ? Theme.arabic(size) : NSFont.systemFont(ofSize: size),
