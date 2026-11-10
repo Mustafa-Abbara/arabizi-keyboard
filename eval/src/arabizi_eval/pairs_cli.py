@@ -1027,6 +1027,7 @@ def cmd_train_ranker(args: argparse.Namespace) -> int:
     ranker = C.train_ranker(examples)
     ranker["trained_on_sets"] = sorted(args.sets)
     C.RANKER_PATH.write_text(json.dumps(ranker, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    C.write_fixture()  # the Swift port is tested against this ranker's order
     top = sorted(zip(C.FEATURES, ranker["weights"], strict=True), key=lambda x: -abs(x[1]))[:6]
     print(f"wrote {C.RANKER_PATH.name}: trained on {len(examples)} wrong words ({', '.join(sorted(args.sets))}); "
           f"strongest signals: {', '.join(f'{f} {w:+.2f}' for f, w in top)}")
