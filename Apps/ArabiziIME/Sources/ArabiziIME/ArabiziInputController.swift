@@ -16,10 +16,47 @@ final class ArabiziInputController: IMKInputController {
     private static let convert: @Sendable (String) -> String = {
         let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         let rules = quickConvert
-        guard let engine = EngineClient(resources: resources) else { return rules }
+        guard let engine = EngineClient(resources: resources) else { return { yours($0, rules($0)) } }
         engine.warmUp()
-        return { text in engine.convert(text) ?? rules(text) }
+        return { text in
+            guard let answer = engine.respond(text) else { return yours(text, rules(text)) }
+            return answer.outcome == .model ? fromModel(text, answer.text) : yours(text, answer.text)
+        }
     }()
+    /// The user's own words: every pick recorded in the encrypted correction record, and the habits it supports
+    /// (ADR 0033). nil when the record cannot be kept: then nothing is recorded or learned.
+    private static let personal: PersonalWords? = CorrectionStore.standard().map(PersonalWords.init)
+    /// Words the model wrote that were never written in training (ADR 0034).
+    private static let unsure: UnsureWords? = {
+        let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
+        guard let lexicon = try? Data(contentsOf: resources.appending(path: RuleConverter.lexiconFileName)) else {
+            return nil
+        }
+        return UnsureWords(known: Suggestions.arabicWords(lexicon: lexicon).keys,
+                           dictionary: Suggestions.dictionary(lexicon: lexicon))
+    }()
+    private static let pointedOut = PointedOut()
+
+    /// The model's answer as the keyboard shows it: unsure words with a dictionary spelling written that way
+    /// (ADR 0034), then the user's habits over everything (ADR 0033).
+    private static func fromModel(_ latin: String, _ arabic: String) -> String {
+        guard let unsure, let suggester else { return arabic }
+        return yours(latin, unsure.swap(latin: latin, converted: arabic, align: suggester.align))
+    }
+
+    /// `arabic` (a conversion of `latin`) with the user's learned habits applied, after the model (ADR 0027 #6).
+    private static func yours(_ latin: String, _ arabic: String) -> String {
+        guard let personal, let suggester else { return arabic }
+        return Habits.apply(personal.current(), latin: latin, converted: arabic, align: suggester.align)
+    }
+
+    /// The first unsure word of a text just sent, to point out: not one the user has chosen themself, and each word
+    /// once in this session.
+    private static func toPointOut(in text: String) -> String? {
+        guard let words = unsure?.unsure(in: text), !words.isEmpty else { return nil }
+        let chosen = Set((personal?.store.all() ?? []).map(\.chosen))
+        return pointedOut.first(of: words.filter { !chosen.contains($0) })
+    }
     /// The rule converter from Resources, nil without the rule files.
     private static let ruleConverter: RuleConverter? = {
         let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
@@ -48,19 +85,17 @@ final class ArabiziInputController: IMKInputController {
         let suggestions = Suggestions(dictionary: Suggestions.dictionary(lexicon: lexicon),
                                       arabicWords: Suggestions.arabicWords(lexicon: lexicon),
                                       rules: { rules.convert($0) })
-        let store = CorrectionStore.standard()
+        let personal = ArabiziInputController.personal
         let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
-        log.info("suggestions ready; corrections \(store == nil ? "not recorded" : "recorded", privacy: .public)")
+        log.info("suggestions ready; corrections \(personal == nil ? "not recorded" : "recorded", privacy: .public)")
         let spelling = try? SpellingOptions(rulesDirectory: resources, rules: rules)
         if spelling == nil { log.error("spelling options not loaded") }
         return Suggester(
             candidates: { shown, latin in
-                suggestions.personalized(for: shown, latin: latin, past: store?.all() ?? [])
+                suggestions.personalized(for: shown, latin: latin, past: personal?.store.all() ?? [])
             },
             align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
-            record: { correction in
-                do { try store?.record(correction) } catch { log.error("correction not saved") }
-            },
+            record: { correction in personal?.record(correction) },  // may complete a habit, announced after the key
             spelling: spelling,
             doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false })
     }()
@@ -205,6 +240,30 @@ final class ArabiziInputController: IMKInputController {
 
     private static let fixHintTimes = 5, fixHintUses = 3, previewFixUses = 3
 
+    /// A habit just announced, and until when Esc refuses it (ADR 0033): the tip shows for 6 seconds.
+    private var announced: (habit: Habit, until: Date)?
+
+    /// After a pick that completed a habit: a tip saying so, which Esc refuses while it shows.
+    private func announceHabit(in client: IMKTextInput) {
+        guard let habit = Self.personal?.takeLearned() else { return }
+        announced = (habit, Date().addingTimeInterval(6))
+        let cursor = client.selectedRange().location
+        let line = lineRect(client, at: [cursor - 1, cursor])
+        nonisolated(unsafe) let chips = chips
+        let tip = "Harfi will now write \(habit.latin) as \(habit.spelling) · Esc: don't"
+        MainActor.assumeIsolated { chips.showHint(tip, above: line, seconds: 6) }
+    }
+
+    /// After sending: the first unsure word still in the text (ADR 0034), else the first-week hint about ⌥Tab.
+    private func pointOut(_ sent: String, in client: IMKTextInput) {
+        guard let word = Self.toPointOut(in: sent) else { return showFixHint(in: client) }
+        let cursor = client.selectedRange().location
+        let line = lineRect(client, at: [cursor - 1, cursor])
+        guard line != .zero else { return }
+        nonisolated(unsafe) let chips = chips
+        MainActor.assumeIsolated { chips.showHint("Not sure about \(word) · ⌥Tab to fix it", above: line, seconds: 4) }
+    }
+
     /// The last line position an app reported that made sense: used when the app reports none or a wrong one.
     private var lastLine: NSRect?
 
@@ -262,6 +321,17 @@ final class ArabiziInputController: IMKInputController {
             break
         }
 
+        // Esc while a new habit's tip shows: the user does not want it (it is never applied or announced again).
+        if let tip = announced {
+            announced = nil
+            if key == .escape, Date() < tip.until, composer.buffer.isEmpty, !composer.isSuggesting {
+                Self.personal?.refuse(tip.habit)
+                hideCandidates()
+                log.notice("habit refused")
+                return true
+            }
+        }
+
         let wasComposing = !composer.buffer.isEmpty && !composer.isSuggesting
         let wasFixing = composer.fixingBeforeSending != nil
         let effect = composer.handle(key, context: context)
@@ -278,10 +348,11 @@ final class ArabiziInputController: IMKInputController {
             UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "previewFixUses") + 1, forKey: "previewFixUses")
         }
         let handled = apply(effect, to: client, selection: selection)
-        if key == .enter, case .commit = effect, composer.lastConversion != nil {
-            showFixHint(in: client)
+        if key == .enter, case .commit(let sent) = effect, composer.lastConversion != nil {
+            pointOut(sent, in: client)
             Settings.complete(.converted)
         }
+        if case .commit = effect { announceHabit(in: client) }  // a pick by its number may have completed a habit
         if case .commit = effect, wasFixing {  // fixed before sending: Enter, or a spelling picked with its number
             Settings.complete(.fixed)
             Settings.complete(.converted)
@@ -404,6 +475,7 @@ final class ArabiziInputController: IMKInputController {
         guard effect != .consume else { return }
         _ = apply(effect, to: client)
         if !composer.isSuggesting { rememberConversionEnd(in: client) }
+        announceHabit(in: client)
     }
 
     /// "Spell it" clicked: the same as ⌥Tab a second time.
