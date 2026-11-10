@@ -9,6 +9,9 @@ import WinSDK
 @objc public protocol ArabiziEngineServiceProtocol {
     /// A JSON ConvertRequest in; a JSON ConvertResponse out (empty Data if the request could not be read).
     func convert(_ request: Data, reply: @escaping @Sendable (Data) -> Void)
+    /// A JSON WordGuessRequest in; a JSON WordGuessResponse out (empty Data if the request could not be read).
+    /// The ↑ list's model guesses (ADR 0036).
+    func wordGuesses(_ request: Data, reply: @escaping @Sendable (Data) -> Void)
     /// A JSON object about the service: model state, whether it is still loading, and a network probe that must fail
     /// (the service has no network entitlement). Never contains user text.
     func status(reply: @escaping @Sendable (Data) -> Void)

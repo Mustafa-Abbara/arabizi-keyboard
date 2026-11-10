@@ -49,6 +49,17 @@ final class EngineHost: NSObject, ArabiziEngineServiceProtocol, @unchecked Senda
         reply((try? encoder.encode(response)) ?? Data())
     }
 
+    func wordGuesses(_ request: Data, reply: @escaping @Sendable (Data) -> Void) {
+        guard let decoded = try? decoder.decode(WordGuessRequest.self, from: request) else {
+            reply(Data())
+            return
+        }
+        let current = lock.withLock { engine }
+        let response = current.wordGuesses(decoded)
+        log.debug("guessed: \(response.outcome.rawValue, privacy: .public), \(response.guesses.count) word(s) in \(response.latencyMs) ms")
+        reply((try? encoder.encode(response)) ?? Data())
+    }
+
     struct Status: Codable, Sendable {
         var loading: Bool
         var state: String

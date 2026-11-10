@@ -24,7 +24,7 @@ def example(name: str) -> dict:
     return json.loads((SCHEMAS / "examples" / f"{name}.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("name", ["convert_request", "convert_response"])
+@pytest.mark.parametrize("name", ["convert_request", "convert_response", "word_guess_request", "word_guess_response"])
 def test_examples_match_their_schema(name):
     validator(name).validate(example(name))
 
@@ -35,6 +35,11 @@ def test_examples_match_their_schema(name):
     ("convert_request", {"extra": True}),
     ("convert_response", {"outcome": "guess"}),
     ("convert_response", {"latencyMs": -1}),
+    ("word_guess_request", {"kind": "convert"}),
+    ("word_guess_request", {"count": 0}),
+    ("word_guess_request", {"count": 11}),
+    ("word_guess_response", {"guesses": [{"word": "", "logProbability": -1}]}),
+    ("word_guess_response", {"guesses": [{"word": "عم", "logProbability": 0.5}]}),
 ])
 def test_bad_messages_fail_the_schema(name, change):
     assert not validator(name).is_valid(example(name) | change)

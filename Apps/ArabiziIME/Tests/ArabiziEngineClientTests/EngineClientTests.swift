@@ -36,6 +36,8 @@ private final class FakeService: NSObject, ArabiziEngineServiceProtocol, @unchec
     }
 
     func status(reply: @escaping @Sendable (Data) -> Void) { reply(Data("{}".utf8)) }
+
+    func wordGuesses(_ request: Data, reply: @escaping @Sendable (Data) -> Void) { reply(Data()) }
 }
 
 /// Hands out a link per connection attempt, each with the next behaviour, and counts the attempts.

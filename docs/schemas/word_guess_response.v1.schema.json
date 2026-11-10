@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Mustafa-Abbara/arabizi-keyboard/docs/schemas/word_guess_response.v1.schema.json",
+  "title": "WordGuessResponse v1",
+  "description": "The model's guesses for one word, best first (ADR 0036). Swift: ArabiziContracts.WordGuessResponse. Explained in docs/API_CONTRACTS.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "id", "guesses", "outcome", "latencyMs"],
+  "properties": {
+    "v": {"description": "Contract version; anything else is rejected.", "const": 1},
+    "id": {"description": "The id of the request this answers.", "type": "string", "format": "uuid",
+           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
+    "guesses": {
+      "description": "Arabic words, best first, each with the model's log-probability of writing it there.",
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["word", "logProbability"],
+        "properties": {
+          "word": {"type": "string", "minLength": 1},
+          "logProbability": {"type": "number", "maximum": 0}
+        }
+      }
+    },
+    "outcome": {
+      "description": "model: the model answered (the list may be empty); fallbackTimeout: the deadline passed; fallbackModelUnavailable: no model.",
+      "enum": ["model", "fallbackTimeout", "fallbackCheckFailed", "fallbackModelUnavailable", "passthrough"]
+    },
+    "latencyMs": {"description": "Time from receiving the request to answering it.", "type": "integer", "minimum": 0}
+  }
+}

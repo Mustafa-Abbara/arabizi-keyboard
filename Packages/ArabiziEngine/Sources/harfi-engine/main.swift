@@ -2,7 +2,8 @@
 // so the model is loaded once and never inside the apps the keyboard runs in. The keyboard's core (HarfiCoreC) starts
 // it when it finds none. It answers on the rules at once and loads the model in the background (its SHA-256 check
 // reads the whole file). Requests arrive on a named pipe (EngineService.pipeName), one JSON line each: a
-// ConvertRequest in, its ConvertResponse out; the line `status` gets the model state. One engine per user: a second
+// ConvertRequest in, its ConvertResponse out, or a WordGuessRequest in (`"kind": "wordGuesses"`, ADR 0036), its
+// WordGuessResponse out; the line `status` gets the model state. One engine per user: a second
 // one finds the pipe taken and quits. After half an hour without a request it quits, which frees the model's memory;
 // the next conversion starts it again. Never logs user text: only states, outcomes and timings (engine.log).
 import ArabiziContracts
@@ -80,6 +81,12 @@ final class Host: @unchecked Sendable {  // `engine`, `loading` and `lastUse` ar
                 status["state"] = "unavailable"; status["model"] = id; status["reason"] = reason
             }
             return (try? JSONSerialization.data(withJSONObject: status, options: [.sortedKeys])) ?? Data("{}".utf8)
+        }
+        if WordGuessRequest.isWordGuessRequest(line) {  // the ↑ list's model guesses (ADR 0036)
+            guard let request = try? decoder.decode(WordGuessRequest.self, from: line) else { return Data("{}".utf8) }
+            let response = current.wordGuesses(request)
+            log("guessed: \(response.outcome.rawValue), \(response.guesses.count) word(s) in \(response.latencyMs) ms")
+            return (try? Contract.encoder().encode(response)) ?? Data("{}".utf8)
         }
         guard let request = try? decoder.decode(ConvertRequest.self, from: line) else { return Data("{}".utf8) }
         let response = current.convert(request)

@@ -6,6 +6,7 @@ The messages between the keyboard, the engine and `arabizi-cli`, and the engine'
 |---|---|---|
 | Request | `ArabiziContracts.ConvertRequest` | [convert_request.v1.schema.json](schemas/convert_request.v1.schema.json), [example](schemas/examples/convert_request.json) |
 | Response | `ArabiziContracts.ConvertResponse` | [convert_response.v1.schema.json](schemas/convert_response.v1.schema.json), [example](schemas/examples/convert_response.json) |
+| Word guesses (↑ list, ADR 0036) | `ArabiziContracts.WordGuessRequest`, `WordGuessResponse` | [word_guess_request.v1.schema.json](schemas/word_guess_request.v1.schema.json), [word_guess_response.v1.schema.json](schemas/word_guess_response.v1.schema.json), [examples](schemas/examples/) |
 | Settings | `ArabiziCore.EngineConfig` | [config/engine.json](../config/engine.json) |
 
 The Swift tests decode and re-encode the examples byte for byte; `eval/tests/test_contracts.py` checks them against the schemas. A change to a message changes all three in the same PR.
@@ -50,6 +51,27 @@ The Swift tests decode and re-encode the examples byte for byte; `eval/tests/tes
 swift build -c release --package-path Packages/ArabiziEngine
 echo '{"v":1,"id":"0D7A4C3E-2B1F-4E8A-9C6D-5F3B2A1E0D9C","text":"kifak?","deadlineMs":1500}' | Packages/ArabiziEngine/.build/release/arabizi-cli --model arabizi-llama3.2-1b-v1
 ```
+
+## Word guesses (v1, ADR 0036)
+
+The model's other spellings for one word of its answer: the ↑ list's first source. The request goes on the same Windows pipe or Mac service as conversions; `"kind": "wordGuesses"` tells it apart (`WordGuessRequest.isWordGuessRequest`). `arabizi-cli` answers both kinds, line by line.
+
+```json
+{"before":"شو","count":5,"deadlineMs":400,"id":"5B1E9C2A-7D3F-4A6B-8E1C-9F2D4A7B3C6E","kind":"wordGuesses","text":"shu 3am ta3mel","v":1}
+{"guesses":[{"logProbability":-0.125,"word":"عم"},{"logProbability":-2.5,"word":"عام"}],"id":"5B1E9C2A-7D3F-4A6B-8E1C-9F2D4A7B3C6E","latencyMs":180,"outcome":"model","v":1}
+```
+
+| Field | Meaning |
+|---|---|
+| `kind` | Always `wordGuesses`. |
+| `text` | The message as typed, as it was converted. |
+| `before` | The model's answer up to the word being fixed; empty for the first word. Spans the conversion masked (links, numbers) are masked here too. |
+| `count` | Guesses wanted, 1–10 (the keyboard asks for 5). |
+| `deadlineMs` | How long the caller waits; past it the answer has no guesses. |
+| `guesses` | Whole Arabic words (no diacritics), best first, with the model's log-probability of writing each there. |
+| `outcome` | `model` (it answered; the list may be empty), `fallbackTimeout` (the deadline passed), `fallbackModelUnavailable` (no model, input too long, or an error). Never an error: the keyboard keeps the list it shows. |
+
+The engine searches with a small beam: the prompt and the answer so far are decoded once (usually only the answer: a conversion leaves its prompt and answer in the model's cache, and the search reuses them), then one decode per step holds every branch, and it stops once no open branch can beat the words already found. Conversions still start from an empty cache, so they give exactly the answers they gave before. On the Windows laptop (CPU), right after a conversion: median 280 ms, 90th percentile 400 ms, slowest 541 ms over 102 dev words.
 
 ## Output checks (`ArabiziCore.OutputChecks`)
 

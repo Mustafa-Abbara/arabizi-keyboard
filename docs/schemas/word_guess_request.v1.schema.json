@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Mustafa-Abbara/arabizi-keyboard/docs/schemas/word_guess_request.v1.schema.json",
+  "title": "WordGuessRequest v1",
+  "description": "The model's other spellings for one word of its answer (ADR 0036). Sent by the keyboard to the engine on the same pipe or service as ConvertRequest; `kind` tells them apart. Swift: ArabiziContracts.WordGuessRequest. Explained in docs/API_CONTRACTS.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "kind", "id", "text", "before", "count", "deadlineMs"],
+  "properties": {
+    "v": {"description": "Contract version; anything else is rejected.", "const": 1},
+    "kind": {"description": "Always wordGuesses.", "const": "wordGuesses"},
+    "id": {"description": "Request id (UUID), echoed in the response.", "type": "string", "format": "uuid",
+           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
+    "text": {"description": "The message as typed (Latin), as it was converted.", "type": "string"},
+    "before": {"description": "The model's answer up to the word being fixed; empty for the first word.", "type": "string"},
+    "count": {"description": "How many guesses to return at most.", "type": "integer", "minimum": 1, "maximum": 10},
+    "deadlineMs": {"description": "How long the caller waits; past it the engine answers with no guesses.", "type": "integer", "minimum": 1}
+  }
+}

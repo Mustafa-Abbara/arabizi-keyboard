@@ -17,6 +17,10 @@ As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026.
 | Very long input (over `max_input_chars`) | Arabic from the rules, without the model | `tooLongInputSkipsTheModel` |
 | Plain English typed | Left exactly as typed | `plainEnglishIsLeftAloneAndNeverReachesTheModel`, `plainEnglishIsRecognised`, `arabiziAndShortTextIsNotEnglish` |
 | A word the model writes from nothing typed (`waraye` → ورايق) | The conversion is kept; the word gets a dashed line and ↑ starts on it | `aWordWithALetterNoKeyWritesIsDoubtful`, `suggestionsStartOnTheWordThatLooksWrong` |
+| Word guesses for the ↑ list (ADR 0036): no model, model error, input too long | No model guesses; the ↑ list from the other sources is already shown and stays | `withoutAModelThereAreNoGuesses`, `aGeneratorThatCannotGuessGivesNoGuesses`, `anErrorIsNeverThrown` |
+| Word guesses too slow for their deadline | No model guesses for that word (`fallbackTimeout`); the list stays | `aSlowModelWithNothingToOfferIsATimeout`, `wordGuessesPastTheDeadlineAreEmpty` (ArabiziLLM, with a model) |
+| Word guesses that are not Arabic words (Latin, tokens of the prompt) | Dropped; only whole Arabic words reach the list | `theModelsGuessesComeBackCleanAndBestFirst`, `guessedWordsAreCleaned` |
+| Word guesses leaving state in the model's cache | Conversions start from an empty cache: the same answers as without guesses | `aConversionIsTheSameBeforeAndAfterWordGuesses` (ArabiziLLM, with a model); 104/104 dev conversions identical (PR) |
 
 ## Service, files and installation
 
