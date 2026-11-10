@@ -117,4 +117,41 @@ import Testing
                               ranker: ranker)
         }
     }
+
+    @Test func theUsersOwnFixComesFirstAndTheTypedWordLast() throws {
+        let list = try Self.list.get()
+        let past = [Correction(latin: "sawene", chosen: "ثواني", rejected: "سوانة", date: Date())]
+        let out = list.personalized(for: "سوانة،", latin: "sawene,", past: past)
+        #expect(out.first == "ثواني")
+        #expect(out.last == "sawene" && out.count <= CandidateList.listLength)
+        #expect(!out.contains("سوانة"))
+    }
+
+    @Test func theTypedWordKeepsItsPlaceWhenFixesFillTheList() throws {
+        let list = try Self.list.get()
+        let past = ["صوني", "سوني", "صواني", "سواني", "ساوني", "سويني", "صويني"].map {
+            Correction(latin: "sawene", chosen: $0, rejected: "سوانة", date: Date())
+        }
+        let out = list.personalized(for: "سوانة", latin: "sawene", past: past)
+        #expect(out.count == CandidateList.listLength && out.last == "sawene")
+    }
+
+    @Test func aRunOfTypedWordsIsOneTypedWord() throws {
+        let out = try Self.list.get().personalized(for: "وانا", latin: "w ana", past: [])
+        #expect(out.last == "w ana" && out.count <= CandidateList.listLength)
+    }
+
+    @Test func theListLoadsInTheBackground() throws {
+        let loader = BackgroundCandidateList(rulesDirectory: rulesDirectory)
+        let start = Date()
+        while !loader.isFinished && Date().timeIntervalSince(start) < 30 { Thread.sleep(forTimeInterval: 0.05) }
+        #expect(loader.list != nil)
+    }
+
+    @Test func withoutItsFilesTheFirstListStays() throws {
+        let loader = BackgroundCandidateList(rulesDirectory: URL(filePath: "/nonexistent/rules"))
+        let start = Date()
+        while !loader.isFinished && Date().timeIntervalSince(start) < 30 { Thread.sleep(forTimeInterval: 0.05) }
+        #expect(loader.isFinished && loader.list == nil)
+    }
 }

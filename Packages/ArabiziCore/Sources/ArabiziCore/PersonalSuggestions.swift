@@ -52,6 +52,21 @@ extension Suggestions {
     /// 3. the usual candidates, the kinds of change the user picks most often first.
     public func personalized(for shown: String, latin: String?, past: [Correction], limit: Int = Suggestions.listLength) -> [String] {
         let word = WordParts(shown).core
+        let usual = ordered(candidates(for: shown, latin: latin, limit: limit + 3), shown: shown, latin: latin, by: past)
+        var out: [String] = []
+        for candidate in personalFixes(for: shown, latin: latin, past: past, limit: limit) + usual
+        where candidate != word && !out.contains(candidate) {
+            out.append(candidate)
+        }
+        return Array(out.prefix(limit))
+    }
+
+    /// The user's own fixes for this word (steps 1 and 2 above), best first: earlier fixes of the same typed word,
+    /// then fixes of typed words one letter apart whose spelling looks like the shown word. Both lists put these
+    /// first: this one and word suggestions v2 (`CandidateList.personalized`, ADR 0036).
+    public func personalFixes(for shown: String, latin: String?, past: [Correction],
+                              limit: Int = Suggestions.listLength) -> [String] {
+        let word = WordParts(shown).core
         let own = Self.pastFixesFirst(past, latin: latin, shown: shown, candidates: [], limit: limit)
         var similar: [String: Int] = [:]
         if let latin {
@@ -63,12 +78,9 @@ extension Suggestions {
             }
         }
         let fromSimilar = similar.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
-        let usual = ordered(candidates(for: shown, latin: latin, limit: limit + 3), shown: shown, latin: latin, by: past)
         var out: [String] = []
-        for candidate in own + fromSimilar + usual where candidate != word && !out.contains(candidate) {
-            out.append(candidate)
-        }
-        return Array(out.prefix(limit))
+        for candidate in own + fromSimilar where candidate != word && !out.contains(candidate) { out.append(candidate) }
+        return out
     }
 
     /// `candidates` with the kinds of change the user has picked most often first (stable: equal counts keep

@@ -90,9 +90,15 @@ final class ArabiziInputController: IMKInputController {
         log.info("suggestions ready; corrections \(personal == nil ? "not recorded" : "recorded", privacy: .public)")
         let spelling = try? SpellingOptions(rulesDirectory: resources, rules: rules)
         if spelling == nil { log.error("spelling options not loaded") }
+        // Word suggestions v2 (ADR 0036), loaded in the background; the first list until it is ready.
+        let candidates = BackgroundCandidateList(rulesDirectory: resources) { result in
+            if case .failure = result { log.error("word suggestions v2 not loaded: the first list stays") }
+        }
         return Suggester(
             candidates: { shown, latin in
-                suggestions.personalized(for: shown, latin: latin, past: personal?.store.all() ?? [])
+                let past = personal?.store.all() ?? []
+                return candidates.list?.personalized(for: shown, latin: latin, past: past)
+                    ?? suggestions.personalized(for: shown, latin: latin, past: past)
             },
             align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
             record: { correction in personal?.record(correction) },  // may complete a habit, announced after the key

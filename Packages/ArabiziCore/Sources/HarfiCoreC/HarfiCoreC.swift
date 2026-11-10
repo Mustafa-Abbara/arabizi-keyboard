@@ -47,9 +47,13 @@ final class Core: Sendable {
             ? CorrectionStore.standard(folder: keyboard.appending(path: "words")).map { PersonalWords(store: $0) }
             : nil
         self.personal = personal
+        // Word suggestions v2 (ADR 0036), loaded in the background; the first list until it is ready.
+        let candidates = BackgroundCandidateList(rulesDirectory: rulesDirectory)
         suggester = Suggester(
             candidates: { shown, latin in  // the user's earlier fixes first, as on the Mac (ADR 0027 #8–9)
-                suggestions.personalized(for: shown, latin: latin, past: personal?.store.all() ?? [])
+                let past = personal?.store.all() ?? []
+                return candidates.list?.personalized(for: shown, latin: latin, past: past)
+                    ?? suggestions.personalized(for: shown, latin: latin, past: past)
             },
             align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
             record: { correction in personal?.record(correction) },
