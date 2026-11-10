@@ -2,10 +2,13 @@ import AppKit
 
 /// The row of spellings above the text (⌥Tab), where the live preview sits, in the palette: the first spelling on the right, as Arabic
 /// reads, each with its number key, then "Spell it". While spelling, the letters for the last key. The keys work
-/// as before (the composer handles them); a click picks a chip without taking the focus from the app.
+/// as before (the composer handles them); a click picks a chip without taking the focus from the app. Above the
+/// chips, the sentence as typed, with the words the selected one came from highlighted.
 final class CorrectionChips {
     private var panel: NSPanel?
+    private var column: NSStackView?
     private var row: NSStackView?
+    private var typedLine: TypedLine?
     private var hintToken = 0
 
     @MainActor private func ensurePanel() -> (NSPanel, NSStackView) {
@@ -23,29 +26,45 @@ final class CorrectionChips {
         let row = NSStackView()
         row.orientation = .horizontal
         row.spacing = 6
-        row.edgeInsets = NSEdgeInsets(top: 6, left: 6, bottom: 6, right: 6)
         row.userInterfaceLayoutDirection = .rightToLeft
-        row.translatesAutoresizingMaskIntoConstraints = false
-        background.addSubview(row)
+        let typedLine = TypedLine()
+        typedLine.isHidden = true
+        // The typed sentence on top, then the chips, both on the right as Arabic reads.
+        let column = NSStackView(views: [typedLine, row])
+        column.orientation = .vertical
+        column.alignment = .trailing
+        column.spacing = 6
+        column.edgeInsets = NSEdgeInsets(top: 6, left: 6, bottom: 6, right: 6)
+        column.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(column)
         NSLayoutConstraint.activate([
-            row.leadingAnchor.constraint(equalTo: background.leadingAnchor),
-            row.trailingAnchor.constraint(equalTo: background.trailingAnchor),
-            row.topAnchor.constraint(equalTo: background.topAnchor),
-            row.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+            column.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            column.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            column.topAnchor.constraint(equalTo: background.topAnchor),
+            column.bottomAnchor.constraint(equalTo: background.bottomAnchor),
         ])
         panel.contentView = background
         self.panel = panel
+        self.column = column
         self.row = row
+        self.typedLine = typedLine
         return (panel, row)
     }
 
     /// Shows the spellings above `line` (the text's first line, in screen coordinates). `choice` is highlighted.
+    /// `typed`: the sentence as typed, with the UTF-16 range of the words the selected word came from.
     @MainActor func show(word: String?, doubtful: Bool, candidates: [String], spelling: Bool, choice: Int?,
-                         above line: NSRect,
+                         typed: (text: String, selected: Range<Int>?)?, above line: NSRect,
                          pick: @escaping (String) -> Void, spellIt: @escaping () -> Void) {
         hintToken += 1
         let (panel, row) = ensurePanel()
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if let typed, !typed.text.isEmpty {
+            typedLine?.set(typed.text, selected: typed.selected)
+            typedLine?.isHidden = false
+        } else {
+            typedLine?.isHidden = true
+        }
         if let word, !spelling {  // the word being fixed, first (on the right): amber when it looks wrong
             row.addArrangedSubview(ChipView(current: word, doubtful: doubtful))
         }
@@ -59,7 +78,7 @@ final class CorrectionChips {
         } else {
             row.addArrangedSubview(ChipView(quiet: "Spell it", onClick: spellIt))
         }
-        place(panel, size: row.fittingSize, above: line)
+        place(panel, size: column?.fittingSize ?? row.fittingSize, above: line)
     }
 
     /// A short line above the text after a conversion, hidden after `seconds` or by the next chips.
@@ -68,8 +87,9 @@ final class CorrectionChips {
         let token = hintToken
         let (panel, row) = ensurePanel()
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        typedLine?.isHidden = true
         row.addArrangedSubview(ChipView(hint: text))
-        place(panel, size: row.fittingSize, above: line)
+        place(panel, size: column?.fittingSize ?? row.fittingSize, above: line)
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
             guard let self, self.hintToken == token else { return }
             self.hide()
@@ -202,5 +222,62 @@ final class ChipView: NSView {
     override func accessibilityPerformPress() -> Bool {
         onClick?()
         return onClick != nil
+    }
+}
+
+/// The sentence as typed, above the chips: its words laid out right to left like the Arabic (the first word on the
+/// right), so the arrows move its highlight the same way as in the Arabic. The words the selected Arabic word came
+/// from sit on a soft accent pill; the others are quiet. Not clickable.
+final class TypedLine: NSView {
+    private struct Word {
+        let text: NSAttributedString
+        let chosen: Bool
+        var frame: NSRect
+    }
+    private var words: [Word] = []
+    private var size = NSSize.zero
+    private static let padding = NSSize(width: 5, height: 2)
+    private static let gap: CGFloat = 6
+
+    /// `selected`: the UTF-16 range in `text` of the chosen words (a word is chosen when it starts inside it).
+    func set(_ text: String, selected: Range<Int>?) {
+        let font = NSFont.systemFont(ofSize: 13 * Theme.scale)
+        var start = 0
+        words = []
+        for piece in text.components(separatedBy: " ") {
+            defer { start += piece.utf16.count + 1 }
+            guard !piece.isEmpty else { continue }
+            let chosen = selected?.contains(start) ?? false
+            let label = NSAttributedString(string: piece, attributes: [
+                .font: font, .foregroundColor: chosen ? Theme.accent : Theme.textMuted])
+            words.append(Word(text: label, chosen: chosen, frame: .zero))
+        }
+        let height = ceil(words.map { $0.text.size().height }.max() ?? 0) + 2 * Self.padding.height
+        let widths = words.map { ceil($0.text.size().width) + 2 * Self.padding.width }
+        let width = widths.reduce(0, +) + Self.gap * CGFloat(max(words.count - 1, 0))
+        // Right to left: the first word against the right edge.
+        var right = width
+        for i in words.indices {
+            words[i].frame = NSRect(x: right - widths[i], y: 0, width: widths[i], height: height)
+            right -= widths[i] + Self.gap
+        }
+        size = NSSize(width: width, height: height)
+        setAccessibilityElement(true)
+        setAccessibilityLabel("Typed: " + text)
+        invalidateIntrinsicContentSize()
+        needsDisplay = true
+    }
+
+    override var intrinsicContentSize: NSSize { size }
+
+    override func draw(_ dirtyRect: NSRect) {
+        for word in words {
+            if word.chosen {
+                Theme.accentSoft.setFill()
+                NSBezierPath(roundedRect: word.frame, xRadius: 6, yRadius: 6).fill()
+            }
+            word.text.draw(at: NSPoint(x: word.frame.minX + Self.padding.width,
+                                       y: word.frame.minY + Self.padding.height))
+        }
     }
 }
