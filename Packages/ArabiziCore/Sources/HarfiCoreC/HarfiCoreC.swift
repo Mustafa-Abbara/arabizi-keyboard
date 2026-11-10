@@ -15,32 +15,6 @@
 import ArabiziCore
 import Foundation
 
-/// How sure the model was of each word of the last few conversions, by the text shown (words joined by one space):
-/// the engine's `wordConfidence`, kept while the user may still press ↑. Only when the counts match the words.
-final class Confidences: @unchecked Sendable {  // `items` is behind `lock`
-    private let lock = NSLock()
-    private var items: [(text: String, confidence: [Double])] = []
-
-    func remember(_ shown: String, _ confidence: [Double]?) {
-        let key = Self.key(shown)
-        guard let confidence, confidence.count == key.split(separator: " ").count else { return }
-        lock.withLock {
-            items.removeAll { $0.text == key }
-            items.append((key, confidence))
-            if items.count > 32 { items.removeFirst() }
-        }
-    }
-
-    func of(_ converted: String) -> [Double]? {
-        let key = Self.key(converted)
-        return lock.withLock { items.last { $0.text == key }?.confidence }
-    }
-
-    private static func key(_ text: String) -> String {
-        DirectionMarks.removed(text).split(whereSeparator: \.isWhitespace).joined(separator: " ")
-    }
-}
-
 /// The rules, the English guard and what suggestions need, read once from a rules folder.
 final class Core: Sendable {
     let rules: RuleConverter
@@ -56,10 +30,10 @@ final class Core: Sendable {
     /// Unsure words already pointed out in this app, so a word the user keeps is not pointed out again.
     private let pointedOut = PointedOut()
     /// How sure the model was of each word of the last conversions, by the text shown: ↑ starts on the least sure.
-    let confidences: Confidences
+    let confidences: WordConfidences
 
     init(rulesDirectory: URL) throws {
-        let confidences = Confidences()
+        let confidences = WordConfidences()
         self.confidences = confidences
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
         self.rules = rules

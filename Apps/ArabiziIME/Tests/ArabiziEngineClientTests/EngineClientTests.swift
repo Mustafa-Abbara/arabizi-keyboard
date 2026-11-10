@@ -26,7 +26,7 @@ private final class FakeService: NSObject, ArabiziEngineServiceProtocol, @unchec
     func convert(_ request: Data, reply: @escaping @Sendable (Data) -> Void) {
         switch behaviour {
         case .answer:
-            let response = ConvertResponse(id: UUID(), text: "كيفك", outcome: .model, latencyMs: 5)
+            let response = ConvertResponse(id: UUID(), text: "كيفك", outcome: .model, latencyMs: 5, wordConfidence: [0.7])
             reply((try? Contract.encoder().encode(response)) ?? Data())
         case .silent:
             break  // never replies, like a service stuck in a long generation
@@ -68,6 +68,10 @@ private func timed<T>(_ body: () -> T) -> (T, Int) {
 
 @Test func aServiceThatAnswersGivesItsText() {
     #expect(FakeServer([.answer]).client().convert("kifak") == "كيفك")
+}
+
+@Test func theAnswerSaysHowSureTheModelWas() {
+    #expect(FakeServer([.answer]).client().respond("kifak")?.wordConfidence == [0.7])
 }
 
 @Test func aServiceThatNeverAnswersGivesUpAfterTheDeadline() {

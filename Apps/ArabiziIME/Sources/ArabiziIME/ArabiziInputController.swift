@@ -1,4 +1,5 @@
 import AppKit
+import ArabiziContracts
 import ArabiziCore
 import ArabiziEngineClient
 import Carbon
@@ -18,11 +19,16 @@ final class ArabiziInputController: IMKInputController {
         let rules = quickConvert
         guard let engine = EngineClient(resources: resources) else { return { yours($0, rules($0)) } }
         engine.warmUp()
+        let confidences = ArabiziInputController.confidences
         return { text in
             guard let answer = engine.respond(text) else { return yours(text, rules(text)) }
-            return answer.outcome == .model ? fromModel(text, answer.text) : yours(text, answer.text)
+            let shown = answer.outcome == .model ? fromModel(text, answer.text) : yours(text, answer.text)
+            confidences.remember(shown, answer.wordConfidence)  // ↑ then starts on the least sure word
+            return shown
         }
     }()
+    /// How sure the model was of each word of the last few conversions (the preview's and Enter's alike).
+    private static let confidences = WordConfidences()
     /// The user's own words: every pick recorded in the encrypted correction record, and the habits it supports
     /// (ADR 0033). nil when the record cannot be kept: then nothing is recorded or learned.
     private static let personal: PersonalWords? = CorrectionStore.standard().map(PersonalWords.init)
@@ -91,6 +97,7 @@ final class ArabiziInputController: IMKInputController {
         let spelling = try? SpellingOptions(rulesDirectory: resources, rules: rules)
         if spelling == nil { log.error("spelling options not loaded") }
         // Word suggestions v2 (ADR 0036), loaded in the background; the first list until it is ready.
+        let confidences = ArabiziInputController.confidences
         let candidates = BackgroundCandidateList(rulesDirectory: resources) { result in
             if case .failure = result { log.error("word suggestions v2 not loaded: the first list stays") }
         }
@@ -103,7 +110,8 @@ final class ArabiziInputController: IMKInputController {
             align: { latin, shown in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) },
             record: { correction in personal?.record(correction) },  // may complete a habit, announced after the key
             spelling: spelling,
-            doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false })
+            doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false },
+            confidence: { confidences.of($0) })
     }()
     /// Conversions made ahead while the user types (live preview), by the exact Latin text. Enter takes a ready one.
     private static let previews = PreviewCache(isClitic: { ruleConverter?.isClitic($0) ?? false })
@@ -217,10 +225,11 @@ final class ArabiziInputController: IMKInputController {
         }
         let current = composer.selectedText
         let doubtful = current.map { Self.suggester?.doubtful($0.shown, $0.latin) ?? false } ?? false
+        let typed = composer.typedSentence
         nonisolated(unsafe) let chips = chips, controller = self
         MainActor.assumeIsolated {
             chips.show(word: current?.shown, doubtful: doubtful, candidates: candidates, spelling: spelling,
-                       choice: choice, above: line,
+                       choice: choice, typed: typed, above: line,
                        pick: { controller.chipPicked($0) }, spellIt: { controller.spellFromChip() })
         }
     }
@@ -718,7 +727,8 @@ final class PreviewWindow {
         let panel = ensurePanel()
         guard let label else { return panel.frame }
         let paragraph = NSMutableParagraphStyle()
-        paragraph.baseWritingDirection = .natural
+        // Right to left when any word is Arabic (a mixed sentence is sent right to left too), else left to right.
+        paragraph.baseWritingDirection = words.allSatisfy(Self.isEnglish) ? .leftToRight : .rightToLeft
         let text = NSMutableAttributedString()
         func add(_ string: String, size: CGFloat, color: NSColor, doubtful: Bool = false, arabic: Bool = false) {
             var attributes: [NSAttributedString.Key: Any] = [.font: arabic ? Theme.arabic(size) : NSFont.systemFont(ofSize: size),
@@ -730,7 +740,9 @@ final class PreviewWindow {
         for (i, word) in words.enumerated() {
             if i > 0 { add(" ", size: 22 * Theme.scale, color: Theme.text, arabic: true) }
             if i == selected { selectedRange = NSRange(location: text.length, length: (word as NSString).length) }
-            add(word, size: 22 * Theme.scale, color: Theme.text, doubtful: doubtful.contains(i), arabic: true)
+            let english = Self.isEnglish(word)
+            add(word, size: (english ? 18 : 22) * Theme.scale, color: Theme.text, doubtful: doubtful.contains(i),
+                arabic: !english)
         }
         if !latin.isEmpty { add(" " + latin, size: 16 * Theme.scale, color: Theme.textMuted) }
         if let hint { add("   " + hint, size: 12 * Theme.scale, color: Theme.accent) }
@@ -753,6 +765,16 @@ final class PreviewWindow {
     @MainActor func hide() {
         label?.select(nil)
         panel?.orderOut(nil)
+    }
+
+    /// A converted word left in Latin letters (English kept as typed): drawn in the system font, not the Arabic one.
+    static func isEnglish(_ word: String) -> Bool {
+        var latin = false
+        for scalar in word.unicodeScalars {
+            if (0x0600...0x06FF).contains(scalar.value) { return false }
+            latin = latin || (scalar.isASCII && scalar.properties.isAlphabetic)
+        }
+        return latin
     }
 }
 

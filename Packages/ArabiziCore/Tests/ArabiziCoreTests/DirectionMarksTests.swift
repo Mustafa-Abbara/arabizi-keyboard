@@ -25,3 +25,11 @@ import Testing
     #expect(c.handle(.arrowUp) == .suggest(marked: "EJET WARAYE KTIR", selected: 5..<11, candidates: ["x"],
                                            replacingLength: nil))
 }
+
+@Test func confidenceIsFoundByTheShownWordsWithOrWithoutMarks() {
+    let confidences = WordConfidences()
+    confidences.remember(DirectionMarks.marked("ok منشوف meeting"), [0.9, 0.3, 0.8])
+    #expect(confidences.of("ok  منشوف meeting") == [0.9, 0.3, 0.8])
+    confidences.remember("شو عم", [0.5])  // one value for two words: not kept
+    #expect(confidences.of("شو عم") == nil)
+}

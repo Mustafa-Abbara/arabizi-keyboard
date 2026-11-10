@@ -45,7 +45,8 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
     if (!latin.empty()) runs_.push_back({latin, Kind::Latin});
     if (!hint.empty()) runs_.push_back({hint, Kind::Hint});
 
-    // Right to left, as Arabic reads: the first word on the right, then the Latin typed since and the hint.
+    // Right to left, as Arabic reads: the first word on the right, then the Latin typed since and the hint
+    // (left to right instead when no word is Arabic, below).
     // A space, but never narrower than the highlight needs to sit around a word without touching the next one.
     // Every word sits on one baseline, and the box is centred on the letters as drawn (from the highest to the
     // lowest), not on each font's line, which for Noto Naskh has much more room above and below than Segoe UI.
@@ -79,11 +80,21 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
     SIZE content = {static_cast<LONG>(width + 0.99f) + 2 * Scaled(PadX),
                     static_cast<LONG>(height + 0.99f) + 2 * Scaled(PadY) + (anyDotted ? Scaled(LineGap) : 0)};
     baseline_ = Scaled(PadY) - high;
-    float right = static_cast<float>(content.cx - Scaled(PadX));
+    // Left to right when no word is Arabic (an English sentence, sent as it is), as the app will show it.
+    bool leftToRight = true;
+    for (const Run &run : runs_) leftToRight = leftToRight && run.kind != Kind::Arabic;
+    float right = static_cast<float>(content.cx - Scaled(PadX)), left = static_cast<float>(Scaled(PadX));
     for (size_t i = 0; i < runs_.size(); ++i) {
-        if (i > 0) right -= runs_[i].kind == Kind::Hint ? 3 * space : space;
-        runs_[i].box = Gdiplus::RectF(right - widths[i], baseline_ + high, widths[i], height);
-        right -= widths[i];
+        float gap = i == 0 ? 0 : runs_[i].kind == Kind::Hint ? 3 * space : space;
+        if (leftToRight) {
+            left += gap;
+            runs_[i].box = Gdiplus::RectF(left, baseline_ + high, widths[i], height);
+            left += widths[i];
+        } else {
+            right -= gap;
+            runs_[i].box = Gdiplus::RectF(right - widths[i], baseline_ + high, widths[i], height);
+            right -= widths[i];
+        }
     }
 
     // The highlight: fades in on the first word, then glides to the next one.
