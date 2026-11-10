@@ -24,7 +24,9 @@ protected:
     void OnTimer(UINT_PTR id) override;
 
 private:
-    enum class Kind { Arabic, Latin, Hint };
+    // Arabic: a converted word. English: a converted word kept in Latin (an English word, a name), drawn in the
+    // Latin font like the Arabic beside it. Latin: typed since, not yet converted (italic, quieter). Hint: a tip.
+    enum class Kind { Arabic, English, Latin, Hint };
     struct Run {
         std::wstring text;
         Kind kind = Kind::Arabic;

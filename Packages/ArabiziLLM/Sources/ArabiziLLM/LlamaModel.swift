@@ -34,13 +34,18 @@ public struct Generation: Equatable, Sendable {
     public let promptTokens: Int
     public let generatedTokens: Int
     public let elapsed: Duration
+    /// For each word of the answer's first line (split at spaces, as the model wrote them), the probability of its
+    /// least likely token: how sure the model was of that word. Empty when not measured.
+    public let wordConfidence: [Double]
 
-    public init(text: String, stop: Stop, promptTokens: Int, generatedTokens: Int, elapsed: Duration) {
+    public init(text: String, stop: Stop, promptTokens: Int, generatedTokens: Int, elapsed: Duration,
+                wordConfidence: [Double] = []) {
         self.text = text
         self.stop = stop
         self.promptTokens = promptTokens
         self.generatedTokens = generatedTokens
         self.elapsed = elapsed
+        self.wordConfidence = wordConfidence
     }
 }
 
@@ -191,6 +196,10 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         var generated = 0
         var stop = Generation.Stop.maxTokens
         var tokens: [llama_token] = []
+        // How sure the model was of each word of the first line: the least likely token in it (as a log-probability).
+        var wordLogProbabilities: [Double] = []
+        var inWord = false, sawText = false, firstLineDone = false
+        let vocabularySize = Int(llama_vocab_n_tokens(vocab))
         while generated < maxTokens {
             // The prompt goes through `prefill` (it reuses what the cache already holds); then one token at a time.
             let status = tokens.isEmpty ? prefill(prompt) : decodeContinuing(tokens)
@@ -204,7 +213,28 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
                 stop = .endOfTurn
                 break
             }
-            output += piece(next)
+            let bytes = piece(next)
+            if !firstLineDone, let logits = llama_get_logits_ith(context, -1) {
+                let logProbability = Self.logProbability(of: next, in: logits, vocabularySize: vocabularySize)
+                for byte in bytes {
+                    if byte == 0x0A {
+                        if sawText { firstLineDone = true }
+                        inWord = false
+                    } else if byte == 0x20 {
+                        inWord = false
+                    } else if !firstLineDone {
+                        if inWord {
+                            wordLogProbabilities[wordLogProbabilities.count - 1] =
+                                min(wordLogProbabilities[wordLogProbabilities.count - 1], logProbability)
+                        } else {
+                            wordLogProbabilities.append(logProbability)
+                            inWord = true
+                        }
+                        sawText = true
+                    }
+                }
+            }
+            output += bytes
             generated += 1
             if DispatchTime.now().uptimeNanoseconds >= deadline {
                 stop = .deadline
@@ -214,7 +244,18 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         }
         // Pieces can split a multi-byte character; the bytes are decoded once, at the end.
         return Generation(text: String(decoding: output, as: UTF8.self), stop: stop,
-                          promptTokens: promptTokens, generatedTokens: generated, elapsed: elapsed())
+                          promptTokens: promptTokens, generatedTokens: generated, elapsed: elapsed(),
+                          wordConfidence: wordLogProbabilities.map { Foundation.exp($0) })
+    }
+
+    /// log P(token) under one row of logits: one pass for the maximum, one for the normaliser.
+    static func logProbability(of token: llama_token, in logits: UnsafeMutablePointer<Float>, vocabularySize: Int)
+        -> Double {
+        var largest = -Float.infinity
+        for i in 0..<vocabularySize where logits[i] > largest { largest = logits[i] }
+        var sum = 0.0
+        for i in 0..<vocabularySize { sum += Foundation.exp(Double(logits[i] - largest)) }
+        return Double(logits[Int(token)] - largest) - Foundation.log(sum)
     }
 
     /// The model's other ways to write the word after `answerSoFar` (ADR 0036): a beam search over its next tokens,

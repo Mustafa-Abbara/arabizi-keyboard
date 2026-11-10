@@ -38,8 +38,31 @@ private func suggestingComposer() -> Composer {
     type("el bet", into: &c)
     #expect(c.handle(.arrowUp) == .suggest(marked: "EL BET", selected: 3..<6, candidates: ["بيت", "بيتي"],
                                            replacingLength: nil))
-    #expect(c.handle(.text("2")) == .commit("EL بيتي"))  // the fix and the rest, committed together
-    #expect(c.lastConversion == Conversion(latin: "el bet", converted: "EL بيتي"))  // ⌘Z still brings it back
+    #expect(c.handle(.text("2")) == .commit(DirectionMarks.marked("EL بيتي")))  // the fix and the rest, committed together
+    #expect(c.lastConversion == Conversion(latin: "el bet", converted: DirectionMarks.marked("EL بيتي")))  // ⌘Z still brings it back
+}
+
+@Test func theTypedSentenceShowsWhereTheSelectedWordCameFrom() {
+    var c = suggestingComposer()
+    #expect(c.typedSentence == nil)  // nothing shown yet
+    type("shu el bet", into: &c)
+    _ = c.handle(.arrowUp)           // on the last word, BET
+    #expect(c.typedSentence?.text == "shu el bet")
+    #expect(c.typedSentence?.selected == 7..<10)
+    _ = c.handle(.arrowRight)        // the word before it (right to left), EL
+    #expect(c.typedSentence?.selected == 4..<6)
+    _ = c.handle(.escape)
+    #expect(c.typedSentence == nil)
+}
+
+@Test func aWordFromTwoTypedWordsHighlightsBoth() {
+    let suggester = Suggester(candidates: { _, _ in ["x"] },
+                              align: { _, _ in [0..<1, 1..<3] },  // SHU from "shu", ELBET from "el bet"
+                              record: { _ in })
+    var c = Composer(convert: { $0.uppercased().replacingOccurrences(of: "EL ", with: "EL") }, suggester: suggester)
+    type("shu el bet", into: &c)
+    _ = c.handle(.arrowUp)
+    #expect(c.typedSentence?.selected == 4..<10)
 }
 
 @Test func suggestionsStartOnTheWordThatLooksWrong() {

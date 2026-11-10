@@ -49,13 +49,18 @@ public struct ConvertResponse: Codable, Equatable, Sendable {
     public let text: String
     public let outcome: Outcome
     public let latencyMs: Int
+    /// For a model answer: how sure the model was of each word of `text` (split at spaces), 0 to 1. Absent when
+    /// unknown (the rules, or an answer whose words changed after the model). The keyboard's ↑ starts on the least
+    /// sure word.
+    public let wordConfidence: [Double]?
 
-    public init(id: UUID, text: String, outcome: Outcome, latencyMs: Int) {
+    public init(id: UUID, text: String, outcome: Outcome, latencyMs: Int, wordConfidence: [Double]? = nil) {
         v = Contract.version
         self.id = id
         self.text = text
         self.outcome = outcome
         self.latencyMs = latencyMs
+        self.wordConfidence = wordConfidence
     }
 
     public init(from decoder: Decoder) throws {
@@ -68,6 +73,11 @@ public struct ConvertResponse: Codable, Equatable, Sendable {
         guard latencyMs >= 0 else {
             throw DecodingError.dataCorruptedError(forKey: .latencyMs, in: container,
                                                    debugDescription: "latencyMs cannot be negative")
+        }
+        wordConfidence = try container.decodeIfPresent([Double].self, forKey: .wordConfidence)
+        guard wordConfidence?.allSatisfy({ (0...1).contains($0) }) ?? true else {
+            throw DecodingError.dataCorruptedError(forKey: .wordConfidence, in: container,
+                                                   debugDescription: "wordConfidence values are 0 to 1")
         }
     }
 }

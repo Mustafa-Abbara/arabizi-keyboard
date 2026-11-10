@@ -119,10 +119,18 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     public func convertExplained(_ request: ConvertRequest) -> (response: ConvertResponse, reason: String?) {
         let started = ContinuousClock.now
         var reason: String?
-        func respond(_ text: String, _ outcome: Outcome) -> (response: ConvertResponse, reason: String?) {
+        func respond(_ text: String, _ outcome: Outcome, confidence: [Double]? = nil)
+            -> (response: ConvertResponse, reason: String?) {
             let elapsed = ContinuousClock.now - started
             let ms = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
-            return (ConvertResponse(id: request.id, text: text, outcome: outcome, latencyMs: ms), reason)
+            return (ConvertResponse(id: request.id, text: text, outcome: outcome, latencyMs: ms,
+                                    wordConfidence: confidence), reason)
+        }
+        /// The model's confidence per word, when the answer still has as many words as the model wrote.
+        func confidence(_ answer: String, _ generation: Generation) -> [Double]? {
+            let words = answer.split(separator: " ", omittingEmptySubsequences: true).count
+            guard words > 0, generation.wordConfidence.count == words else { return nil }
+            return generation.wordConfidence.map { min(1, max(0, $0)) }
         }
         let text = request.text
         guard text.unicodeScalars.contains(where: { $0.isASCII && $0.properties.isAlphabetic }) else {
@@ -161,13 +169,15 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         case .endOfTurn:
             switch checks.check(Self.clean(generation.text), for: protected) {
             case .success(let converted):
-                return respond(kept(converted, typed: text), .model)
+                let answer = kept(converted, typed: text)
+                return respond(answer, .model, confidence: confidence(answer, generation))
             case .failure(.newLatin(let invented)):
                 let answer = Self.clean(generation.text)
                 if repairTokens, let (repaired, count) = Self.repair(answer, input: protected.masked, rules: rules),
                    case .success(let converted) = checks.check(repaired, for: protected) {
                     reason = "repaired: \(count) token(s)"
-                    return respond(kept(converted, typed: text), .model)
+                    let final = kept(converted, typed: text)
+                    return respond(final, .model, confidence: confidence(final, generation))
                 }
                 reason = Self.describe(.newLatin(invented))
                 return respond(ruled(text), .fallbackCheckFailed)

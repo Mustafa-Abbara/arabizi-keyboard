@@ -179,7 +179,7 @@ final class PreviewConversions: @unchecked Sendable {  // everything is behind `
 
     private let lock = NSLock()
     private let engine: EngineClient
-    private var items: [(latin: String, arabic: String)] = []
+    private var items: [(latin: String, arabic: String, confidence: [Double]?)] = []
     private var failed: [String: Date] = [:]  // when the model last missed each text
     private var pending: String?
     private var running = false
@@ -188,6 +188,11 @@ final class PreviewConversions: @unchecked Sendable {  // everything is behind `
 
     func arabic(for latin: String) -> String? {
         lock.withLock { items.last { $0.latin == latin }?.arabic }
+    }
+
+    /// The conversion made ahead for `latin`, with how sure the model was of each word.
+    func answer(for latin: String) -> (arabic: String, confidence: [Double]?)? {
+        lock.withLock { items.last { $0.latin == latin }.map { ($0.arabic, $0.confidence) } }
     }
 
     /// Asks for `latin` in the background unless it is ready, failed or already asked; true while it is coming.
@@ -219,7 +224,7 @@ final class PreviewConversions: @unchecked Sendable {  // everything is behind `
             lock.withLock {
                 if let answer, answer.outcome == .model || answer.outcome == .passthrough {
                     items.removeAll { $0.latin == next }
-                    items.append((next, answer.text))
+                    items.append((next, answer.text, answer.wordConfidence))
                     if items.count > 16 { items.removeFirst() }
                     failed[next] = nil
                 } else {

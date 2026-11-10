@@ -8,6 +8,39 @@ const int Gap = 6, PadX = 10, PadY = 4, Inset = 6, MinHeight = 32, NumberGap = 6
 Gdiplus::Font ArabicFont() { return Gdiplus::Font(ArabicFamily(), static_cast<float>(Scaled(20)), 0, Gdiplus::UnitPixel); }
 Gdiplus::Font NumberFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(12)), 0, Gdiplus::UnitPixel); }
 Gdiplus::Font QuietFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(13)), 0, Gdiplus::UnitPixel); }
+// The sentence as typed, above the chips: small and quiet, the part being fixed in cedar on a soft cedar pill.
+Gdiplus::Font TypedFont() { return Gdiplus::Font(LatinFamily(), static_cast<float>(Scaled(13)), 0, Gdiplus::UnitPixel); }
+const int TypedGap = 6, TypedPadX = 5, TypedPadY = 2;
+
+// The typed sentence's words with where each starts (UTF-16), laid out right to left like the Arabic below them, so
+// ← and → move the highlight the same way in both: the first typed word on the right.
+struct TypedWord {
+    std::wstring text;
+    int start = 0;
+    float x = 0, width = 0;
+};
+std::vector<TypedWord> TypedWords(const std::wstring &typed) {
+    std::vector<TypedWord> words;
+    size_t i = 0;
+    while (i < typed.size()) {
+        while (i < typed.size() && typed[i] == L' ') ++i;
+        size_t start = i;
+        while (i < typed.size() && typed[i] != L' ') ++i;
+        if (i > start) words.push_back({typed.substr(start, i - start), static_cast<int>(start)});
+    }
+    return words;
+}
+// Places the words right to left from `right`; returns the line's width.
+float LayOut(std::vector<TypedWord> &words, const Gdiplus::Font &font, float right) {
+    float space = Measure(L" ", font, false).Width, x = right;
+    for (size_t i = 0; i < words.size(); ++i) {
+        words[i].width = Measure(words[i].text, font, false).Width;
+        if (i > 0) x -= space;
+        x -= words[i].width;
+        words[i].x = x;
+    }
+    return right - x;
+}
 const wchar_t Pencil[] = L"\uE70F";  // "Edit" in Windows' icon font, before "Spell it"
 }  // namespace
 
@@ -19,6 +52,11 @@ void ChipWindow::Show(const Effect &effect, const RECT &text, Pick pick, SpellIt
     if (!Ensure()) return;
     KillTimer(window_, HintTimer);
     chips_.clear();
+    typed_ = effect.typed;
+    bool traced = effect.typedStart >= 0 && effect.typedLength > 0 &&
+                  effect.typedStart + effect.typedLength <= static_cast<int>(typed_.size());
+    typedStart_ = traced ? effect.typedStart : -1;
+    typedLength_ = traced ? effect.typedLength : 0;
     if (!effect.word.empty() && !effect.spelling) {  // the word being fixed, first (on the right)
         Chip current;
         current.style = Style::Current;
@@ -49,6 +87,9 @@ void ChipWindow::Show(const Effect &effect, const RECT &text, Pick pick, SpellIt
 void ChipWindow::ShowHint(const std::wstring &hint, const RECT &text, UINT milliseconds) {
     if (!Ensure()) return;
     chips_.clear();
+    typed_.clear();  // a tip has no typed line
+    typedStart_ = -1;
+    typedLength_ = 0;
     Chip tip;
     tip.label = hint;
     chips_.push_back(tip);
@@ -113,8 +154,28 @@ void ChipWindow::Arrange(const RECT &text) {
     if (height < Scaled(MinHeight)) height = static_cast<float>(Scaled(MinHeight));
     float total = 0;
     for (size_t i = 0; i < widths.size(); ++i) total += widths[i] + (i ? Scaled(Gap) : 0);
-    SIZE content = {static_cast<LONG>(total + 0.99f) + 2 * Scaled(Inset), static_cast<LONG>(height + 0.99f) + 2 * Scaled(Inset)};
-    float right = static_cast<float>(content.cx - Scaled(Inset)), top = static_cast<float>(Scaled(Inset));
+
+    // The typed line: as wide as the sentence, as tall as its letters plus a little room for the highlight.
+    float typedWidth = 0, typedHeight = 0, typedHigh = 0;
+    if (!typed_.empty()) {
+        Gdiplus::Font font = TypedFont();
+        std::vector<TypedWord> words = TypedWords(typed_);
+        typedWidth = LayOut(words, font, 0) + 2 * Scaled(TypedPadX);
+        Gdiplus::RectF ink = Ink(typed_, font, LatinFamily(), false, typedWidth);
+        float lineHigh = ink.Height > 0 ? ink.Y : -Ascent(font, LatinFamily());
+        float lineLow = ink.Height > 0 ? ink.GetBottom() : LineHeight(font, LatinFamily()) + lineHigh;
+        typedHigh = lineHigh;
+        typedHeight = lineLow - lineHigh + 2 * Scaled(TypedPadY);
+    }
+    float rowWidth = total > typedWidth ? total : typedWidth;
+    float above = typed_.empty() ? 0 : typedHeight + Scaled(TypedGap);
+    SIZE content = {static_cast<LONG>(rowWidth + 0.99f) + 2 * Scaled(Inset),
+                    static_cast<LONG>(height + above + 0.99f) + 2 * Scaled(Inset)};
+    float right = static_cast<float>(content.cx - Scaled(Inset)), top = static_cast<float>(Scaled(Inset)) + above;
+    if (!typed_.empty()) {  // right-aligned like the chips, above them
+        typedBox_ = Gdiplus::RectF(right - typedWidth, static_cast<float>(Scaled(Inset)), typedWidth, typedHeight);
+        typedBaseline_ = typedBox_.Y + Scaled(TypedPadY) - typedHigh;
+    }
     baseline_ = top + (height - letters) / 2 - high;
     for (size_t i = 0; i < chips_.size(); ++i) {
         Chip &chip = chips_[i];
@@ -152,6 +213,34 @@ void ChipWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
         }
         graphics.DrawPath(&pen, &path);
     };
+    if (!typed_.empty()) {  // what was typed, right to left like the Arabic: the word(s) behind the selected one in
+                            // cedar on a soft pill, the others quiet
+        Gdiplus::Font font = TypedFont();
+        std::vector<TypedWord> words = TypedWords(typed_);
+        LayOut(words, font, typedBox_.GetRight() - Scaled(TypedPadX));
+        auto chosen = [&](const TypedWord &word) {
+            return typedStart_ >= 0 && word.start >= typedStart_ && word.start < typedStart_ + typedLength_;
+        };
+        float left = 0, right = 0;
+        bool any = false;
+        for (const TypedWord &word : words) {
+            if (!chosen(word)) continue;
+            left = any ? (word.x < left ? word.x : left) : word.x;
+            right = any ? (word.x + word.width > right ? word.x + word.width : right) : word.x + word.width;
+            any = true;
+        }
+        if (any) {
+            Gdiplus::RectF behind(left - Scaled(3), typedBox_.Y, right - left + Scaled(6), typedBox_.Height);
+            Gdiplus::GraphicsPath path;
+            RoundedRect(path, behind, static_cast<float>(Scaled(5)));
+            Gdiplus::SolidBrush soft(Colour(colours.accentSoft));
+            graphics.FillPath(&soft, &path);
+        }
+        for (const TypedWord &word : words) {
+            WriteOnBaseline(graphics, word.text, font, LatinFamily(), chosen(word) ? colours.accent : colours.muted,
+                            word.x, word.width, typedBaseline_, false);
+        }
+    }
     for (size_t i = 0; i < chips_.size(); ++i) {
         const Chip &chip = chips_[i];
         bool on = static_cast<int>(i) == lit;

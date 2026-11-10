@@ -1,7 +1,8 @@
 // The row of spellings above the text while a word is fixed (↑, also right after converting, or Alt+Tab), as on the Mac (CorrectionChips): the
 // word being fixed first (amber when it looks wrong), then the spellings with their number keys, then "Spell it";
-// while spelling, the letters for the last key. Right to left, as Arabic reads. It never takes the focus; a click
-// picks a chip. It also shows the one-line tips.
+// while spelling, the letters for the last key. Right to left, as Arabic reads. Above the chips, the sentence as
+// typed, the typed word behind the selected word highlighted. It never takes the focus; a click picks a chip. It
+// also shows the one-line tips.
 #pragma once
 #include <functional>
 #include <vector>
@@ -44,6 +45,12 @@ private:
 
     std::vector<Chip> chips_;
     float baseline_ = 0;  // shared by every chip's text, so numbers, arrows and Arabic sit on one line
+    // The sentence as typed, above the chips, with the selected word's typed part highlighted (UTF-16 range;
+    // typedStart_ -1: nothing highlighted). Empty for tips.
+    std::wstring typed_;
+    int typedStart_ = -1, typedLength_ = 0;
+    Gdiplus::RectF typedBox_;   // the line's room, right-aligned above the chips
+    float typedBaseline_ = 0;
     int hovered_ = -1;
     Pick pick_;
     SpellIt spellIt_;
