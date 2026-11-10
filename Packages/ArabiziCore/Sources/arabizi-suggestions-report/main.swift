@@ -4,6 +4,7 @@
 //   swift run -c release --package-path Packages/ArabiziCore arabizi-suggestions-report [predictions.jsonl ...]
 //   swift run -c release --package-path Packages/ArabiziCore arabizi-suggestions-report --corrections
 //   swift run -c release --package-path Packages/ArabiziCore arabizi-suggestions-report --doubtful predictions.jsonl ...
+//   swift run -c release --package-path Packages/ArabiziCore arabizi-suggestions-report --unsure predictions.jsonl ...
 //
 // Without arguments: can every Arabic word in the dev sets and the training data be spelled letter by letter,
 // and with how many presses. With predictions (eval/results/<run>/predictions.jsonl): for each wrong word, is the
@@ -50,6 +51,48 @@ if arguments.first == "--english" {
         let flagged = texts.filter { guardRules.isEnglish($0) }
         print("\(URL(filePath: path).lastPathComponent): \(flagged.count) of \(texts.count) left unchanged")
         if show { flagged.forEach { print("   \($0)") } }
+    }
+    exit(0)
+}
+
+if arguments.first == "--unsure" {
+    // What the unsure-word swap (ADR 0034) does to model outputs, word by word against the reference: counts only.
+    let unsure = UnsureWords(known: Suggestions.arabicWords(lexicon: lexicon).keys,
+                             dictionary: Suggestions.dictionary(lexicon: lexicon))
+    let align = { (latin: [String], shown: [String]) in WordAlignment.align(latin: latin, shown: shown, rules: { rules.convert($0) }) }
+    func same(_ a: String, _ b: String) -> Bool {  // alif forms, final ى/ي and ة/ه as the lenient metric
+        func fold(_ s: String) -> String {
+            var t = WordParts(s).core.replacingOccurrences(of: "[أإآ]", with: "ا", options: .regularExpression)
+            if t.hasSuffix("ى") { t = String(t.dropLast()) + "ي" }
+            if t.hasSuffix("ة") { t = String(t.dropLast()) + "ه" }
+            return t
+        }
+        return fold(a) == fold(b)
+    }
+    for path in arguments.dropFirst() {
+        var fixed = 0, broken = 0, stillWrong = 0, unsureWords = 0, unsureWrong = 0
+        for row in try rows(path) {
+            let latin = row["arabizi"] as? String ?? "", shown = row["prediction"] as? String ?? ""
+            let reference = (row["reference"] as? String ?? "").components(separatedBy: " ")
+            let before = shown.components(separatedBy: " ")
+            let after = unsure.swap(latin: latin, converted: shown, align: align).components(separatedBy: " ")
+            guard before.count == reference.count, after.count == before.count else { continue }
+            for i in before.indices {
+                if unsure.isUnsure(before[i]) {
+                    unsureWords += 1
+                    if !same(before[i], reference[i]) { unsureWrong += 1 }
+                }
+                guard before[i] != after[i] else { continue }
+                switch (same(before[i], reference[i]), same(after[i], reference[i])) {
+                case (false, true): fixed += 1
+                case (true, false): broken += 1
+                default: stillWrong += 1
+                }
+            }
+        }
+        print(URL(filePath: path).deletingLastPathComponent().lastPathComponent)
+        print("  unsure words: \(unsureWords), wrong: \(unsureWrong) (\(percent(unsureWrong, unsureWords)))")
+        print("  the swap: fixed \(fixed), broke \(broken), changed but still wrong \(stillWrong)")
     }
     exit(0)
 }

@@ -103,6 +103,9 @@ enum Settings {
     @Published var largerText = Settings.largerText { didSet { Settings.largerText = largerText } }
     @Published private(set) var words: [Word] = []
     @Published private(set) var fixes = 0
+    /// Spellings Harfi now writes by itself (ADR 0033), and the ones the user said no to.
+    @Published private(set) var habits: [Habit] = []
+    @Published private(set) var refused: [Habit] = []
     private let store = CorrectionStore.standard()
 
     @Published private(set) var practice: Set<Settings.Practice> = []
@@ -138,6 +141,19 @@ enum Settings {
         }
         words = counts.values.map { Word(latin: $0.latin, arabic: $0.arabic, times: $0.times) }
             .sorted { ($0.times, $1.latin) > ($1.times, $0.latin) }
+        let no = store?.refused() ?? []
+        habits = Habits.learned(from: all).filter { !no.contains($0) }.sorted { $0.latin < $1.latin }
+        refused = no.sorted { $0.latin < $1.latin }
+    }
+
+    func refuse(_ habit: Habit) {
+        try? store?.refuse(habit)
+        reload()
+    }
+
+    func allow(_ habit: Habit) {
+        try? store?.allow(habit)
+        reload()
     }
 
     func forget(_ word: Word) {
@@ -310,6 +326,19 @@ struct SettingsView: View {
             } else {
                 Text("\(model.words.count) words taught · \(model.fixes) fixes in the last 30 days")
                     .font(.system(size: 13)).foregroundStyle(Color.muted)
+                if !model.habits.isEmpty || !model.refused.isEmpty {
+                    card {
+                        Text("Harfi now writes these your way").foregroundStyle(Color.ink)
+                        Text("A word becomes a habit after you pick the same spelling 3 times on 2 different days.")
+                            .font(.system(size: 12)).foregroundStyle(Color.muted)
+                        ForEach(model.habits, id: \.self) { habit in
+                            habitRow(habit, button: "Don't") { model.refuse(habit) }
+                        }
+                        ForEach(model.refused, id: \.self) { habit in
+                            habitRow(habit, button: "Allow again", muted: true) { model.allow(habit) }
+                        }
+                    }
+                }
                 card {
                     ForEach(model.words) { word in
                         HStack {
@@ -333,6 +362,18 @@ struct SettingsView: View {
                         Text("Harfi will stop putting your spellings first. This can't be undone.")
                     }
             }
+        }
+    }
+
+    private func habitRow(_ habit: Habit, button: String, muted: Bool = false,
+                          action: @escaping () -> Void) -> some View {
+        HStack {
+            Text(habit.latin).font(.system(size: 13, design: .monospaced)).foregroundStyle(Color.muted)
+            Spacer()
+            Text(habit.spelling).font(Font(Theme.arabic(20))).foregroundStyle(muted ? Color.muted : Color.ink)
+                .strikethrough(muted)
+            Button(button, action: action).font(.system(size: 12))
+                .accessibilityLabel("\(button): \(habit.latin) as \(habit.spelling)")
         }
     }
 

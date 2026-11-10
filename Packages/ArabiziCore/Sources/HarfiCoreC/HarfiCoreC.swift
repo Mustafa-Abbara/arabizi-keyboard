@@ -161,21 +161,6 @@ final class Core: Sendable {
     }
 }
 
-/// Words already pointed out in this app (in memory only).
-final class PointedOut: @unchecked Sendable {  // `words` is behind `lock`
-    private let lock = NSLock()
-    private var words: Set<String> = []
-
-    /// The first of `candidates` not pointed out yet, now marked as pointed out.
-    func first(of candidates: [String]) -> String? {
-        lock.withLock {
-            guard let word = candidates.first(where: { !words.contains($0) }) else { return nil }
-            words.insert(word)
-            return word
-        }
-    }
-}
-
 final class ComposerBox {
     let core: Core
     var composer: Composer
