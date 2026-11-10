@@ -24,6 +24,8 @@ swift "$PKG/Tools/make_icon.swift" "$APP/Contents/Resources/MenuIcon.tiff"
 # The keyboard's own rule converter (used when the engine service cannot answer) and the engine settings.
 cp "$ROOT/data/rules/arabizi_to_arabic.json" "$ROOT/data/rules/arabizi_lexicon.json" "$ROOT/data/rules/spelling_options.json" \
    "$ROOT/data/rules/english_stopwords.json" "$APP/Contents/Resources/"
+# Word suggestions v2 (ADR 0036): the letter odds and the ranker of the ↑ list.
+cp "$ROOT/data/rules/spelling_odds.json" "$ROOT/data/rules/candidate_ranker.json" "$APP/Contents/Resources/"
 cp "$ROOT/config/engine.json" "$ROOT/config/models.json" "$APP/Contents/Resources/"
 # Installing on another Mac (scripts/install_harfi.sh): the setup script, where the model is
 # published, and the model's licence notice. The model is published under a name that starts with "Llama", as the

@@ -111,6 +111,29 @@ public struct CandidateList: Sendable {
         return out
     }
 
+    /// The ↑ list as the keyboards show it: the user's own fixes first (ADR 0027 #8–9), then this list, at most
+    /// `limit`, never `shown`, the typed word last. `latin`: the typed word, or the run of typed words the shown
+    /// word came from (`w ana`), with any punctuation around it.
+    public func personalized(for shown: String, latin: String?, past: [Correction],
+                             guesses: [(String, Double)] = [], limit: Int = listLength) -> [String] {
+        let word = WordParts(shown).core
+        let typedWords = latin.map { $0.split(whereSeparator: \.isWhitespace).map { WordParts(String($0)).core }
+            .filter { !$0.isEmpty } } ?? []
+        let fixes = suggestions.personalFixes(for: shown, latin: latin, past: past, limit: limit)
+        var out: [String] = []
+        for candidate in fixes + suggestions(shown: word, typedWords: typedWords, guesses: guesses, limit: limit)
+        where candidate != word && !out.contains(candidate) {
+            out.append(candidate)
+        }
+        // The typed word keeps the last place even when the user's fixes fill the list.
+        let latinWord = typedWords.joined(separator: " ")
+        if out.count > limit, !latinWord.isEmpty, out.contains(latinWord) {
+            out.removeAll { $0 == latinWord }
+            return Array(out.prefix(limit - 1)) + [latinWord]
+        }
+        return Array(out.prefix(limit))
+    }
+
     /// Candidates best first by the ranker (or as built without one); equal scores keep the built order.
     func order(_ pool: [(word: String, signals: [Double])]) -> [String] {
         guard let ranker else { return pool.map(\.word) }
@@ -230,6 +253,37 @@ public struct CandidateList: Sendable {
         }
         return String(String.UnicodeScalarView(scalars[start...end]))
     }
+}
+
+/// Word suggestions v2 loaded off the keyboard's thread (ADR 0036): reading the files takes about 0.4 s, so the
+/// keyboards start it when they start and use the first list until it is ready, or for good if the files are
+/// missing or do not load (`list` stays nil).
+public final class BackgroundCandidateList: @unchecked Sendable {  // `loaded` is behind `lock`
+    private let lock = NSLock()
+    private var loaded: CandidateList?
+    private var finished = false
+
+    public init(rulesDirectory: URL, onLoaded: (@Sendable (Result<Void, any Error>) -> Void)? = nil) {
+        Thread.detachNewThread { [self] in
+            do {
+                let list = try CandidateList(rulesDirectory: rulesDirectory)
+                lock.withLock {
+                    loaded = list
+                    finished = true
+                }
+                onLoaded?(.success(()))
+            } catch {
+                lock.withLock { finished = true }
+                onLoaded?(.failure(error))
+            }
+        }
+    }
+
+    /// The list once it has loaded; nil before, or when it could not load.
+    public var list: CandidateList? { lock.withLock { loaded } }
+
+    /// True once loading has ended, with or without a list.
+    public var isFinished: Bool { lock.withLock { finished } }
 }
 
 /// A dictionary that remembers the order words were first added (Python's dict). With `lastWins`, a word added

@@ -40,7 +40,7 @@ jobs:
           # The user's learned words, until a settings window exists (ADR 0033).
           swift build -c release --package-path Packages/ArabiziCore --product harfi-words -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
           Copy-Item "$bin/harfi-words.exe" dist/harfi-windows/
-          Copy-Item data/rules/arabizi_to_arabic.json, data/rules/arabizi_lexicon.json, data/rules/spelling_options.json, data/rules/english_stopwords.json, data/rules/chat_abbreviations.json dist/harfi-windows/rules/
+          Copy-Item data/rules/arabizi_to_arabic.json, data/rules/arabizi_lexicon.json, data/rules/spelling_options.json, data/rules/english_stopwords.json, data/rules/chat_abbreviations.json, data/rules/spelling_odds.json, data/rules/candidate_ranker.json dist/harfi-windows/rules/
           Copy-Item Apps/HarfiWindows/install.ps1, Apps/HarfiWindows/status.ps1 dist/harfi-windows/
           New-Item -ItemType Directory -Force dist/harfi-windows/fonts | Out-Null
           Copy-Item Apps/ArabiziIME/Resources/Fonts/NotoNaskhArabic-Variable.ttf, Apps/ArabiziIME/Resources/Fonts/OFL.txt dist/harfi-windows/fonts/
