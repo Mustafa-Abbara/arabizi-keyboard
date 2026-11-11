@@ -4,15 +4,15 @@ Fill in after installing with [SETUP_IME.md](../SETUP_IME.md). Use ✅ pass, ❌
 
 | # | Case | Expected | TextEdit | Safari | Chrome | Slack | WhatsApp | Outlook | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Type `kifak shu 3am ta3mel` | Latin text underlined | | | | | | | |
-| 2 | Enter with underlined text | Arabic inserted, message **not** sent | | | | | | | |
-| 3 | Enter again | App sends / new line | | | | | | | |
+| 1 | Type `kifak shu 3am ta3mel` | Latin text underlined | | | | | ✅ | | ✅ |
+| 2 | Enter with underlined text | Arabic inserted, message **not** sent | | | | | ✅ | | ✅ |
+| 3 | Enter again | App sends / new line | | | | | ✅ | | ✅ |
 | 4 | Backspace inside underlined text | Edits the underlined text only | | | | | | | |
 | 5 | Click elsewhere while composing | Latin text committed once (no duplicate, no loss) | | | | | | | |
 | 6 | ⌘Z after a conversion | Undoes the inserted Arabic only | | | | | | | |
 | 7 | Password field (a login page) | Nothing underlined; keys pass through | | | | | | | |
 | 8 | Long text: 25 words underlined | Shown correctly, Enter converts all of it | | | | | | | |
-| 9 | ⌘Z right after a conversion | Arabic turns back into underlined Latin | | | | | | | |
+| 9 | ⌘Z right after a conversion | Arabic turns back into underlined Latin | | | | | ✅ | | |
 | 10 | Select Latin text, ⌥Enter | Selection converted in place | | | | | | | |
 | 11 | Shift+Enter with underlined text | Converts (no new line); note what the app expected | | | | | | | |
 | 12 | Enter in an address bar or search box | Converts first; second Enter submits | | | | | | | |
@@ -42,3 +42,10 @@ Apps: Messages, Mail, a web browser, VS Code, Terminal, an Electron chat app, Te
 - ⚠️ Other apps (not recorded which) read the selection but **ignored the explicit replacement range**, so ⌥Enter did nothing visible. Fix: insert the converted text like typing, which replaces the current selection. ✅ Retested: ⌥Enter works in those apps too.
 - ✅ ⌘Z right after Enter restores the underlined Latin (log: `undo -> restore`).
 - ⚠️ ⌘Z right after ⌥Enter falls back to the app's own undo (log: `undo -> pass`): the keyboard could not confirm the cursor was still at the end of the converted text, so it does not risk replacing the wrong text. Accepted for P1; revisit in P6.
+
+### Third round: 11 Nov 2026 (v0.3.0 hand checks, Notes and WhatsApp)
+
+- ✅ Typing, Enter converts, Enter again sends (WhatsApp) or starts a line (Notes); mixed Arabic and English keep their order after Enter in both.
+- ❌ then ✅ ⌘Z right after a conversion in Notes deleted the sentence without bringing the Latin back: Notes deletes the range but never shows marked text set over a range. Fixed by deleting the converted text first and composing the Latin at the cursor (PR #72); the same path serves ↑ right after Enter. WhatsApp's case 9 was not re-checked.
+- ✅ ↑ before Enter opens the spellings on the least sure word; ← → and the numbers pick; the chips now stay on the far side of the preview.
+- Not yet run in this round: TextEdit, Safari, Chrome, Slack, Outlook; cases 4–8 and 10–12.
