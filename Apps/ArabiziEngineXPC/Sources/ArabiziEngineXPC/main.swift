@@ -17,6 +17,11 @@ final class EngineHost: NSObject, ArabiziEngineServiceProtocol, @unchecked Senda
     private var loading = true
     private let decoder = JSONDecoder()
     private let encoder = Contract.encoder()
+    /// Requests come in through here: after 30 minutes without any, the service quits to free the model's memory.
+    let idle = IdleClock()
+
+    /// True while the model is still being loaded (the service never quits then).
+    var isLoading: Bool { lock.withLock { loading } }
 
     init(rulesOnly: Engine) {
         engine = rulesOnly
@@ -39,6 +44,8 @@ final class EngineHost: NSObject, ArabiziEngineServiceProtocol, @unchecked Senda
     }
 
     func convert(_ request: Data, reply: @escaping @Sendable (Data) -> Void) {
+        idle.touch()
+        defer { idle.touch() }
         guard let decoded = try? decoder.decode(ConvertRequest.self, from: request) else {
             reply(Data())
             return
@@ -50,6 +57,8 @@ final class EngineHost: NSObject, ArabiziEngineServiceProtocol, @unchecked Senda
     }
 
     func wordGuesses(_ request: Data, reply: @escaping @Sendable (Data) -> Void) {
+        idle.touch()
+        defer { idle.touch() }
         guard let decoded = try? decoder.decode(WordGuessRequest.self, from: request) else {
             reply(Data())
             return
@@ -69,6 +78,7 @@ final class EngineHost: NSObject, ArabiziEngineServiceProtocol, @unchecked Senda
     }
 
     func status(reply: @escaping @Sendable (Data) -> Void) {
+        idle.touch()
         let (current, stillLoading) = lock.withLock { (engine, loading) }
         let status: Status
         switch current.modelState {
@@ -128,7 +138,20 @@ do {
     exit(1)
 }
 log.info("engine service started on the rules; loading the model in the background")
-let delegate = ListenerDelegate(host: EngineHost(rulesOnly: rulesOnly))
+let host = EngineHost(rulesOnly: rulesOnly)
+// After half an hour without a request the service quits, which gives the model's memory back (about 1 GB, measured
+// as wired memory on the 8 GB Air); launchd starts it again on the next request, and the keyboard converts ahead
+// while the user types, so the model has loaded again by Enter in most cases.
+Thread.detachNewThread { [host] in
+    while true {
+        Thread.sleep(forTimeInterval: 60)
+        if host.idle.isIdle, !host.isLoading {
+            log.info("idle for 30 minutes: quitting to free the model's memory")
+            exit(0)
+        }
+    }
+}
+let delegate = ListenerDelegate(host: host)
 let listener = NSXPCListener.service()
 listener.delegate = delegate
 listener.resume()  // never returns

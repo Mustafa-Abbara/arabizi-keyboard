@@ -94,10 +94,11 @@
       <p>On a 64-bit Windows 10 or 11 PC:</p>
       <ol>
         <li><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Windows-x64.zip">Download Harfi for Windows</a>, then right-click the zip → <strong>Extract All</strong>.</li>
-        <li>In the extracted folder, right-click <code>install.ps1</code> → <strong>Run with PowerShell</strong>. It installs Harfi for you only and downloads its model (808 MB, each part checked); if Windows asks for administrator rights, allow it once.</li>
+        <li>In the extracted folder, double-click <strong>Install Harfi</strong> and press Install. It installs Harfi for you only and downloads its model (808 MB, each part checked); if Windows asks for administrator rights, allow it once.</li>
         <li>Turn it on once: Settings → Time &amp; language → Language &amp; region → Arabic (Lebanon) → Language options → Add a keyboard → Harfi. Add Arabic (Lebanon) first if it isn't listed.</li>
         <li>Switch to it with <kbd>Win</kbd> <kbd>Space</kbd> and type.</li>
       </ol>
+      <p class="note"><strong>Harfi</strong> in the Start menu has the settings, the words you taught it and the keys.</p>
       <p class="note">The model runs on the processor, so the first conversion after starting takes a few seconds. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md">Full guide</a></p>
     </div>
   </section>
@@ -142,7 +143,7 @@
       </details>
       <details>
         <summary>Windows warns me or asks for administrator rights. Is that safe?</summary>
-        <p>Harfi isn't signed with a paid certificate, so Windows may ask before running <code>install.ps1</code>. Adding a keyboard to Windows needs administrator rights once; everything else installs for your account only. The code is open on GitHub for anyone to check.</p>
+        <p>Harfi isn't signed with a paid certificate, so Windows may say it doesn't know the publisher when you open <strong>Install Harfi</strong>: choose More info → Run anyway. Adding a keyboard to Windows needs administrator rights once; everything else installs for your account only. The code is open on GitHub for anyone to check.</p>
       </details>
       <details>
         <summary>Which apps does it work in?</summary>
@@ -158,13 +159,13 @@
       </details>
       <details>
         <summary>How do I update?</summary>
-        <p>Mac: run the install line again. Windows: download the latest zip and run <code>install.ps1</code> again. The model is only downloaded again if it changed.</p>
+        <p>Mac: run the install line again. Windows: download the latest zip and run <strong>Install Harfi</strong> again. The model is only downloaded again if it changed.</p>
       </details>
       <details>
         <summary>How do I remove it?</summary>
         <p>Mac: run this in Terminal, then remove Harfi from Input Sources (−). The words Harfi learned stay until you choose <strong>Forget all my words</strong> in its window first.</p>
         <div class="cmd"><code>curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash -s -- --uninstall</code><button type="button" data-copied="Copied" data-failed="Select and copy">Copy</button></div>
-        <p>Windows: run <code style="white-space:nowrap">install.ps1 -Uninstall</code> from the folder you extracted. This also removes the words Harfi learned.</p>
+        <p>Windows: Settings → Apps → Installed apps → Harfi → Uninstall. This also removes the words Harfi learned.</p>
       </details>
       <details>
         <summary>Is it free?</summary>

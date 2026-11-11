@@ -14,19 +14,23 @@ final class ArabiziInputController: IMKInputController {
     /// output checks and its own rule fallback, ADR 0020), and the rule converter here if the service cannot answer
     /// in time. The rule files and config come from Resources (scripts/build_ime.sh); without them the P1 toy
     /// converter keeps the keyboard usable.
-    private static let convert: @Sendable (String) -> String = {
+    private static let convert: @Sendable (String) -> String = { answer($0).text }
+    /// The conversion with whether the model made it: the live preview keeps only the model's answers for Enter, so a
+    /// rule fallback (the model still loading, a timeout) is shown but asked again at Enter.
+    private static let answer: @Sendable (String) -> (text: String, fromModel: Bool) = {
         let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         let rules = quickConvert
         guard let engine = EngineClient(resources: resources, fasterPreview: { Settings.fasterPreview }) else {
-            return { yours($0, rules($0)) }
+            return { (yours($0, rules($0)), false) }
         }
         engine.warmUp()
         let confidences = ArabiziInputController.confidences
         return { text in
-            guard let answer = engine.respond(text) else { return yours(text, rules(text)) }
-            let shown = answer.outcome == .model ? fromModel(text, answer.text) : yours(text, answer.text)
+            guard let answer = engine.respond(text) else { return (yours(text, rules(text)), false) }
+            let model = answer.outcome == .model
+            let shown = model ? fromModel(text, answer.text) : yours(text, answer.text)
             confidences.remember(shown, answer.wordConfidence)  // ↑ then starts on the least sure word
-            return shown
+            return (shown, model)
         }
     }()
     /// How sure the model was of each word of the last few conversions (the preview's and Enter's alike).
@@ -133,7 +137,8 @@ final class ArabiziInputController: IMKInputController {
     private func schedulePreview() {
         let latin = composer.buffer
         let generation = previewState.next()
-        guard Self.livePreviewEnabled, latin.contains(where: \.isLetter), !composer.isSuggesting else { return }
+        // Converted ahead even with the preview box off, so Enter does not wait for the engine.
+        guard PreviewPolicy.convertsAhead(latin, fixing: composer.isSuggesting) else { return }
         if latin.last?.isWhitespace == true, !Self.previews.endsWithClitic(latin) {
             // A finished word: the rules at once, then the model. After a small word (el, w, b) the next word
             // decides its Arabic, so that waits for the next word or a pause.
@@ -162,7 +167,8 @@ final class ArabiziInputController: IMKInputController {
         nonisolated(unsafe) let controller = self
         Self.previewQueue.async {
             while let next = Self.previewWork.take() {
-                Self.previews.set(next, Self.convert(next))
+                let made = Self.answer(next)
+                Self.previews.store(next, made.text, fromModel: made.fromModel)
                 DispatchQueue.main.async { controller.showPreview() }
             }
         }
@@ -171,8 +177,8 @@ final class ArabiziInputController: IMKInputController {
     /// The preview box above the typed text: the Arabic of what has been converted, then the Latin typed since.
     /// Hidden when nothing is converted yet or the user is not composing.
     private func showPreview() {
-        guard !composer.isSuggesting, let client = client(),
-              let text = Self.previews.display(for: composer.buffer) else { return hidePreview() }
+        guard PreviewPolicy.shows(livePreview: Self.livePreviewEnabled, fixing: composer.isSuggesting),
+              let client = client(), let text = Self.previews.display(for: composer.buffer) else { return hidePreview() }
         let marked = client.markedRange()
         let index = marked.location == NSNotFound ? client.selectedRange().location : marked.location
         let line = lineRect(client, at: [index])
@@ -182,7 +188,8 @@ final class ArabiziInputController: IMKInputController {
         let doubtful = Self.doubtfulWords(words, latin: String(composer.buffer.dropLast(text.typedSince)))
         let hint = text.latin.isEmpty && Settings.personality != .quiet
             && UserDefaults.standard.integer(forKey: "previewFixUses") < Self.previewFixUses ? "↑ fix a word" : nil
-        _ = MainActor.assumeIsolated { window.show(arabic: words, doubtful: doubtful, latin: text.latin, hint: hint, above: line) }
+        _ = MainActor.assumeIsolated { window.show(arabic: words, doubtful: doubtful, latin: text.latin, hint: hint, above: line,
+                                                         reserve: Self.chipsHeight) }
     }
 
     /// Which shown words look wrong (a letter no typed key writes, in a word never seen written): dotted in the preview.
@@ -210,15 +217,19 @@ final class ArabiziInputController: IMKInputController {
         let marked = client.markedRange()
         let start = marked.location == NSNotFound ? client.selectedRange().location : marked.location
         var line = lineRect(client, at: [start])
+        var preview: ((CGFloat) -> NSRect)?
         if let fix = composer.fixingBeforeSending {
             // Fixing before sending: the preview stays where it was, the selected word highlighted in it, and the
-            // chips rise just above it, so the eye never loses its place.
+            // chips sit on its far side from the text (above it, or below it when there is no room above), so the
+            // eye never loses its place.
             let doubtful = Self.doubtfulWords(fix.words, latin: fix.latin)
             nonisolated(unsafe) let window = previewWindow
-            let box = MainActor.assumeIsolated {
-                window.show(arabic: fix.words, doubtful: doubtful, selected: fix.index, latin: "", above: line)
+            preview = { height in
+                MainActor.assumeIsolated {
+                    window.show(arabic: fix.words, doubtful: doubtful, selected: fix.index, latin: "", above: line,
+                                reserve: height)
+                }
             }
-            line = box
         } else {
             hidePreview()
             if line != .zero, let word = plausibleLine(client, at: start + wordStart), abs(word.midY - line.midY) < 2 {
@@ -231,7 +242,7 @@ final class ArabiziInputController: IMKInputController {
         nonisolated(unsafe) let chips = chips, controller = self
         MainActor.assumeIsolated {
             chips.show(word: current?.shown, doubtful: doubtful, candidates: candidates, spelling: spelling,
-                       choice: choice, typed: typed, above: line,
+                       choice: choice, typed: typed, above: line, preview: preview,
                        pick: { controller.chipPicked($0) }, spellIt: { controller.spellFromChip() })
         }
     }
@@ -241,8 +252,8 @@ final class ArabiziInputController: IMKInputController {
         MainActor.assumeIsolated { chips.hide() }
     }
 
-    /// After a conversion, a one-line hint that ⌥Tab fixes a word: the first few times only, never in Quiet mode,
-    /// and no more once ⌥Tab has been used a few times.
+    /// After a conversion, a one-line hint that ↑ fixes a word: the first few times only, never in Quiet mode,
+    /// and no more once ↑ or ⌥Tab has been used a few times.
     private func showFixHint(in client: IMKTextInput) {
         let shown = UserDefaults.standard.integer(forKey: "fixHintShown")
         guard shown < Self.fixHintTimes, UserDefaults.standard.integer(forKey: "fixHintUses") < Self.fixHintUses,
@@ -252,8 +263,12 @@ final class ArabiziInputController: IMKInputController {
         let line = lineRect(client, at: [cursor - 1, cursor])
         guard line != .zero else { return }
         nonisolated(unsafe) let chips = chips
-        MainActor.assumeIsolated { chips.showHint("Not quite? ⌥Tab to fix a word", above: line) }
+        MainActor.assumeIsolated { chips.showHint("Not quite? ↑ to fix a word", above: line) }
     }
+
+    /// About the chip row's height with the sentence over it: the preview keeps room for it while typing, so it
+    /// does not move when ↑ opens the chips.
+    private static let chipsHeight: CGFloat = 72
 
     private static let fixHintTimes = 5, fixHintUses = 3, previewFixUses = 3
 
@@ -271,14 +286,14 @@ final class ArabiziInputController: IMKInputController {
         MainActor.assumeIsolated { chips.showHint(tip, above: line, seconds: 6) }
     }
 
-    /// After sending: the first unsure word still in the text (ADR 0034), else the first-week hint about ⌥Tab.
+    /// After sending: the first unsure word still in the text (ADR 0034), else the first-week hint about ↑.
     private func pointOut(_ sent: String, in client: IMKTextInput) {
         guard let word = Self.toPointOut(in: sent) else { return showFixHint(in: client) }
         let cursor = client.selectedRange().location
         let line = lineRect(client, at: [cursor - 1, cursor])
         guard line != .zero else { return }
         nonisolated(unsafe) let chips = chips
-        MainActor.assumeIsolated { chips.showHint("Not sure about \(word) · ⌥Tab to fix it", above: line, seconds: 4) }
+        MainActor.assumeIsolated { chips.showHint("Not sure about \(word) · ↑ to fix it", above: line, seconds: 4) }
     }
 
     /// The last line position an app reported that made sense: used when the app reports none or a wrong one.
@@ -307,8 +322,10 @@ final class ArabiziInputController: IMKInputController {
         return line
     }
 
-    /// Where the cursor was right after the last conversion, so ⌘Z can tell whether it moved since.
+    /// Where the cursor was right after the last conversion, so ⌘Z can tell whether it moved since: where the app
+    /// reported it, and where the converted text ends (an app such as Notes can report the cursor late).
     private var conversionEnd: Int?
+    private var conversionEnds: Set<Int> = []
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
@@ -316,10 +333,11 @@ final class ArabiziInputController: IMKInputController {
         var context = Context(secureInput: IsSecureEventInputEnabled())
         var selection: NSRange?
         switch key {
-        case .undo, .suggest:
+        case .undo, .suggest, .arrowUp where composer.buffer.isEmpty:
             let cursor = client.selectedRange()
             context.cursorAtLastConversion = cursor.length == 0 && cursor.location != NSNotFound
-                && cursor.location == conversionEnd
+                && conversionEnds.contains(cursor.location)
+            if context.cursorAtLastConversion { conversionEnd = cursor.location }
         case .convertSelection where composer.buffer.isEmpty:
             selection = Self.usable(client.selectedRange())
             if let range = selection {
@@ -358,7 +376,8 @@ final class ArabiziInputController: IMKInputController {
         if [.arrowLeft, .arrowRight, .suggest, .arrowUp].contains(key), let word = composer.selectedWord {
             log.notice("\(key.kind, privacy: .public): word \(word.index + 1, privacy: .public) of \(word.count, privacy: .public)")
         }
-        if key == .suggest {  // ⌥Tab used: after a few times the hint is no longer needed
+        // ⌥Tab, or ↑ right after a conversion, used: after a few times the hint is no longer needed.
+        if key == .suggest || (key == .arrowUp && !wasComposing && composer.isSuggesting) {
             UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "fixHintUses") + 1, forKey: "fixHintUses")
         }
         if key == .arrowUp, case .suggest = effect, wasComposing {  // fixing before sending
@@ -387,7 +406,7 @@ final class ArabiziInputController: IMKInputController {
     /// Carries out what the composer decided, in the app.
     private func apply(_ effect: Effect, to client: IMKTextInput, selection: NSRange? = nil) -> Bool {
         defer {
-            if composer.lastConversion == nil { conversionEnd = nil }
+            if composer.lastConversion == nil { conversionEnd = nil; conversionEnds = [] }
             if !composer.isSuggesting {
                 hideCandidates()
                 if composer.buffer.isEmpty { hidePreview() }  // still composing: showPreview decides
@@ -403,8 +422,9 @@ final class ArabiziInputController: IMKInputController {
             setMarked(marked, in: client)
             return true
         case .commit(let text):
+            let start = client.markedRange().location
             insert(text, into: client)
-            rememberConversionEnd(in: client)
+            rememberConversionEnd(in: client, start: start, length: (text as NSString).length)
             return true
         case .commitAndPass(let text):
             insert(text, into: client)
@@ -421,21 +441,23 @@ final class ArabiziInputController: IMKInputController {
                 _ = composer.flush()  // the app moved the text under us: stop composing, let ⌘Z be the app's
                 return false
             }
-            setMarked(marked, in: client, replacing: NSRange(location: end - replacingLength, length: replacingLength))
+            let range = NSRange(location: end - replacingLength, length: replacingLength)
+            replace(range, with: marked, selection: NSRange(location: (marked as NSString).length, length: 0), in: client)
             log.debug("restored \(marked.count) Latin characters")
             return true
         case .suggest(let marked, let selected, _, let replacingLength):
-            var range = Self.notFound
+            let selection = NSRange(location: selected.lowerBound, length: selected.count)
             if let replacingLength {
                 guard let end = conversionEnd, end >= replacingLength else {
                     _ = composer.flush()  // the app cannot report the cursor: leave the text alone
                     NSSound.beep()
                     return true
                 }
-                range = NSRange(location: end - replacingLength, length: replacingLength)
+                replace(NSRange(location: end - replacingLength, length: replacingLength), with: marked,
+                        selection: selection, in: client)
+            } else {
+                client.setMarkedText(marked, selectionRange: selection, replacementRange: Self.notFound)
             }
-            client.setMarkedText(marked, selectionRange: NSRange(location: selected.lowerBound, length: selected.count),
-                                 replacementRange: range)
             showCandidates(wordStart: selected.lowerBound)
             return true
         case .commitAndCompose(let text, let marked):
@@ -490,8 +512,7 @@ final class ArabiziInputController: IMKInputController {
         if composer.fixingBeforeSending != nil { Settings.complete(.fixed) }
         let effect = composer.pick(picked)
         guard effect != .consume else { return }
-        _ = apply(effect, to: client)
-        if !composer.isSuggesting { rememberConversionEnd(in: client) }
+        _ = apply(effect, to: client)  // a commit remembers where the text ends
         announceHabit(in: client)
     }
 
@@ -518,9 +539,20 @@ final class ArabiziInputController: IMKInputController {
     }
 
     /// Some apps (often browsers and Electron) cannot report the cursor; then ⌘Z simply stays the app's undo.
-    private func rememberConversionEnd(in client: IMKTextInput) {
+    private func rememberConversionEnd(in client: IMKTextInput, start: Int = NSNotFound, length: Int = 0) {
         let cursor = client.selectedRange()
         conversionEnd = cursor.location == NSNotFound ? nil : cursor.location
+        conversionEnds = Set([conversionEnd, start == NSNotFound ? nil : start + length].compactMap { $0 })
+    }
+
+    /// Puts `marked` (still being composed) in place of `range`, text the keyboard committed. Some apps (Notes)
+    /// delete the range but never show marked text given a replacement range: the range is deleted first, and the
+    /// marked text set at the cursor. When the app ignored the deletion, the replacement range is used as before.
+    private func replace(_ range: NSRange, with marked: String, selection: NSRange, in client: IMKTextInput) {
+        let before = client.length()
+        client.insertText("", replacementRange: range)
+        let deleted = client.selectedRange().location == range.location || client.length() == before - range.length
+        client.setMarkedText(marked, selectionRange: selection, replacementRange: deleted ? Self.notFound : range)
     }
 
     private func setMarked(_ text: String, in client: IMKTextInput, replacing range: NSRange = notFound) {
@@ -596,55 +628,6 @@ extension Key {
     }
 }
 
-
-/// The conversions made ahead for the live preview: the last few, by the exact Latin text. A conversion is final
-/// (the model's, which Enter may use) or quick (the rules', shown only until the model's arrives).
-final class PreviewCache: @unchecked Sendable {  // `items` is behind `lock`
-    private let lock = NSLock()
-    private var items: [(latin: String, arabic: String, final: Bool)] = []
-    private let isClitic: @Sendable (String) -> Bool
-
-    init(isClitic: @escaping @Sendable (String) -> Bool) { self.isClitic = isClitic }
-
-    func set(_ latin: String, _ arabic: String, final: Bool = true) {
-        lock.withLock {
-            if !final, items.contains(where: { $0.latin == latin && $0.final }) { return }
-            items.removeAll { $0.latin == latin }
-            items.append((latin, arabic, final))
-            if items.count > 16 { items.removeFirst() }
-        }
-    }
-
-    /// The final Arabic for exactly this text.
-    func arabic(for latin: String) -> String? {
-        lock.withLock { items.last { $0.latin == latin && $0.final }?.arabic }
-    }
-
-    /// True when the last word of `latin` is a small word whose Arabic depends on the next one (el, w, b).
-    func endsWithClitic(_ latin: String) -> Bool {
-        guard let last = latin.split(whereSeparator: \.isWhitespace).last else { return false }
-        return isClitic(String(last))
-    }
-
-    /// What the preview window shows for the text typed so far: the Arabic of the longest converted start that ends
-    /// at a word boundary, then the Latin typed since. A start ending in a small word (el, w, b) is not used, so
-    /// a lone ال never shows before its word. nil when no start of the text is converted yet.
-    func display(for buffer: String) -> (arabic: String, latin: String, typedSince: Int)? {
-        lock.withLock {
-            let starts = items.filter { item in
-                guard buffer.hasPrefix(item.latin), !endsWithClitic(item.latin) || item.latin.count == buffer.count
-                else { return false }
-                if item.latin.count == buffer.count || item.latin.last?.isWhitespace == true { return true }
-                return buffer[buffer.index(buffer.startIndex, offsetBy: item.latin.count)].isWhitespace
-            }
-            guard let best = starts.max(by: { ($0.latin.count, $0.final ? 1 : 0) < ($1.latin.count, $1.final ? 1 : 0) })
-            else { return nil }
-            let head = best.arabic.trimmingCharacters(in: .whitespaces)
-            let rest = String(buffer.dropFirst(best.latin.count)).trimmingCharacters(in: .whitespaces)
-            return (head, rest, buffer.count - best.latin.count)
-        }
-    }
-}
 
 /// The newest text waiting to be converted for the preview, and whether a worker is running.
 final class PreviewWork: @unchecked Sendable {  // both fields are behind `lock`
@@ -725,7 +708,7 @@ final class PreviewWindow {
     /// from word to word).
     @discardableResult
     @MainActor func show(arabic words: [String], doubtful: Set<Int>, selected: Int? = nil, latin: String,
-                         hint: String? = nil, above line: NSRect) -> NSRect {
+                         hint: String? = nil, above line: NSRect, reserve: CGFloat = 0) -> NSRect {
         let panel = ensurePanel()
         guard let label else { return panel.frame }
         let paragraph = NSMutableParagraphStyle()
@@ -754,8 +737,9 @@ final class PreviewWindow {
         let anchor = line == .zero ? NSRect(origin: NSEvent.mouseLocation, size: .zero) : line
         let screen = NSScreen.screens.first { $0.frame.contains(anchor.origin) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1_600, height: 1_000)
-        var origin = NSPoint(x: anchor.minX, y: anchor.maxY + 6)  // above the line
-        if origin.y + size.height > visible.maxY { origin.y = anchor.minY - size.height - 6 }  // no room: below it
+        // Above the line, with room for `reserve` (the chips) over it; else below the line.
+        var origin = NSPoint(x: anchor.minX,
+                             y: StackPlacement.y(for: anchor, height: size.height, reserve: reserve, top: visible.maxY))
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         label.needsDisplay = true
