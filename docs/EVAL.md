@@ -248,6 +248,10 @@ running.
   p50 379 → 170 ms); word accuracy 0.8206 → 0.8180; **9 of the 200** answers differ from the same text converted on its
   own (28 words where the lengths match), against 28 of 200 on the Windows processor.
 
+## Reproducing a baseline from a fresh clone (11 Nov 2026)
+
+`git clone` of `main` at `0b8ca02`, then `uv run --project eval evalrun run --system b0 --split dev`, against the committed run of 29 Oct (`20261029-153707-b0-dev`): the same data (`data_sha256` 08b3a640…), and every accuracy metric identical (word accuracy 0.756, lenient 0.762). Latency p50 0.019 → 0.021 ms (+10%), p95 0.047 → 0.051 ms (+9%), within the 20% the P3 gate allows. Run: `eval/results/20261111-221425-b0-dev`.
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
