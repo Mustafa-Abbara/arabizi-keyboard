@@ -11,6 +11,7 @@
     "id": {"description": "Request id (UUID), echoed in the response.", "type": "string", "format": "uuid",
            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
     "text": {"description": "The Latin text as typed. The engine's limit is max_input_chars in config/engine.json.", "type": "string"},
-    "deadlineMs": {"description": "How long the caller waits for the model before the rule fallback answers.", "type": "integer", "minimum": 1}
+    "deadlineMs": {"description": "How long the caller waits for the model before the rule fallback answers.", "type": "integer", "minimum": 1},
+    "incremental": {"description": "Optional. false: convert this text on its own, never from the last conversion (ADR 0037). Absent: the engine's default (incremental).", "type": "boolean"}
   }
 }

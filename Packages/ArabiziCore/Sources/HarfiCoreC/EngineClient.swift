@@ -20,6 +20,7 @@ final class EngineClient: @unchecked Sendable {  // `lastStart` is behind `lock`
     private let sid: String
     private let lock = NSLock()
     private var lastStart: Date?
+    private let settings = UserSettingsFile()
 
     /// nil without the config, harfi-engine.exe or the account's SID: the keyboard then keeps to its own rules.
     init?(folder: URL) {
@@ -46,9 +47,10 @@ final class EngineClient: @unchecked Sendable {  // `lastStart` is behind `lock`
     /// The engine's whole answer (with how it was made), or nil when there is none in time.
     func answer(_ text: String) -> ConvertResponse? {
         let deadlineMs = config.deadlineMs(for: text)  // longer messages get longer (ADR 0025)
-        guard var request = try? Contract.encoder().encode(ConvertRequest(text: text, deadlineMs: deadlineMs)) else {
-            return nil
-        }
+        // "Faster preview" switched off (ADR 0037): the engine converts every text on its own.
+        let incremental: Bool? = settings.current.fasterPreview ? nil : false
+        guard var request = try? Contract.encoder().encode(
+            ConvertRequest(text: text, deadlineMs: deadlineMs, incremental: incremental)) else { return nil }
         guard let pipe = open() else {
             start()
             return nil

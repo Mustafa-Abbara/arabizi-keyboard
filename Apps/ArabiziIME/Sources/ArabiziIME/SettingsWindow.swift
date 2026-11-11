@@ -10,6 +10,12 @@ enum Settings {
         set { UserDefaults.standard.set(newValue, forKey: "livePreview") }
     }
 
+    /// Incremental conversion while typing (ADR 0037): faster, and an answer can differ by a word. On by default.
+    static var fasterPreview: Bool {
+        get { UserDefaults.standard.object(forKey: "fasterPreview") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "fasterPreview") }
+    }
+
     /// Larger Arabic in the preview and the chips.
     static var largerText: Bool {
         get { UserDefaults.standard.bool(forKey: "largerText") }
@@ -101,6 +107,7 @@ enum Settings {
     @Published var livePreview = Settings.livePreview { didSet { Settings.livePreview = livePreview } }
     @Published var personality = Settings.personality { didSet { Settings.personality = personality } }
     @Published var largerText = Settings.largerText { didSet { Settings.largerText = largerText } }
+    @Published var fasterPreview = Settings.fasterPreview { didSet { Settings.fasterPreview = fasterPreview } }
     @Published private(set) var words: [Word] = []
     @Published private(set) var fixes = 0
     /// Spellings Harfi now writes by itself (ADR 0033), and the ones the user said no to.
@@ -288,6 +295,16 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Live preview").foregroundStyle(Color.ink)
                         Text("A small box above your text shows the Arabic as you type.")
+                            .font(.system(size: 12)).foregroundStyle(Color.muted)
+                    }
+                }
+                .toggleStyle(.switch)
+            }
+            card {
+                Toggle(isOn: $model.fasterPreview) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Faster preview").foregroundStyle(Color.ink)
+                        Text("Reuses what is already converted as you type. Now and then a word can come out differently.")
                             .font(.system(size: 12)).foregroundStyle(Color.muted)
                     }
                 }

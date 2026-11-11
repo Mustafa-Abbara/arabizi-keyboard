@@ -17,7 +17,9 @@ final class ArabiziInputController: IMKInputController {
     private static let convert: @Sendable (String) -> String = {
         let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         let rules = quickConvert
-        guard let engine = EngineClient(resources: resources) else { return { yours($0, rules($0)) } }
+        guard let engine = EngineClient(resources: resources, fasterPreview: { Settings.fasterPreview }) else {
+            return { yours($0, rules($0)) }
+        }
         engine.warmUp()
         let confidences = ArabiziInputController.confidences
         return { text in

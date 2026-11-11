@@ -52,6 +52,16 @@ public struct Generation: Equatable, Sendable {
 /// Something that turns a rendered prompt into text: the real `LlamaModel`, or a stand-in in tests of the engine.
 public protocol TextGenerator: Sendable {
     func generate(_ prompt: String, maxTokens: Int, timeout: Duration) throws -> Generation
+    /// The same; with `reuseLast` false the prompt is converted on its own even when it continues the last one
+    /// (incremental conversion, ADR 0037).
+    func generate(_ prompt: String, maxTokens: Int, timeout: Duration, reuseLast: Bool) throws -> Generation
+}
+
+extension TextGenerator {
+    /// A generator without incremental conversion converts every prompt on its own anyway.
+    public func generate(_ prompt: String, maxTokens: Int, timeout: Duration, reuseLast: Bool) throws -> Generation {
+        try generate(prompt, maxTokens: maxTokens, timeout: timeout)
+    }
 }
 
 /// The model's other ways to write one word of its answer (ADR 0036, the up-arrow list's first source).
@@ -202,6 +212,11 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
     /// Generate the answer to `prompt` (already rendered with the model's `PromptTemplate`), greedily, stopping at
     /// the end of the turn, after `maxTokens`, or when `timeout` has passed since the call.
     public func generate(_ prompt: String, maxTokens: Int = 128, timeout: Duration) throws -> Generation {
+        try generate(prompt, maxTokens: maxTokens, timeout: timeout, reuseLast: true)
+    }
+
+    /// The same; `reuseLast` false converts the prompt on its own even when it continues the last one (ADR 0037).
+    public func generate(_ prompt: String, maxTokens: Int, timeout: Duration, reuseLast: Bool) throws -> Generation {
         lock.lock()
         defer { lock.unlock() }
         guard !freed else { throw LlamaError.modelClosed }
@@ -274,7 +289,7 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         }
 
         // The prompt: after the pinned instruction, or (incremental) after the text it shares with the last one.
-        let draft = self.draft(for: prompt)
+        let draft = reuseLast ? self.draft(for: prompt) : nil
         var status = draft == nil ? begin(prompt) : prefill(prompt)
         if status == 2 {  // aborted by the deadline callback
             stop = .deadline

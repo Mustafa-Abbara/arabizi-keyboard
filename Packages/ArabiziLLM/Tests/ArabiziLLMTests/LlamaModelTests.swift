@@ -97,66 +97,90 @@ func promptLongerThanTheContextIsRejected() throws {
     #expect(throws: LlamaError.self) { try #require(model).generate(long, timeout: .seconds(30)) }
 }
 
-@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
-func withThePinnedInstructionAnAnswerDependsOnlyOnItsText() throws {
-    // Its own model: pinning changes how every later prompt is decoded.
-    let pinned = try LlamaModel(path: try #require(testModelPath))
-    try pinned.pin(template.prefix)
-    let prompt = template.render("bade ruh 3al beit")
-    func answer() throws -> String { try pinned.generate(prompt, maxTokens: 24, timeout: .seconds(60)).text }
-    let first = try answer()
-    #expect(!first.isEmpty)
-    // The same after another text, after word guesses, and after a prompt that does not start with the instruction.
-    _ = try pinned.generate(template.render("kifak ya zalame shu akhbarak"), maxTokens: 24, timeout: .seconds(60))
-    #expect(try answer() == first)
-    _ = try pinned.wordGuesses(template.render("kifak"), answerSoFar: "", count: 3, timeout: .seconds(60))
-    #expect(try answer() == first)
-    _ = try pinned.generate("marhaba", maxTokens: 4, timeout: .seconds(60))
-    #expect(try answer() == first)
-}
+// The pinned instruction and incremental conversion (ADR 0037). One more model, shared by these tests: `pin` changes
+// how every later prompt is decoded, so it cannot be the model above; each test runs alone on it (`onPinned`) and
+// starts with `pin`, which also forgets the last conversion.
+let pinnedModel: LlamaModel? = testModelPath.flatMap { try? LlamaModel(path: $0) }
+private let pinnedLock = NSLock()
 
-@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
-func aDeadlineWhileThePinnedInstructionIsDecodedIsRecoveredFrom() throws {
-    let pinned = try LlamaModel(path: try #require(testModelPath))
-    try pinned.pin(template.prefix)
-    let prompt = template.render("bade ruh 3al beit")
-    let whole = try pinned.generate(prompt, maxTokens: 24, timeout: .seconds(60))
-    #expect(try pinned.generate(prompt, maxTokens: 24, timeout: .zero).stop == .deadline)
-    let after = try pinned.generate(prompt, maxTokens: 24, timeout: .seconds(60))
-    #expect(after.stop != .deadline && after.text == whole.text)
-}
-
-// Incremental conversion (ADR 0037): a text that continues the last one reuses it. An answer made that way can
-// differ by a word from the same text converted on its own (rounding), so these tests check what is exact.
-
-@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
-func incrementalConversionIsRepeatableAndLeavesOtherTextsAlone() throws {
-    func typed(_ texts: [String]) throws -> [String] {
-        let model = try LlamaModel(path: try #require(testModelPath))
-        try model.pin(template.prefix, incrementalSuffix: template.suffix)
-        return try texts.map { try model.generate(template.render($0), maxTokens: 24, timeout: .seconds(60)).text }
+private func onPinned<T>(incremental: Bool, _ body: (LlamaModel) throws -> T) throws -> T {
+    let model = try #require(pinnedModel)
+    return try pinnedLock.withLock {
+        try model.pin(template.prefix, incrementalSuffix: incremental ? template.suffix : nil)
+        return try body(model)
     }
+}
+
+private func answer(_ model: LlamaModel, _ text: String, reuseLast: Bool = true) throws -> String {
+    try model.generate(template.render(text), maxTokens: 24, timeout: .seconds(120), reuseLast: reuseLast).text
+}
+
+/// The answers to `texts`, converted one after the other from a fresh start.
+private func typed(_ texts: [String], incremental: Bool = true) throws -> [String] {
+    try onPinned(incremental: incremental) { model in try texts.map { try answer(model, $0) } }
+}
+
+@Test(.enabled(if: pinnedModel != nil, "no model file in models/"))
+func withThePinnedInstructionAnAnswerDependsOnlyOnItsText() throws {
+    try onPinned(incremental: false) { model in
+        let first = try answer(model, "bade ruh 3al beit")
+        #expect(!first.isEmpty)
+        // The same after another text, after word guesses, and after a prompt without the instruction.
+        _ = try answer(model, "kifak ya zalame shu akhbarak")
+        #expect(try answer(model, "bade ruh 3al beit") == first)
+        _ = try model.wordGuesses(template.render("kifak"), answerSoFar: "", count: 3, timeout: .seconds(120))
+        #expect(try answer(model, "bade ruh 3al beit") == first)
+        _ = try model.generate("marhaba", maxTokens: 4, timeout: .seconds(120))
+        #expect(try answer(model, "bade ruh 3al beit") == first)
+    }
+}
+
+@Test(.enabled(if: pinnedModel != nil, "no model file in models/"))
+func aDeadlineWhileThePinnedInstructionIsDecodedIsRecoveredFrom() throws {
+    try onPinned(incremental: false) { model in
+        let prompt = template.render("bade ruh 3al beit")
+        let whole = try answer(model, "bade ruh 3al beit")
+        #expect(try model.generate(prompt, maxTokens: 24, timeout: .zero).stop == .deadline)
+        #expect(try answer(model, "bade ruh 3al beit") == whole)
+    }
+}
+
+// An answer made incrementally can differ by a word from the same text converted on its own (rounding), so these
+// tests check what is exact.
+
+@Test(.enabled(if: pinnedModel != nil, "no model file in models/"))
+func incrementalConversionIsRepeatableAndLeavesOtherTextsAlone() throws {
     let typing = ["bade", "bade ruh", "bade ruh 3al", "bade ruh 3al beit"]
     let first = try typed(typing)
     #expect(first.allSatisfy { !$0.isEmpty })
     #expect(try typed(typing) == first)  // the same typing, the same answers
     // A text that does not continue the last one is converted on its own, whatever came before it.
     let other = "kifak ya zalame"
-    #expect(try typed(typing + [other]).last == typed([other]).last)
+    let alone = try typed([other])
+    #expect(try typed(typing + [other]).last == alone.last)
     // The same text again is not a draft of itself: it is converted on its own too.
-    #expect(try typed([other, other]) == typed([other]) + typed([other]))
+    #expect(try typed([other, other]) == alone + alone)
 }
 
-@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
+@Test(.enabled(if: pinnedModel != nil, "no model file in models/"))
 func aDeadlineLeavesNoDraftBehind() throws {
-    let model = try LlamaModel(path: try #require(testModelPath))
-    try model.pin(template.prefix, incrementalSuffix: template.suffix)
-    let fresh = try LlamaModel(path: try #require(testModelPath))
-    try fresh.pin(template.prefix, incrementalSuffix: template.suffix)
-    #expect(try model.generate(template.render("bade ruh"), maxTokens: 24, timeout: .zero).stop == .deadline)
-    let longer = template.render("bade ruh 3al beit")
-    #expect(try model.generate(longer, maxTokens: 24, timeout: .seconds(60)).text
-            == fresh.generate(longer, maxTokens: 24, timeout: .seconds(60)).text)
+    let alone = try typed(["bade ruh 3al beit"])
+    let after = try onPinned(incremental: true) { model in
+        #expect(try model.generate(template.render("bade ruh"), maxTokens: 24, timeout: .zero).stop == .deadline)
+        return try answer(model, "bade ruh 3al beit")
+    }
+    #expect([after] == alone)
+}
+
+@Test(.enabled(if: pinnedModel != nil, "no model file in models/"))
+func aConversionToldNotToReuseTheLastOneIsTheSameAsOnItsOwn() throws {
+    // "Faster preview" switched off: the text continues the last one, and is still converted on its own.
+    let alone = try typed(["bade ruh 3al beit"], incremental: false)
+    let off = try onPinned(incremental: true) { model in
+        _ = try answer(model, "bade ruh 3al")
+        return try answer(model, "bade ruh 3al beit", reuseLast: false)
+    }
+    #expect([off] == alone)
 }
 
 @Test func theMostLikelyTokenAndItsLogProbability() {
