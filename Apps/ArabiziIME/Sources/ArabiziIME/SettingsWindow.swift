@@ -337,7 +337,7 @@ struct SettingsView: View {
             if model.words.isEmpty {
                 card {
                     Text("Teach Harfi your spellings").foregroundStyle(Color.ink)
-                    Text("After a conversion, press ⌥Tab and pick the right word. Your picks show up here and come first next time.")
+                    Text("Right after a conversion, press ↑ and pick the right word. Your picks show up here and come first next time.")
                         .font(.system(size: 12)).foregroundStyle(Color.muted)
                 }
             } else {
@@ -415,6 +415,7 @@ struct SettingsView: View {
         card {
             ForEach([("Enter", "Turn the Latin into Arabic. Enter again sends."),
                      ("↑ while typing", "Fix a word in the preview before converting: ← → the word, 1–7 the spelling."),
+                     ("↑ right after", "Fix a word in what was just converted, or just fixed."),
                      ("⌘Z", "Right after: back to your Latin."),
                      ("⌥Enter", "Convert the selected Latin text."),
                      ("⌥Tab", "Other spellings for a word. ← → pick the word, ↓ ↑ the spelling."),

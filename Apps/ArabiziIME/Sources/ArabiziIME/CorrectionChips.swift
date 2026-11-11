@@ -1,4 +1,5 @@
 import AppKit
+import ArabiziEngineClient
 
 /// The row of spellings above the text (⌥Tab), where the live preview sits, in the palette: the first spelling on the right, as Arabic
 /// reads, each with its number key, then "Spell it". While spelling, the letters for the last key. The keys work
@@ -55,6 +56,7 @@ final class CorrectionChips {
     /// `typed`: the sentence as typed, with the UTF-16 range of the words the selected word came from.
     @MainActor func show(word: String?, doubtful: Bool, candidates: [String], spelling: Bool, choice: Int?,
                          typed: (text: String, selected: Range<Int>?)?, above line: NSRect,
+                         preview: ((CGFloat) -> NSRect)? = nil,
                          pick: @escaping (String) -> Void, spellIt: @escaping () -> Void) {
         hintToken += 1
         let (panel, row) = ensurePanel()
@@ -78,7 +80,9 @@ final class CorrectionChips {
         } else {
             row.addArrangedSubview(ChipView(quiet: "Spell it", onClick: spellIt))
         }
-        place(panel, size: column?.fittingSize ?? row.fittingSize, above: line)
+        let size = column?.fittingSize ?? row.fittingSize
+        // With the preview: it is placed knowing the chips' height, and the chips go on its far side from the text.
+        place(panel, size: size, above: line, beside: preview?(size.height))
     }
 
     /// A short line above the text after a conversion, hidden after `seconds` or by the next chips.
@@ -101,13 +105,13 @@ final class CorrectionChips {
         panel?.orderOut(nil)
     }
 
-    @MainActor private func place(_ panel: NSPanel, size: NSSize, above line: NSRect) {
+    @MainActor private func place(_ panel: NSPanel, size: NSSize, above line: NSRect, beside preview: NSRect? = nil) {
         let anchor = line == .zero ? NSRect(origin: NSEvent.mouseLocation, size: .zero) : line
         let screen = NSScreen.screens.first { $0.frame.contains(anchor.origin) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1_600, height: 1_000)
         // Above the line, where the live preview sits (typing boxes are often at the bottom of the screen).
-        var origin = NSPoint(x: anchor.minX, y: anchor.maxY + 6)
-        if origin.y + size.height > visible.maxY { origin.y = anchor.minY - size.height - 6 }  // no room: below
+        var origin = NSPoint(x: anchor.minX, y: StackPlacement.y(for: anchor, height: size.height, top: visible.maxY))
+        if let preview { origin = NSPoint(x: preview.minX, y: StackPlacement.y(beside: preview, of: anchor, height: size.height)) }
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
         let frame = NSRect(origin: origin, size: size)
         let still = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

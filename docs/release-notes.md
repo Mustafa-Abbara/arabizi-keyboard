@@ -2,7 +2,7 @@ Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own compu
 
 **New in 0.3.0**
 
-- **Fixing a word is quicker:** ↑ now opens on the word Harfi is least sure of, and its list of spellings is wider and better ordered: for a word Harfi got wrong, the right spelling is first about half the time (it was under a third) and in the list nearly four times out of five (it was half). The sentence as you typed it shows above the list.
+- **Fixing a word is quicker:** ↑ now opens on the word Harfi is least sure of, and its list of spellings is wider and better ordered: for a word Harfi got wrong, the right spelling is first about half the time (it was under a third) and in the list nearly four times out of five (it was half). The sentence as you typed it shows above the list. On the Mac, ↑ also works right after Enter and right after a fix, so a second word can be fixed too.
 - **Harfi learns your spellings on the Mac too:** pick the same spelling for a word three times on two different days and Harfi writes it your way from then on. It tells you when that happens, and you can say no.
 - **Faster on Windows:** the preview and Enter are about twice as fast while you type. This is the new "Faster preview" setting, on by default; now and then it makes a word come out differently, and it can be switched off in the Harfi window (the Mac has the same switch in its settings).
 - **A Harfi window on Windows:** "Harfi" in the Start menu has the settings, the words you taught it (stop a habit, forget a word), the keys, and a first-steps page.
