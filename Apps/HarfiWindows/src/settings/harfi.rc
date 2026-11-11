@@ -1,0 +1,2 @@
+// The icon of the Harfi window and the installer (made by scripts/site/make_images.ps1 from site/icon.svg).
+1 ICON "harfi.ico"

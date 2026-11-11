@@ -618,6 +618,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     type.lpfnWndProc = Procedure;
     type.hInstance = instance;
     type.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    type.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1));  // harfi.rc
+    type.hIconSm = type.hIcon;
     type.lpszClassName = ClassName;
     RegisterClassExW(&type);
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
