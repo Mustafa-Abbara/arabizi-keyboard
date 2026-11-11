@@ -96,3 +96,32 @@ func promptLongerThanTheContextIsRejected() throws {
     let long = template.render(String(repeating: "kifak ", count: 600))
     #expect(throws: LlamaError.self) { try #require(model).generate(long, timeout: .seconds(30)) }
 }
+
+@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
+func withThePinnedInstructionAnAnswerDependsOnlyOnItsText() throws {
+    // Its own model: pinning changes how every later prompt is decoded.
+    let pinned = try LlamaModel(path: try #require(testModelPath))
+    try pinned.pin(template.prefix)
+    let prompt = template.render("bade ruh 3al beit")
+    func answer() throws -> String { try pinned.generate(prompt, maxTokens: 24, timeout: .seconds(60)).text }
+    let first = try answer()
+    #expect(!first.isEmpty)
+    // The same after another text, after word guesses, and after a prompt that does not start with the instruction.
+    _ = try pinned.generate(template.render("kifak ya zalame shu akhbarak"), maxTokens: 24, timeout: .seconds(60))
+    #expect(try answer() == first)
+    _ = try pinned.wordGuesses(template.render("kifak"), answerSoFar: "", count: 3, timeout: .seconds(60))
+    #expect(try answer() == first)
+    _ = try pinned.generate("marhaba", maxTokens: 4, timeout: .seconds(60))
+    #expect(try answer() == first)
+}
+
+@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
+func aDeadlineWhileThePinnedInstructionIsDecodedIsRecoveredFrom() throws {
+    let pinned = try LlamaModel(path: try #require(testModelPath))
+    try pinned.pin(template.prefix)
+    let prompt = template.render("bade ruh 3al beit")
+    let whole = try pinned.generate(prompt, maxTokens: 24, timeout: .seconds(60))
+    #expect(try pinned.generate(prompt, maxTokens: 24, timeout: .zero).stop == .deadline)
+    let after = try pinned.generate(prompt, maxTokens: 24, timeout: .seconds(60))
+    #expect(after.stop != .deadline && after.text == whole.text)
+}

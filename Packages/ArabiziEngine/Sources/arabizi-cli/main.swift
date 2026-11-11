@@ -2,7 +2,7 @@
 // engine. One ConvertRequest per line on stdin, one ConvertResponse per line on stdout (docs/API_CONTRACTS.md).
 // The engine's status goes to stderr as one JSON line at start-up. Never prints the text it converts to stderr.
 //
-//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--no-repair] [--keyboard-deadline]
+//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--no-repair] [--no-pin] [--keyboard-deadline]
 // A line that is a WordGuessRequest (`"kind": "wordGuesses"`) gets a WordGuessResponse: the ↑ list's model guesses
 // (ADR 0036). Conversions and guesses can be mixed, as the keyboard sends them.
 // --explain writes one line per request to stderr: why a fallback happened, or how many tokens of a model answer
@@ -24,7 +24,7 @@ func json(_ value: Any) -> String {
 
 var configDirectory = "config", rulesDirectory = "data/rules", modelsDirectory = "models"
 var modelOverride: String?, noModel = false, verifyHash = true, explain = false, repair = true
-var keyboardDeadline = false
+var keyboardDeadline = false, pin = true
 var arguments = CommandLine.arguments.dropFirst().makeIterator()
 @MainActor func value(after flag: String) -> String {
     guard let value = arguments.next() else { fail("\(flag) needs a value") }
@@ -40,6 +40,7 @@ while let argument = arguments.next() {
     case "--skip-hash": verifyHash = false
     case "--explain": explain = true
     case "--no-repair": repair = false
+    case "--no-pin": pin = false  // the whole prompt decoded for every conversion, as before the instruction was kept
     case "--keyboard-deadline": keyboardDeadline = true
     default: fail("unknown argument \(argument)")
     }
@@ -61,7 +62,7 @@ do {
                                   models: Data(contentsOf: configURL.appending(path: "models.json")))
     engine = try Engine.load(config: config, rulesDirectory: URL(filePath: rulesDirectory),
                              modelsDirectory: URL(filePath: modelsDirectory), verifyModelHash: verifyHash,
-                             repairTokens: repair)
+                             repairTokens: repair, pinInstruction: pin)
 } catch {
     fail("could not start the engine: \(error)")
 }
