@@ -160,7 +160,8 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         let generation: Generation
         do {
             generation = try generator.generate(template.render(protected.masked), maxTokens: limit,
-                                                timeout: .milliseconds(request.deadlineMs))
+                                                timeout: .milliseconds(request.deadlineMs),
+                                                reuseLast: request.incremental ?? true)
         } catch {
             reason = "generation error: \(error)"
             return respond(ruled(text), .fallbackModelUnavailable)

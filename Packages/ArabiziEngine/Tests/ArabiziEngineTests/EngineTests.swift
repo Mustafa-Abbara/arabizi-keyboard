@@ -241,3 +241,30 @@ private func sure(_ text: String, _ confidence: [Double]) -> Generation {
     let response = try engine(model).convert(request("shu 3am ta3mel"))
     #expect(response.outcome == .model && response.wordConfidence == nil)
 }
+
+/// A stand-in model that records whether each conversion was allowed to reuse the last one (ADR 0037).
+final class ReuseRecordingModel: TextGenerator, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _reuse: [Bool] = []
+    var reuse: [Bool] { lock.withLock { _reuse } }
+
+    func generate(_ prompt: String, maxTokens: Int, timeout: Duration) throws -> Generation {
+        try generate(prompt, maxTokens: maxTokens, timeout: timeout, reuseLast: true)
+    }
+
+    func generate(_ prompt: String, maxTokens: Int, timeout: Duration, reuseLast: Bool) throws -> Generation {
+        lock.withLock { _reuse.append(reuseLast) }
+        return finished("كيفك")
+    }
+}
+
+@Test func aRequestCanAskForAConversionOnItsOwn() throws {
+    let model = ReuseRecordingModel()
+    let config = try EngineConfig(configDirectory: configDirectory)
+    let engine = Engine(config: config, rules: rules, generator: model, template: template,
+                        modelState: .ready(id: "scripted"))
+    _ = engine.convert(ConvertRequest(text: "kifak", deadlineMs: 1500))
+    _ = engine.convert(ConvertRequest(text: "kifak", deadlineMs: 1500, incremental: false))
+    _ = engine.convert(ConvertRequest(text: "kifak", deadlineMs: 1500, incremental: true))
+    #expect(model.reuse == [true, false, true])
+}

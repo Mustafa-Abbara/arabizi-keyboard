@@ -23,6 +23,7 @@ The Swift tests decode and re-encode the examples byte for byte; `eval/tests/tes
 | `id` | A UUID chosen by the caller; the response carries it back. |
 | `text` | The Latin text as typed. The engine refuses more than `max_input_chars` (settings). |
 | `deadlineMs` | How long the caller waits for the model (at least 1). After it, the rule fallback answers. |
+| `incremental` | Optional. `false`: convert this text on its own, never from the last conversion ([ADR 0037](decisions/0037-incremental-conversion.md)); the keyboards send it when "Faster preview" is switched off. Absent: incremental. |
 
 ## Response (v1)
 

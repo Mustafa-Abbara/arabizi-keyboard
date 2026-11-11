@@ -66,3 +66,14 @@ func badRequestsAreRejected(json: String) {
 func badResponsesAreRejected(json: String) {
     #expect(throws: DecodingError.self) { try JSONDecoder().decode(ConvertResponse.self, from: Data(json.utf8)) }
 }
+
+@Test func incrementalIsOptionalInARequest() throws {
+    // Absent unless the caller sets it: a request without it reads as before and is written without it.
+    let plain = ConvertRequest(text: "shu", deadlineMs: 10)
+    let written = String(decoding: try Contract.encoder().encode(plain), as: UTF8.self)
+    #expect(!written.contains("incremental"))
+    #expect(try JSONDecoder().decode(ConvertRequest.self, from: Data(written.utf8)).incremental == nil)
+    let off = ConvertRequest(text: "shu", deadlineMs: 10, incremental: false)
+    let read = try JSONDecoder().decode(ConvertRequest.self, from: Contract.encoder().encode(off))
+    #expect(read == off && read.incremental == false)
+}

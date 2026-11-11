@@ -97,7 +97,8 @@ while let line = readLine(strippingNewline: true) {
         var request = try decoder.decode(ConvertRequest.self, from: Data(line.utf8))
         if keyboardDeadline {  // the deadline the keyboard would give this message (ADR 0025)
             request = ConvertRequest(id: request.id, text: request.text,
-                                     deadlineMs: engine.config.deadlineMs(for: request.text))
+                                     deadlineMs: engine.config.deadlineMs(for: request.text),
+                                     incremental: request.incremental)
         }
         let (response, reason) = engine.convertExplained(request)
         FileHandle.standardOutput.write(try encoder.encode(response) + Data("\n".utf8))

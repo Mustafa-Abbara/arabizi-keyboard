@@ -21,12 +21,16 @@ public struct ConvertRequest: Codable, Equatable, Sendable {
     public let id: UUID
     public let text: String
     public let deadlineMs: Int
+    /// false: convert this text on its own, never from the last conversion (ADR 0037; the keyboard's "Faster
+    /// preview" setting switched off). Absent: the engine's own default (incremental).
+    public let incremental: Bool?
 
-    public init(id: UUID = UUID(), text: String, deadlineMs: Int) {
+    public init(id: UUID = UUID(), text: String, deadlineMs: Int, incremental: Bool? = nil) {
         v = Contract.version
         self.id = id
         self.text = text
         self.deadlineMs = deadlineMs
+        self.incremental = incremental
     }
 
     public init(from decoder: Decoder) throws {
@@ -35,6 +39,7 @@ public struct ConvertRequest: Codable, Equatable, Sendable {
         id = try container.decode(UUID.self, forKey: .id)
         text = try container.decode(String.self, forKey: .text)
         deadlineMs = try container.decode(Int.self, forKey: .deadlineMs)
+        incremental = try container.decodeIfPresent(Bool.self, forKey: .incremental)
         guard deadlineMs > 0 else {
             throw DecodingError.dataCorruptedError(forKey: .deadlineMs, in: container,
                                                    debugDescription: "deadlineMs must be positive")

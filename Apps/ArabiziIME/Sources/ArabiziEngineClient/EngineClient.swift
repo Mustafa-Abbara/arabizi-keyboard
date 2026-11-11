@@ -29,15 +29,17 @@ public final class EngineClient: @unchecked Sendable {  // `link` is behind `loc
     /// Opens a link to the service and calls `lost` when it ends (a crash, the service quitting): the bundled XPC
     /// service in the keyboard, a fake in tests. nil when no link can be made.
     private let connect: @Sendable (_ lost: @escaping @Sendable () -> Void) -> EngineLink?
+    /// The keyboard's "Faster preview" setting (ADR 0037), asked for each conversion; on unless the keyboard says no.
+    private let fasterPreview: @Sendable () -> Bool
 
     /// nil when the bundled config cannot be read: the keyboard then keeps to its own rules.
-    public convenience init?(resources: URL) {
+    public convenience init?(resources: URL, fasterPreview: @escaping @Sendable () -> Bool = { true }) {
         guard let config = try? EngineConfig(configDirectory: resources) else {
             Logger(subsystem: "lb.aub.arabizi", category: "ime").error("engine config not readable: rules only")
             return nil
         }
         let log = Logger(subsystem: "lb.aub.arabizi", category: "ime")
-        self.init(config: config) { lost in
+        self.init(config: config, fasterPreview: fasterPreview) { lost in
             let connection = NSXPCConnection(serviceName: EngineService.name)
             connection.remoteObjectInterface = NSXPCInterface(with: ArabiziEngineServiceProtocol.self)
             connection.invalidationHandler = lost
@@ -49,9 +51,10 @@ public final class EngineClient: @unchecked Sendable {  // `link` is behind `loc
         }
     }
 
-    public init(config: EngineConfig,
+    public init(config: EngineConfig, fasterPreview: @escaping @Sendable () -> Bool = { true },
                 connect: @escaping @Sendable (_ lost: @escaping @Sendable () -> Void) -> EngineLink?) {
         self.config = config
+        self.fasterPreview = fasterPreview
         self.connect = connect
     }
 
@@ -80,8 +83,11 @@ public final class EngineClient: @unchecked Sendable {  // `link` is behind `loc
     /// nil when it did not answer in time.
     public func respond(_ text: String) -> ConvertResponse? {
         let deadlineMs = config.deadlineMs(for: text)  // longer messages get longer (ADR 0025)
+        // "Faster preview" switched off: the service converts every text on its own.
+        let incremental: Bool? = fasterPreview() ? nil : false
         guard let proxy = proxy(),
-              let request = try? encoder.encode(ConvertRequest(text: text, deadlineMs: deadlineMs)) else { return nil }
+              let request = try? encoder.encode(ConvertRequest(text: text, deadlineMs: deadlineMs,
+                                                               incremental: incremental)) else { return nil }
         let box = ReplyBox()
         proxy.convert(request) { data in box.set(data) }
         guard let data = box.wait(milliseconds: deadlineMs + Self.replyMarginMs),
