@@ -75,21 +75,17 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
     }
 
     public func record(_ correction: Correction) throws {
-        try lock.withLock {
-            try save(load() + [correction])
-        }
+        try changing { try save(load() + [correction]) }
     }
 
     /// Forgets every correction of this typed word to this spelling (the "Your words" page).
     public func forget(latin: String, chosen: String) throws {
-        try lock.withLock {
-            try save(load().filter { $0.latin.lowercased() != latin.lowercased() || $0.chosen != chosen })
-        }
+        try changing { try save(load().filter { $0.latin.lowercased() != latin.lowercased() || $0.chosen != chosen }) }
     }
 
     /// Deletes every correction, and the habits the user refused.
     public func wipe() throws {
-        try lock.withLock {
+        try changing {
             for url in [file, refusedFile] where FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
             }
@@ -107,7 +103,7 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
     }
 
     public func refuse(_ habit: Habit) throws {
-        try lock.withLock {
+        try changing {
             var habits = Set(open([Habit].self, from: refusedFile) ?? [])
             habits.insert(habit)
             try seal(Array(habits), to: refusedFile)
@@ -115,7 +111,7 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
     }
 
     public func allow(_ habit: Habit) throws {
-        try lock.withLock {
+        try changing {
             var habits = Set(open([Habit].self, from: refusedFile) ?? [])
             habits.remove(habit)
             try seal(Array(habits), to: refusedFile)
@@ -127,6 +123,16 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
         [file, refusedFile].compactMap {
             (try? FileManager.default.attributesOfItem(atPath: $0.path))?[.modificationDate] as? Date
         }.max()
+    }
+
+    /// Runs a read-change-write of the files with the lock of this process and the lock folder beside the files,
+    /// so two apps saving at the same moment (on Windows, each app has its own keyboard) do not lose a change.
+    private func changing(_ body: () throws -> Void) throws {
+        try lock.withLock {
+            let held = FileLock.acquire(file.deletingLastPathComponent().appending(path: "corrections.lock"))
+            defer { held?.release() }
+            try body()
+        }
     }
 
     private func load() -> [Correction] {
@@ -161,5 +167,41 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
         #else
         return [.posixPermissions: mode]
         #endif
+    }
+}
+
+/// A lock across processes: a folder that only one process can create (creating a folder that exists fails, on
+/// every system). It holds the time it was taken (`taken`: folder dates cannot be relied on on Windows); a lock older
+/// than `stale` is left from a process that ended mid-change and is taken over.
+struct FileLock {
+    let url: URL
+
+    static func acquire(_ url: URL, wait: TimeInterval = 2, stale: TimeInterval = 10) -> FileLock? {
+        let fm = FileManager.default
+        let until = Date().addingTimeInterval(wait)
+        while true {
+            if (try? fm.createDirectory(at: url, withIntermediateDirectories: false)) != nil {
+                try? Data(String(Date().timeIntervalSince1970).utf8).write(to: url.appending(path: "taken"))
+                return FileLock(url: url)
+            }
+            if let made = taken(url), Date().timeIntervalSince(made) > stale {
+                try? fm.removeItem(at: url)
+                continue
+            }
+            // Gave up waiting: change anyway, as before the lock (better than losing the user's pick).
+            if Date() > until { return nil }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+    }
+
+    /// When the lock at `url` was taken; nil when that cannot be read (the holder may be writing it right now).
+    static func taken(_ url: URL) -> Date? {
+        guard let data = try? Data(contentsOf: url.appending(path: "taken")),
+              let seconds = TimeInterval(String(decoding: data, as: UTF8.self)) else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    func release() {
+        try? FileManager.default.removeItem(at: url)
     }
 }

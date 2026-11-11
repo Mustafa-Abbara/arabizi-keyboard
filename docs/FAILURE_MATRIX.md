@@ -89,10 +89,10 @@ The same rule holds: a failure never stops typing. On Windows the model runs in 
 | Keyboard files in use by open apps | Installed anyway: the old files are moved aside and removed at a later install | **manual** (`install.ps1`, 7 Nov 2026) |
 | Learned-words record unreadable (or its key replaced) | No personal suggestions or habits; nothing else changes | `theStoreEncryptsKeepsAndExpiresCorrections`, `refusedHabitsAreKeptSealedAndCanBeAllowedAgain` |
 | A habit the user does not want | Esc while the tip shows refuses it; "Don't" under Your words in the Harfi window later (`harfi-words refuse WORD` for developers) | `aThirdPickOnASecondDayBecomesAHabitThatCanBeRefused` |
-| Two apps record a fix at the same moment | One of the two fixes may be lost | **open** (review on #41): needs a lock across apps |
+| Two apps record a fix at the same moment | Both fixes are kept: a change waits for the other app (a lock folder beside the record; one left by an app that ended is taken over after 10 s) | `twoAppsSavingAtTheSameMomentKeepBothFixes`, `aLockLeftByAnAppThatEndedIsTakenOver` |
 
 ## Gaps to close for the P7 gate
 
 1. The per-app matrix (Mac and Windows).
 2. The remaining manual rows: the engine's network block (`arabizi-engine-check`), the model loading in the background, positions in apps that report none, a quarantined app.
-3. Windows: the manual rows above (a test host for the text service, an engine smoke test in the `windows` CI job), and the open row: two apps recording a fix at once.
+3. Windows: the manual rows above (a test host for the text service, an engine smoke test in the `windows` CI job).
