@@ -81,11 +81,15 @@ final class CorrectionChips {
             row.addArrangedSubview(ChipView(quiet: "Spell it", onClick: spellIt))
         }
         let size = column?.fittingSize ?? row.fittingSize
+        height = size.height
         // With the preview: it is placed knowing the chips' height, and the chips go on its far side from the text.
         place(panel, size: size, above: line, beside: preview?(size.height))
     }
 
     /// A short line above the text after a conversion, hidden after `seconds` or by the next chips.
+    /// The height of the last chip row shown with its sentence: the preview keeps this much room over it.
+    @MainActor private(set) var height: CGFloat?
+
     @MainActor func showHint(_ text: String, above line: NSRect, seconds: Double = 3) {
         hintToken += 1
         let token = hintToken
