@@ -12,7 +12,7 @@ Fill in after installing with [SETUP_IME.md](../SETUP_IME.md). Use ✅ pass, ❌
 | 6 | ⌘Z after a conversion | Undoes the inserted Arabic only | | | | | | | |
 | 7 | Password field (a login page) | Nothing underlined; keys pass through | | | | | | | |
 | 8 | Long text: 25 words underlined | Shown correctly, Enter converts all of it | | | | | | | |
-| 9 | ⌘Z right after a conversion | Arabic turns back into underlined Latin | | | | | ✅ | | |
+| 9 | ⌘Z right after a conversion | Arabic turns back into underlined Latin | | | | | | | ✅ |
 | 10 | Select Latin text, ⌥Enter | Selection converted in place | | | | | | | |
 | 11 | Shift+Enter with underlined text | Converts (no new line); note what the app expected | | | | | | | |
 | 12 | Enter in an address bar or search box | Converts first; second Enter submits | | | | | | | |
