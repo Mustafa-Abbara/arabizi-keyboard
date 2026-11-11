@@ -107,6 +107,8 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
     private let sequences: Int
     /// The tokens sequence 0 of the cache holds, so the next prompt decodes only what differs (behind `lock`).
     private var cached: [llama_token] = []
+    /// The start every prompt shares (the instruction), kept decoded between conversions (behind `lock`).
+    private var pinned: [llama_token] = []
     private let lock = NSLock()
     private var freed = false
     /// Uptime in nanoseconds after which llama_decode aborts; read by the C abort callback.
@@ -157,6 +159,19 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         abortAt.deallocate()
     }
 
+    /// Keeps `prefix` (the prompt template's fixed start: the instruction) decoded between conversions, so each one
+    /// decodes only its own text. The instruction is always decoded on its own and the text after it, whatever was
+    /// converted before, so an answer depends only on its text. Splitting the prompt in two decode calls changes
+    /// the arithmetic a little against one call (a few greedy answers differ); measured before it was switched on.
+    public func pin(_ prefix: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !freed else { throw LlamaError.modelClosed }
+        pinned = try tokenize(prefix)
+        llama_memory_clear(llama_get_memory(context), true)
+        cached = []
+    }
+
     /// Free the model and context once; after this, `generate` throws. Waits for a running generation.
     fileprivate func freeResources() {
         lock.lock()
@@ -183,10 +198,9 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         func elapsed() -> Duration { .nanoseconds(Int64(DispatchTime.now().uptimeNanoseconds - start)) }
 
         llama_sampler_reset(sampler)
-        // A conversion starts from an empty cache, exactly as before word guesses existed (reusing part of it
-        // changes the arithmetic, and so a few greedy answers); it leaves its prompt and answer for the guesses.
-        llama_memory_clear(llama_get_memory(context), true)
-        cached = []
+        // A conversion never reuses the last one's text (reusing a part that varies changes the arithmetic, and so
+        // a few greedy answers): it starts from an empty cache, or from the pinned instruction alone (`begin`). It
+        // leaves its prompt and answer for the guesses.
         let prompt = try tokenize(prompt)
         let promptTokens = prompt.count
         guard prompt.count + maxTokens <= contextLength else {
@@ -202,7 +216,7 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         let vocabularySize = Int(llama_vocab_n_tokens(vocab))
         while generated < maxTokens {
             // The prompt goes through `prefill` (it reuses what the cache already holds); then one token at a time.
-            let status = tokens.isEmpty ? prefill(prompt) : decodeContinuing(tokens)
+            let status = tokens.isEmpty ? begin(prompt) : decodeContinuing(tokens)
             if status == 2 {  // aborted by the deadline callback
                 stop = .deadline
                 break
@@ -374,6 +388,29 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         }
         cached = Array(cached.prefix(keep))
         return decodeContinuing(Array(tokens[keep...]))
+    }
+
+    /// A conversion's prompt in sequence 0. Without a pinned instruction (or when the prompt does not start with
+    /// it): from an empty cache, in one decode call. With one: the instruction stays as it was decoded on its own
+    /// (decoded now if the cache lost it), and only the rest of the prompt is decoded.
+    private func begin(_ prompt: [llama_token]) -> Int32 {
+        let memory = llama_get_memory(context)
+        guard !pinned.isEmpty, prompt.count > pinned.count, prompt.starts(with: pinned) else {
+            llama_memory_clear(memory, true)
+            cached = []
+            return decodeContinuing(prompt)
+        }
+        for s in 1..<sequences { _ = llama_memory_seq_rm(memory, llama_seq_id(s), -1, -1) }
+        if cached.count >= pinned.count, cached.starts(with: pinned),
+           llama_memory_seq_rm(memory, 0, Int32(pinned.count), -1) {
+            cached = pinned
+        } else {
+            llama_memory_clear(memory, true)
+            cached = []
+            let status = decodeContinuing(pinned)
+            guard status == 0 else { return status }
+        }
+        return decodeContinuing(Array(prompt[pinned.count...]))
     }
 
     /// Decodes `tokens` after what sequence 0 holds, and records them as cached when that worked.

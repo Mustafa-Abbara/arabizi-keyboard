@@ -25,25 +25,28 @@ DEADLINE_MS = 10_000  # accuracy runs: generous, so a busy Mac does not turn ans
 
 def cli_path() -> Path:
     for config in ("release", "debug"):
-        path = PACKAGE / ".build" / config / "arabizi-cli"
-        if path.exists():
-            return path
+        for name in ("arabizi-cli", "arabizi-cli.exe"):  # .exe: the Windows build
+            path = PACKAGE / ".build" / config / name
+            if path.exists():
+                return path
     raise SystemExit("arabizi-cli not built: swift build -c release --package-path Packages/ArabiziEngine")
 
 
 class EngineSystem(System):
     def __init__(self, model_id: str | None, deadline_ms: int = DEADLINE_MS, repair: bool = True,
-                 keyboard_deadline: bool = False) -> None:
+                 keyboard_deadline: bool = False, pin: bool = True) -> None:
         super().__init__(f"engine-{model_id or 'rules'}" + ("" if repair else "-norepair")
-                         + ("-kb" if keyboard_deadline else ""), {
+                         + ("-kb" if keyboard_deadline else "") + ("" if pin else "-nopin"), {
             "kind": "swift-engine", "cli": "arabizi-cli", "model": model_id,
             "deadline_ms": "keyboard (config/engine.json, ADR 0025)" if keyboard_deadline else deadline_ms,
             "pipeline": "ProtectedSpans, saved prompt, model with deadline, clean, OutputChecks"
                         + (", token repair (ADR 0023)" if repair else "") + "; rules on fallback",
+            "instruction": "decoded once and kept" if pin else "decoded for every conversion (--no-pin)",
         })
         self.model_id = model_id
         self.repair = repair
         self.keyboard_deadline = keyboard_deadline
+        self.pin = pin
         self.deadline_ms = deadline_ms
         self.process: subprocess.Popen | None = None
         self.outcomes: Counter = Counter()
@@ -56,6 +59,7 @@ class EngineSystem(System):
         args += ["--model", self.model_id] if self.model_id else ["--no-model"]
         args += [] if self.repair else ["--no-repair"]
         args += ["--keyboard-deadline"] if self.keyboard_deadline else []
+        args += [] if self.pin else ["--no-pin"]
         self.process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         text=True, encoding="utf-8", bufsize=1)
         status = json.loads(self.process.stderr.readline())

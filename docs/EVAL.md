@@ -204,6 +204,30 @@ The largest group is words the model never saw in training: 53% of the automatic
 
 **Not done:** the per-app results (the app matrix, `docs/spikes/ime_app_matrix.md`); the P4 data ablations (with and without the AI-drafted rows and the rule variants) and Q4_K_M against the unquantised model; a peak-memory measurement of v3.
 
+## Speed on Windows (11 Nov 2026)
+
+The first measurement of the engine on Windows: the development laptop (Intel i7-10870H, 8 cores, 16 GB), where the
+model runs on the processor only (llama.cpp with AVX2, one thread per core). The Swift engine through `arabizi-cli`
+with the keyboard's own deadline per message, on the two **dev** sets (the test sets were not run), one run each.
+
+| System | Frozen dev (104): word acc. | p50 / p95 ms | Others dev (200): word acc. | p50 / p95 ms | Rule fallbacks (deadline) |
+|---|---|---|---|---|---|
+| Whole prompt decoded for every conversion, as until now (`engine-arabizi-llama3.2-1b-v3-kb-nopin`) | 0.827 | 817 / 1,432 | 0.824 | 1,393 / 2,165 | 0 + 4 |
+| **Instruction decoded once and kept** (`engine-arabizi-llama3.2-1b-v3-kb`) | 0.826 | 659 / 1,287 | 0.824 | 1,021 / 1,707 | 0 + 0 |
+
+- **What changed:** every prompt starts with the same instruction (about 45 tokens). `LlamaModel.pin` keeps it decoded
+  between conversions, so a conversion decodes only its own text: 160 to 460 ms less per message here. The instruction
+  is always decoded on its own and the text after it, so an answer still depends only on its text.
+- **Accuracy:** splitting the prompt in two decode calls changes the arithmetic a little, and a few greedy answers with
+  it: 0.827 → 0.826 on frozen dev (one word), 0.824 → 0.824 on others dev. No real difference.
+- **Fallbacks:** a message that misses its deadline is converted by the rules. An earlier pass over the same 304
+  messages on the same laptop, before the change, missed 23 deadlines (p50 1,427 ms, p95 2,456 ms), against 4 in the
+  run above: the speed of this laptop varies between runs, and the slower it is the more messages fall back.
+- **Budgets:** the Mac budgets (p50 ≤ 600 ms, p95 ≤ 1.2 s) are still not met on this laptop's processor; long
+  messages are the slow ones. **Not measured:** the Mac after this change (the same code runs there), the graphics
+  card on Windows, peak memory.
+- `arabizi-cli --no-pin` (system `…-kb-nopin`) decodes the whole prompt every time, to repeat the comparison.
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.
