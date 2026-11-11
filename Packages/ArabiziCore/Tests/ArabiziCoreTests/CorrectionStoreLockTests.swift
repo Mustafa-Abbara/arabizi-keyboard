@@ -35,7 +35,7 @@ private func temporaryFolder() -> URL {
     defer { try? FileManager.default.removeItem(at: folder) }
     let lock = folder.appending(path: "corrections.lock")
     try FileManager.default.createDirectory(at: lock, withIntermediateDirectories: false)
-    try FileManager.default.setAttributes([.creationDate: Date().addingTimeInterval(-60)], ofItemAtPath: lock.path)
+    try Data(String(Date().addingTimeInterval(-60).timeIntervalSince1970).utf8).write(to: lock.appending(path: "taken"))
     let store = CorrectionStore(file: folder.appending(path: "corrections.bin"), key: SymmetricKey(size: .bits256))
     let start = Date()
     try store.record(Correction(latin: "sawa", chosen: "سوا", rejected: "x", date: Date()))

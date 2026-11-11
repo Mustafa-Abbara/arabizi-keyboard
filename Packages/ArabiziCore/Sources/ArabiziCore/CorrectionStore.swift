@@ -171,7 +171,8 @@ public final class CorrectionStore: @unchecked Sendable {  // file access is beh
 }
 
 /// A lock across processes: a folder that only one process can create (creating a folder that exists fails, on
-/// every system). A lock older than `stale` is left from a process that ended mid-change and is taken over.
+/// every system). It holds the time it was taken (`taken`: folder dates cannot be relied on on Windows); a lock older
+/// than `stale` is left from a process that ended mid-change and is taken over.
 struct FileLock {
     let url: URL
 
@@ -179,9 +180,11 @@ struct FileLock {
         let fm = FileManager.default
         let until = Date().addingTimeInterval(wait)
         while true {
-            if (try? fm.createDirectory(at: url, withIntermediateDirectories: false)) != nil { return FileLock(url: url) }
-            if let made = (try? fm.attributesOfItem(atPath: url.path))?[.creationDate] as? Date,
-               Date().timeIntervalSince(made) > stale {
+            if (try? fm.createDirectory(at: url, withIntermediateDirectories: false)) != nil {
+                try? Data(String(Date().timeIntervalSince1970).utf8).write(to: url.appending(path: "taken"))
+                return FileLock(url: url)
+            }
+            if let made = taken(url), Date().timeIntervalSince(made) > stale {
                 try? fm.removeItem(at: url)
                 continue
             }
@@ -189,6 +192,13 @@ struct FileLock {
             if Date() > until { return nil }
             Thread.sleep(forTimeInterval: 0.01)
         }
+    }
+
+    /// When the lock at `url` was taken; nil when that cannot be read (the holder may be writing it right now).
+    static func taken(_ url: URL) -> Date? {
+        guard let data = try? Data(contentsOf: url.appending(path: "taken")),
+              let seconds = TimeInterval(String(decoding: data, as: UTF8.self)) else { return nil }
+        return Date(timeIntervalSince1970: seconds)
     }
 
     func release() {
