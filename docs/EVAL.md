@@ -229,6 +229,25 @@ with the keyboard's own deadline per message, on the two **dev** sets (the test 
 - `arabizi-cli --no-pin` (system `…-kb-nopin`) decodes the whole prompt every time, to repeat the comparison.
 - **While typing** ([ADR 0037](decisions/0037-incremental-conversion.md)): a text that continues the last one reuses it and checks the last answer in one decode call. Typing 200 dev messages one word at a time (`scripts/typing_simulation.py`): a whole message p50 843 → 360 ms and p95 1,686 → 1,049 ms, word accuracy 0.817 → 0.818; 28 of the 200 answers differ by a word or two from the same text converted on its own. The runs above send unrelated messages and are not affected.
 
+## Speed on the Mac (11 Nov 2026)
+
+The same two changes measured on the 8 GB M2 MacBook Air (Metal), with the Swift engine through `arabizi-cli`, the
+keyboard's own deadline per message, the two **dev** sets (the test sets were not run), one run each, nothing else
+running.
+
+| System | Frozen dev (104): word acc. | p50 / p95 ms | Others dev (200): word acc. | p50 / p95 ms | Rule fallbacks (deadline) |
+|---|---|---|---|---|---|
+| Whole prompt decoded for every conversion (`engine-arabizi-llama3.2-1b-v3-kb-nopin`) | 0.824 | 713 / 1,272 | 0.826 | 801 / 1,511 | 0 + 0 |
+| **Instruction decoded once and kept** (`engine-arabizi-llama3.2-1b-v3-kb`) | 0.824 | **387 / 753** | 0.826 | **671 / 1,154** | 0 + 0 |
+
+- **Accuracy:** unchanged on both sets (every answer came from the model).
+- **Speed:** 130 to 330 ms less per message at the median. The Mac budgets (p50 ≤ 600 ms, p95 ≤ 1.2 s) are met on frozen
+  dev; on others dev (longer messages) p95 1,154 ms is within budget and p50 671 ms is just above it.
+- **While typing** ([ADR 0037](decisions/0037-incremental-conversion.md), `scripts/typing_simulation.py`, the same 200
+  dev messages one word at a time): a whole message p50 612 → **207 ms** and p95 1,173 → **667 ms** (every step
+  p50 379 → 170 ms); word accuracy 0.8206 → 0.8180; **9 of the 200** answers differ from the same text converted on its
+  own (28 words where the lengths match), against 28 of 200 on the Windows processor.
+
 ## Metrics
 
 Before comparing, diacritics, tatweel and extra spaces are removed ([SPELLING.md](SPELLING.md) §10). Words are whitespace-separated with surrounding punctuation stripped.

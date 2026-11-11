@@ -44,5 +44,6 @@ While someone types, each text is the last one plus a word, and the answer is mo
 
 - Tests (ArabiziLLM, with a model file): the same typing gives the same answers; a text that does not continue the last one, and the same text again, get the answer they get on their own; a conversion that ran out of time leaves no draft.
 - The preview and Enter are about twice as fast while typing on Windows. A long message whose draft stops early (the model changes an early word) still takes as long as before from that word on.
-- **Not measured:** the Mac (the same code; Metal rounds differently, so its share of differing answers may be another number), and the real keyboard, which also asks in the middle of a word.
+- **The Mac** (11 Nov 2026, M2 Air, Metal, the same 200 messages): a whole message p50 612 → 207 ms and p95 1,173 → 667 ms; word accuracy 0.8206 → 0.8180; 9 of the 200 answers differ from the same text converted on its own (fewer than on the Windows processor). Kept on there too ([EVAL.md](../EVAL.md), "Speed on the Mac").
+- **Not measured:** the real keyboard, which also asks in the middle of a word.
 - Drop it (`incremental: false` in `Engine.load`) if a later measurement shows accuracy falling.
