@@ -109,6 +109,11 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
     private var cached: [llama_token] = []
     /// The start every prompt shares (the instruction), kept decoded between conversions (behind `lock`).
     private var pinned: [llama_token] = []
+    /// Incremental conversion (ADR 0037): how many tokens end every prompt (the template's suffix), nil when off;
+    /// and the last conversion's prompt and answer, the draft for a prompt whose text continues it.
+    private var suffixLength: Int?
+    private var lastPrompt: [llama_token] = []
+    private var lastAnswer: [llama_token] = []
     private let lock = NSLock()
     private var freed = false
     /// Uptime in nanoseconds after which llama_decode aborts; read by the C abort callback.
@@ -163,11 +168,22 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
     /// decodes only its own text. The instruction is always decoded on its own and the text after it, whatever was
     /// converted before, so an answer depends only on its text. Splitting the prompt in two decode calls changes
     /// the arithmetic a little against one call (a few greedy answers differ); measured before it was switched on.
-    public func pin(_ prefix: String) throws {
+    ///
+    /// With `incrementalSuffix` (the template's end, after the text): incremental conversion (ADR 0037). While
+    /// someone types, each prompt's text is the last one's plus a word, and the answer mostly the last answer plus
+    /// a word. Such a prompt keeps the text it shares with the last one decoded, and the last answer is checked in
+    /// one decode call instead of written again token by token: every token of it the model would also choose now
+    /// is kept, and writing goes on from the first one it would not. The answer is the greedy one up to rounding:
+    /// decoding several tokens in one call changes the arithmetic a little, so a few answers differ by a word from
+    /// the same text converted on its own.
+    public func pin(_ prefix: String, incrementalSuffix: String? = nil) throws {
         lock.lock()
         defer { lock.unlock() }
         guard !freed else { throw LlamaError.modelClosed }
         pinned = try tokenize(prefix)
+        suffixLength = try incrementalSuffix.map { try tokenize($0, special: true, addBOS: false).count }
+        lastPrompt = []
+        lastAnswer = []
         llama_memory_clear(llama_get_memory(context), true)
         cached = []
     }
@@ -209,67 +225,140 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
         var output: [UInt8] = []
         var generated = 0
         var stop = Generation.Stop.maxTokens
-        var tokens: [llama_token] = []
+        var answer: [llama_token] = []
         // How sure the model was of each word of the first line: the least likely token in it (as a log-probability).
         var wordLogProbabilities: [Double] = []
         var inWord = false, sawText = false, firstLineDone = false
         let vocabularySize = Int(llama_vocab_n_tokens(vocab))
-        while generated < maxTokens {
-            // The prompt goes through `prefill` (it reuses what the cache already holds); then one token at a time.
-            let status = tokens.isEmpty ? begin(prompt) : decodeContinuing(tokens)
-            if status == 2 {  // aborted by the deadline callback
-                stop = .deadline
-                break
-            }
-            guard status == 0 else { throw LlamaError.decodeFailed(status) }
-            let next = llama_sampler_sample(sampler, context, -1)
-            if llama_vocab_is_eog(vocab, next) {
+        /// Adds one chosen token to the answer; false at the end of the turn.
+        func take(_ token: llama_token, _ logProbability: Double) -> Bool {
+            if llama_vocab_is_eog(vocab, token) {
                 stop = .endOfTurn
-                break
+                return false
             }
-            let bytes = piece(next)
-            if !firstLineDone, let logits = llama_get_logits_ith(context, -1) {
-                let logProbability = Self.logProbability(of: next, in: logits, vocabularySize: vocabularySize)
-                for byte in bytes {
-                    if byte == 0x0A {
-                        if sawText { firstLineDone = true }
-                        inWord = false
-                    } else if byte == 0x20 {
-                        inWord = false
-                    } else if !firstLineDone {
-                        if inWord {
-                            wordLogProbabilities[wordLogProbabilities.count - 1] =
-                                min(wordLogProbabilities[wordLogProbabilities.count - 1], logProbability)
-                        } else {
-                            wordLogProbabilities.append(logProbability)
-                            inWord = true
-                        }
-                        sawText = true
+            let bytes = piece(token)
+            for byte in bytes where !firstLineDone {
+                if byte == 0x0A {
+                    if sawText { firstLineDone = true }
+                    inWord = false
+                } else if byte == 0x20 {
+                    inWord = false
+                } else {
+                    if inWord {
+                        wordLogProbabilities[wordLogProbabilities.count - 1] =
+                            min(wordLogProbabilities[wordLogProbabilities.count - 1], logProbability)
+                    } else {
+                        wordLogProbabilities.append(logProbability)
+                        inWord = true
                     }
+                    sawText = true
                 }
             }
             output += bytes
+            answer.append(token)
             generated += 1
+            return true
+        }
+        func finish() -> Generation {
+            if stop == .deadline {
+                lastPrompt = []
+                lastAnswer = []
+            } else {
+                lastPrompt = prompt
+                lastAnswer = answer
+            }
+            // Pieces can split a multi-byte character; the bytes are decoded once, at the end.
+            return Generation(text: String(decoding: output, as: UTF8.self), stop: stop,
+                              promptTokens: promptTokens, generatedTokens: generated, elapsed: elapsed(),
+                              wordConfidence: wordLogProbabilities.map { Foundation.exp($0) })
+        }
+
+        // The prompt: after the pinned instruction, or (incremental) after the text it shares with the last one.
+        let draft = self.draft(for: prompt)
+        var status = draft == nil ? begin(prompt) : prefill(prompt)
+        if status == 2 {  // aborted by the deadline callback
+            stop = .deadline
+            return finish()
+        }
+        guard status == 0 else { throw LlamaError.decodeFailed(status) }
+        guard let logits = llama_get_logits_ith(context, -1) else { throw LlamaError.decodeFailed(-1) }
+        var (next, logProbability) = Self.top(logits, vocabularySize: vocabularySize)
+
+        // The draft (the last answer), checked in one decode call: row i says what follows its token i.
+        if let draft, next == draft[0] {
+            let count = min(draft.count, maxTokens)
+            var batch = llama_batch_init(Int32(count), 0, 1)
+            defer { llama_batch_free(batch) }
+            batch.n_tokens = Int32(count)
+            for i in 0..<count {
+                batch.token[i] = draft[i]
+                batch.pos[i] = Int32(prompt.count + i)
+                batch.n_seq_id[i] = 1
+                batch.seq_id[i]![0] = 0
+                batch.logits[i] = 1
+            }
+            status = llama_decode(context, batch)
+            if status != 0 {
+                llama_memory_clear(llama_get_memory(context), true)
+                cached = []
+                if status == 2 {
+                    stop = .deadline
+                    return finish()
+                }
+                throw LlamaError.decodeFailed(status)
+            }
+            var kept = 0
+            while kept < count {
+                _ = take(draft[kept], logProbability)  // never the end of the turn: a draft holds none
+                guard let row = llama_get_logits_ith(context, Int32(kept)) else { throw LlamaError.decodeFailed(-1) }
+                (next, logProbability) = Self.top(row, vocabularySize: vocabularySize)
+                kept += 1
+                if kept == count || next != draft[kept] { break }
+            }
+            // The cache keeps the prompt and the draft tokens that stood; `next` follows them.
+            _ = llama_memory_seq_rm(llama_get_memory(context), 0, Int32(prompt.count + kept), -1)
+            cached = prompt + draft.prefix(kept)
+        }
+
+        while generated < maxTokens {
+            guard take(next, logProbability) else { break }
             if DispatchTime.now().uptimeNanoseconds >= deadline {
                 stop = .deadline
                 break
             }
-            tokens = [next]
+            if generated >= maxTokens { break }
+            status = decodeContinuing([next])
+            if status == 2 {
+                stop = .deadline
+                break
+            }
+            guard status == 0 else { throw LlamaError.decodeFailed(status) }
+            guard let row = llama_get_logits_ith(context, -1) else { throw LlamaError.decodeFailed(-1) }
+            (next, logProbability) = Self.top(row, vocabularySize: vocabularySize)
         }
-        // Pieces can split a multi-byte character; the bytes are decoded once, at the end.
-        return Generation(text: String(decoding: output, as: UTF8.self), stop: stop,
-                          promptTokens: promptTokens, generatedTokens: generated, elapsed: elapsed(),
-                          wordConfidence: wordLogProbabilities.map { Foundation.exp($0) })
+        return finish()
     }
 
-    /// log P(token) under one row of logits: one pass for the maximum, one for the normaliser.
-    static func logProbability(of token: llama_token, in logits: UnsafeMutablePointer<Float>, vocabularySize: Int)
-        -> Double {
-        var largest = -Float.infinity
-        for i in 0..<vocabularySize where logits[i] > largest { largest = logits[i] }
+    /// The last answer, when `prompt`'s text continues the last prompt's (the same but for its last few tokens,
+    /// or with more after it): the draft to check instead of writing the answer again. nil when incremental
+    /// conversion is off, or for any other text, which is then converted on its own.
+    private func draft(for prompt: [llama_token]) -> [llama_token]? {
+        guard let suffixLength, !pinned.isEmpty, !lastAnswer.isEmpty, prompt != lastPrompt,
+              prompt.count > pinned.count + suffixLength, prompt.starts(with: pinned),
+              lastPrompt.count > pinned.count + suffixLength else { return nil }
+        let before = lastPrompt[pinned.count..<(lastPrompt.count - suffixLength)]
+        let now = prompt[pinned.count..<(prompt.count - suffixLength)]
+        let shared = zip(before, now).prefix { $0 == $1 }.count
+        return shared >= max(1, before.count - 3) ? lastAnswer : nil
+    }
+
+    /// The most likely token of one row of logits, with its log-probability.
+    static func top(_ logits: UnsafeMutablePointer<Float>, vocabularySize: Int) -> (llama_token, Double) {
+        var best = 0
+        for i in 1..<vocabularySize where logits[i] > logits[best] { best = i }
         var sum = 0.0
-        for i in 0..<vocabularySize { sum += Foundation.exp(Double(logits[i] - largest)) }
-        return Double(logits[Int(token)] - largest) - Foundation.log(sum)
+        for i in 0..<vocabularySize { sum += Foundation.exp(Double(logits[i] - logits[best])) }
+        return (llama_token(best), -Foundation.log(sum))
     }
 
     /// The model's other ways to write the word after `answerSoFar` (ADR 0036): a beam search over its next tokens,
@@ -459,13 +548,15 @@ public final class LlamaModel: TextGenerator, WordGuessing, @unchecked Sendable 
     /// `<|begin_of_text|>` therefore gets two BOS tokens, and that is right: the fine-tune was trained that way, and
     /// removing one degrades its output (MODELS.md, "Fine-tuned models").
     /// With `special` false (the model's own answer so far): no BOS, and special-token text is plain text.
-    func tokenize(_ text: String, special: Bool = true) throws -> [llama_token] {
+    /// `addBOS` false with `special` true: special tokens parsed, no BOS (the template's suffix).
+    func tokenize(_ text: String, special: Bool = true, addBOS: Bool? = nil) throws -> [llama_token] {
         let length = Int32(text.utf8.count)
+        let bos = addBOS ?? special
         var tokens = [llama_token](repeating: 0, count: Int(length) + 8)
-        var count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), special, special)
+        var count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), bos, special)
         if count < 0 {  // buffer too small: -count is the size needed
             tokens = [llama_token](repeating: 0, count: Int(-count))
-            count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), special, special)
+            count = llama_tokenize(vocab, text, length, &tokens, Int32(tokens.count), bos, special)
         }
         guard count > 0 else { throw LlamaError.tokenizeFailed }
         tokens.removeLast(tokens.count - Int(count))

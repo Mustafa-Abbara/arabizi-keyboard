@@ -78,7 +78,7 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     /// The same with a config already built (arabizi-cli's --model / --no-model overrides).
     public static func load(config: EngineConfig, rulesDirectory: URL, modelsDirectory: URL,
                             verifyModelHash: Bool = true, repairTokens: Bool = true,
-                            pinInstruction: Bool = true) throws -> Engine {
+                            pinInstruction: Bool = true, incremental: Bool = true) throws -> Engine {
         let rules = try RuleConverter(rulesDirectory: rulesDirectory)
         let english = EnglishGuard(rulesDirectory: rulesDirectory, rules: rules)
         let abbreviations = ChatAbbreviations(rulesDirectory: rulesDirectory)
@@ -104,7 +104,10 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         do {
             let generator = try LlamaModel(path: path.path, settings: settings)
             // The instruction is decoded once and kept; each conversion decodes only its own text.
-            if pinInstruction { try generator.pin(model.promptPrefix) }
+            // A text that continues the last one keeps what they share and checks the last answer (ADR 0037).
+            if pinInstruction {
+                try generator.pin(model.promptPrefix, incrementalSuffix: incremental ? model.promptSuffix : nil)
+            }
             return Engine(config: config, rules: rules, generator: generator,
                           template: PromptTemplate(prefix: model.promptPrefix, suffix: model.promptSuffix),
                           modelState: .ready(id: model.id), repairTokens: repairTokens, englishGuard: english, abbreviations: abbreviations)
