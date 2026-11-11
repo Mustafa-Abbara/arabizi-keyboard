@@ -212,7 +212,7 @@ About 8–12 hours in W1, spread over the week:
 **Gate:**
 - [ ] `pytest eval/tests` passes in CI.
 - [ ] Baseline table on **dev**: B0 and each B1 model, word accuracy with 95% CI, CER, Keep-Latin F1, number preservation, latency p50/p95 and RSS on the 8 GB Air.
-- [ ] Re-running one baseline from a fresh clone gives the same accuracy (temperature 0) and latency within 20%.
+- [x] Re-running one baseline from a fresh clone gives the same accuracy (temperature 0) and latency within 20%. (B0 on dev, 11 Nov 2026: every accuracy metric identical, p50 latency +10%; [EVAL.md](EVAL.md#reproducing-a-baseline-from-a-fresh-clone-11-nov-2026).)
 - [ ] At least one model fits the memory budget. If none fits the latency budget, write it down and plan for the smaller model in P4.
 
 **Rubric mapping:** Agent performance/evaluation 20% (baselines, held-out evaluation); real-world constraint (latency/RAM) measured.
