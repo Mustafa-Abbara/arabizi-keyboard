@@ -48,7 +48,12 @@ rm -rf "$APP"
 ditto -x -k "$WORK/$ZIP" "$DEST"
 echo "App installed in $DEST."
 if [ -n "$FROM" ] && [ -d "$FROM/model" ]; then export HARFI_MODEL_FROM="$FROM/model"; fi  # package_release.sh
-"$APP/Contents/Resources/harfi-setup.sh" "$APP"
+"$APP/Contents/Resources/harfi-setup.sh" "$APP" | tee "$WORK/setup.log"  # shown as it runs
+if grep -q "Already enabled" "$WORK/setup.log"; then
+  echo
+  echo "Harfi is updated. Switch to another keyboard and back with Ctrl+Space to start the new version."
+  exit 0
+fi
 cat <<'EOF'
 
 Almost there: turn Harfi on once.

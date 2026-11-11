@@ -188,8 +188,11 @@ final class ArabiziInputController: IMKInputController {
         let doubtful = Self.doubtfulWords(words, latin: String(composer.buffer.dropLast(text.typedSince)))
         let hint = text.latin.isEmpty && Settings.personality != .quiet
             && UserDefaults.standard.integer(forKey: "previewFixUses") < Self.previewFixUses ? "↑ fix a word" : nil
-        _ = MainActor.assumeIsolated { window.show(arabic: words, doubtful: doubtful, latin: text.latin, hint: hint, above: line,
-                                                         reserve: Self.chipsHeight) }
+        nonisolated(unsafe) let chips = chips
+        _ = MainActor.assumeIsolated {
+            window.show(arabic: words, doubtful: doubtful, latin: text.latin, hint: hint, above: line,
+                        reserve: chips.height ?? Self.chipsHeight)
+        }
     }
 
     /// Which shown words look wrong (a letter no typed key writes, in a word never seen written): dotted in the preview.
@@ -266,8 +269,8 @@ final class ArabiziInputController: IMKInputController {
         MainActor.assumeIsolated { chips.showHint("Not quite? ↑ to fix a word", above: line) }
     }
 
-    /// About the chip row's height with the sentence over it: the preview keeps room for it while typing, so it
-    /// does not move when ↑ opens the chips.
+    /// The chip row's height with the sentence over it before it is first shown (then its measured height): the
+    /// preview keeps room for it while typing, so it does not move when ↑ opens the chips.
     private static let chipsHeight: CGFloat = 72
 
     private static let fixHintTimes = 5, fixHintUses = 3, previewFixUses = 3

@@ -27,6 +27,7 @@ As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026.
 | Failure | What the user sees | Covered by |
 |---|---|---|
 | Engine service crashes or does not answer | The keyboard's own rules answer (after the deadline plus 0.5 s); the next message reconnects | `aServiceThatNeverAnswersGivesUpAfterTheDeadline`, `aServiceThatCrashesIsReachedAgainOnTheNextMessage` (`swift test --package-path Apps/ArabiziIME`) |
+| Engine service idle for 30 minutes | It quits and gives back the model's memory (about 1 GB); the next message gets the rules while the model loads again (about 3 s) | `theEngineIsIdleOnlyAfterTheLimitWithoutRequests`, `theDefaultLimitIsHalfAnHour` (ArabiziEngine); the quit itself: **manual** (`log stream`: "idle for 30 minutes", 11 Nov 2026) |
 | Engine tries the network | Refused by the sandbox (no network entitlement); nothing is sent | **manual**: `arabizi-engine-check` must report `network: blocked` |
 | Engine config unreadable | The keyboard's own rules | `committedConfigLoads` (the shipped config loads); unreadable case: **manual** |
 | Rule dictionary missing | Letter rules only | `missingDictionaryMeansLetterRulesOnly` |
@@ -43,6 +44,9 @@ As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026.
 | Password field (secure input) | Nothing is underlined or converted; keys go straight to the field | `secureInputNeverComposes`, `passwordFieldsForgetTheLastConversion` |
 | App cannot report the cursor | ⌘Z stays the app's own undo, ⌥Enter beeps, ⌥Tab does nothing | `undoIsTheAppsOwnWhenTheCursorMoved`, `optionTabDoesNothingWhenTheCursorMovedOrNothingWasConverted` |
 | App reports no or a wrong text position | The preview and chips sit at the last good position, above the text | **manual** (`lineRect` / `plausibleLine`) |
+| No room above the line for the preview and the chips | Both go below the line, the chips on the far side of the preview, never over the text | `withRoomThePreviewIsAboveTheLineAndTheChipsAboveIt`, `whenThePreviewFitsAboveButNotTheChipsBothGoBelow` |
+| App drops marked text set over a range (Notes) | ⌘Z and ↑ right after Enter still work: the converted text is deleted first, then the Latin or the spellings are composed at the cursor | **manual** (`replace(_:with:)`; Notes and WhatsApp, 11 Nov 2026) |
+| ↑ pressed when nothing was just converted, or after the cursor moved | The app's own ↑ (the cursor moves) | `upIsTheAppsWhenTheCursorMovedOrAnotherKeyCameFirst`, `upRightAfterAConversionOrAFixOpensTheSpellings` |
 | Focus moves away while composing | The Latin text is committed unchanged | `focusLossCommitsLatinNotConverted`, `focusLossForgetsTheLastConversion` |
 | App without marked-text support | Per app, recorded in the matrix | **open**: `docs/spikes/ime_app_matrix.md` |
 

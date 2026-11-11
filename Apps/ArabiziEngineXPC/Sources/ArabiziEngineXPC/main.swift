@@ -142,15 +142,17 @@ let host = EngineHost(rulesOnly: rulesOnly)
 // After half an hour without a request the service quits, which gives the model's memory back (about 1 GB, measured
 // as wired memory on the 8 GB Air); launchd starts it again on the next request, and the keyboard converts ahead
 // while the user types, so the model has loaded again by Enter in most cases.
-Thread.detachNewThread { [host] in
-    while true {
-        Thread.sleep(forTimeInterval: 60)
-        if host.idle.isIdle, !host.isLoading {
-            log.info("idle for 30 minutes: quitting to free the model's memory")
-            exit(0)
-        }
+// A strict timer: macOS may otherwise delay a background service's sleeping thread by many minutes (the service
+// quit 47 minutes after its last request in a 30-minute test, 11 Nov 2026).
+let idleCheck = DispatchSource.makeTimerSource(flags: .strict, queue: .global(qos: .utility))
+idleCheck.schedule(deadline: .now() + 60, repeating: 60, leeway: .seconds(1))
+idleCheck.setEventHandler { [host] in
+    if host.idle.isIdle, !host.isLoading {
+        log.info("idle for 30 minutes: quitting to free the model's memory")
+        exit(0)
     }
 }
+idleCheck.resume()
 let delegate = ListenerDelegate(host: host)
 let listener = NSXPCListener.service()
 listener.delegate = delegate
