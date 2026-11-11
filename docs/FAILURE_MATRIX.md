@@ -81,7 +81,7 @@ The same rule holds: a failure never stops typing. On Windows the model runs in 
 
 | Failure | What the user sees | Covered by |
 |---|---|---|
-| Model download drops | Run `install.ps1` again: it resumes the part in progress and checks every part | **manual**; a known gap: a part already complete can make the rerun fail (review on #42); delete `models\download` to retry |
+| Model download drops | Run `install.ps1` again: it keeps the parts already complete (checked by SHA-256), resumes the part in progress and checks every part | **manual** |
 | Keyboard files in use by open apps | Installed anyway: the old files are moved aside and removed at a later install | **manual** (`install.ps1`, 7 Nov 2026) |
 | Learned-words record unreadable (or its key replaced) | No personal suggestions or habits; nothing else changes | `theStoreEncryptsKeepsAndExpiresCorrections`, `refusedHabitsAreKeptSealedAndCanBeAllowedAgain` |
 | A habit the user does not want | Esc while the tip shows refuses it; "Don't" under Your words in the Harfi window later (`harfi-words refuse WORD` for developers) | `aThirdPickOnASecondDayBecomesAHabitThatCanBeRefused` |
