@@ -227,6 +227,7 @@ with the keyboard's own deadline per message, on the two **dev** sets (the test 
   messages are the slow ones. **Not measured:** the Mac after this change (the same code runs there), the graphics
   card on Windows, peak memory.
 - `arabizi-cli --no-pin` (system `…-kb-nopin`) decodes the whole prompt every time, to repeat the comparison.
+- **While typing** ([ADR 0037](decisions/0037-incremental-conversion.md)): a text that continues the last one reuses it and checks the last answer in one decode call. Typing 200 dev messages one word at a time (`scripts/typing_simulation.py`): a whole message p50 843 → 360 ms and p95 1,686 → 1,049 ms, word accuracy 0.817 → 0.818; 28 of the 200 answers differ by a word or two from the same text converted on its own. The runs above send unrelated messages and are not affected.
 
 ## Metrics
 

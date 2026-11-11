@@ -125,3 +125,45 @@ func aDeadlineWhileThePinnedInstructionIsDecodedIsRecoveredFrom() throws {
     let after = try pinned.generate(prompt, maxTokens: 24, timeout: .seconds(60))
     #expect(after.stop != .deadline && after.text == whole.text)
 }
+
+// Incremental conversion (ADR 0037): a text that continues the last one reuses it. An answer made that way can
+// differ by a word from the same text converted on its own (rounding), so these tests check what is exact.
+
+@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
+func incrementalConversionIsRepeatableAndLeavesOtherTextsAlone() throws {
+    func typed(_ texts: [String]) throws -> [String] {
+        let model = try LlamaModel(path: try #require(testModelPath))
+        try model.pin(template.prefix, incrementalSuffix: template.suffix)
+        return try texts.map { try model.generate(template.render($0), maxTokens: 24, timeout: .seconds(60)).text }
+    }
+    let typing = ["bade", "bade ruh", "bade ruh 3al", "bade ruh 3al beit"]
+    let first = try typed(typing)
+    #expect(first.allSatisfy { !$0.isEmpty })
+    #expect(try typed(typing) == first)  // the same typing, the same answers
+    // A text that does not continue the last one is converted on its own, whatever came before it.
+    let other = "kifak ya zalame"
+    #expect(try typed(typing + [other]).last == typed([other]).last)
+    // The same text again is not a draft of itself: it is converted on its own too.
+    #expect(try typed([other, other]) == typed([other]) + typed([other]))
+}
+
+@Test(.enabled(if: testModelPath != nil, "no model file in models/"))
+func aDeadlineLeavesNoDraftBehind() throws {
+    let model = try LlamaModel(path: try #require(testModelPath))
+    try model.pin(template.prefix, incrementalSuffix: template.suffix)
+    let fresh = try LlamaModel(path: try #require(testModelPath))
+    try fresh.pin(template.prefix, incrementalSuffix: template.suffix)
+    #expect(try model.generate(template.render("bade ruh"), maxTokens: 24, timeout: .zero).stop == .deadline)
+    let longer = template.render("bade ruh 3al beit")
+    #expect(try model.generate(longer, maxTokens: 24, timeout: .seconds(60)).text
+            == fresh.generate(longer, maxTokens: 24, timeout: .seconds(60)).text)
+}
+
+@Test func theMostLikelyTokenAndItsLogProbability() {
+    var logits: [Float] = [0, 2, 1]
+    let (token, logProbability) = logits.withUnsafeMutableBufferPointer {
+        LlamaModel.top($0.baseAddress!, vocabularySize: 3)
+    }
+    #expect(token == 1)
+    #expect(abs(logProbability - (2 - log(exp(0.0) + exp(2.0) + exp(1.0)))) < 1e-9)
+}
