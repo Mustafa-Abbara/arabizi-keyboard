@@ -79,6 +79,14 @@ jobs:
           New-Item -ItemType Directory -Force dist/harfi-windows/config | Out-Null
           Copy-Item config/engine.json, config/models.json dist/harfi-windows/config/
           Get-ChildItem dist/harfi-windows | Format-Table Name, Length
+      - name: the PowerShell scripts parse
+        shell: pwsh
+        run: |
+          foreach ($script in Get-ChildItem Apps/HarfiWindows -Filter *.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Host "$($script.Name): $_" }; throw "$($script.Name) does not parse" }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: harfi-windows

@@ -42,6 +42,11 @@ function Get-ModelFile($model, [string]$file) {
         if ($line -notmatch '^([0-9a-f]{64})\s+\*?(\S+)$') { continue }
         $hash, $name = $Matches[1], $Matches[2]
         $part = Join-Path $parts $name
+        # A part finished by an earlier run is kept: resuming a complete file is refused by the server (HTTP 416).
+        if ((Test-Path $part) -and (Get-FileHash -Algorithm SHA256 $part).Hash.ToLower() -eq $hash) {
+            $names += $part
+            continue
+        }
         curl.exe -fL -C - --retry 5 -o $part "$modelRelease/$name"
         if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 33) { throw "Downloading $name failed. Run install.ps1 again to resume." }
         if ((Get-FileHash -Algorithm SHA256 $part).Hash.ToLower() -ne $hash) {
