@@ -139,6 +139,7 @@ enum Settings {
         livePreview = Settings.livePreview
         personality = Settings.personality
         largerText = Settings.largerText
+        fasterPreview = Settings.fasterPreview
         let all = store?.all() ?? []
         fixes = all.count
         var counts: [String: (latin: String, arabic: String, times: Int)] = [:]
