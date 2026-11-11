@@ -14,19 +14,23 @@ final class ArabiziInputController: IMKInputController {
     /// output checks and its own rule fallback, ADR 0020), and the rule converter here if the service cannot answer
     /// in time. The rule files and config come from Resources (scripts/build_ime.sh); without them the P1 toy
     /// converter keeps the keyboard usable.
-    private static let convert: @Sendable (String) -> String = {
+    private static let convert: @Sendable (String) -> String = { answer($0).text }
+    /// The conversion with whether the model made it: the live preview keeps only the model's answers for Enter, so a
+    /// rule fallback (the model still loading, a timeout) is shown but asked again at Enter.
+    private static let answer: @Sendable (String) -> (text: String, fromModel: Bool) = {
         let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         let rules = quickConvert
         guard let engine = EngineClient(resources: resources, fasterPreview: { Settings.fasterPreview }) else {
-            return { yours($0, rules($0)) }
+            return { (yours($0, rules($0)), false) }
         }
         engine.warmUp()
         let confidences = ArabiziInputController.confidences
         return { text in
-            guard let answer = engine.respond(text) else { return yours(text, rules(text)) }
-            let shown = answer.outcome == .model ? fromModel(text, answer.text) : yours(text, answer.text)
+            guard let answer = engine.respond(text) else { return (yours(text, rules(text)), false) }
+            let model = answer.outcome == .model
+            let shown = model ? fromModel(text, answer.text) : yours(text, answer.text)
             confidences.remember(shown, answer.wordConfidence)  // ↑ then starts on the least sure word
-            return shown
+            return (shown, model)
         }
     }()
     /// How sure the model was of each word of the last few conversions (the preview's and Enter's alike).
@@ -162,7 +166,8 @@ final class ArabiziInputController: IMKInputController {
         nonisolated(unsafe) let controller = self
         Self.previewQueue.async {
             while let next = Self.previewWork.take() {
-                Self.previews.set(next, Self.convert(next))
+                let made = Self.answer(next)
+                Self.previews.store(next, made.text, fromModel: made.fromModel)
                 DispatchQueue.main.async { controller.showPreview() }
             }
         }
@@ -596,55 +601,6 @@ extension Key {
     }
 }
 
-
-/// The conversions made ahead for the live preview: the last few, by the exact Latin text. A conversion is final
-/// (the model's, which Enter may use) or quick (the rules', shown only until the model's arrives).
-final class PreviewCache: @unchecked Sendable {  // `items` is behind `lock`
-    private let lock = NSLock()
-    private var items: [(latin: String, arabic: String, final: Bool)] = []
-    private let isClitic: @Sendable (String) -> Bool
-
-    init(isClitic: @escaping @Sendable (String) -> Bool) { self.isClitic = isClitic }
-
-    func set(_ latin: String, _ arabic: String, final: Bool = true) {
-        lock.withLock {
-            if !final, items.contains(where: { $0.latin == latin && $0.final }) { return }
-            items.removeAll { $0.latin == latin }
-            items.append((latin, arabic, final))
-            if items.count > 16 { items.removeFirst() }
-        }
-    }
-
-    /// The final Arabic for exactly this text.
-    func arabic(for latin: String) -> String? {
-        lock.withLock { items.last { $0.latin == latin && $0.final }?.arabic }
-    }
-
-    /// True when the last word of `latin` is a small word whose Arabic depends on the next one (el, w, b).
-    func endsWithClitic(_ latin: String) -> Bool {
-        guard let last = latin.split(whereSeparator: \.isWhitespace).last else { return false }
-        return isClitic(String(last))
-    }
-
-    /// What the preview window shows for the text typed so far: the Arabic of the longest converted start that ends
-    /// at a word boundary, then the Latin typed since. A start ending in a small word (el, w, b) is not used, so
-    /// a lone ال never shows before its word. nil when no start of the text is converted yet.
-    func display(for buffer: String) -> (arabic: String, latin: String, typedSince: Int)? {
-        lock.withLock {
-            let starts = items.filter { item in
-                guard buffer.hasPrefix(item.latin), !endsWithClitic(item.latin) || item.latin.count == buffer.count
-                else { return false }
-                if item.latin.count == buffer.count || item.latin.last?.isWhitespace == true { return true }
-                return buffer[buffer.index(buffer.startIndex, offsetBy: item.latin.count)].isWhitespace
-            }
-            guard let best = starts.max(by: { ($0.latin.count, $0.final ? 1 : 0) < ($1.latin.count, $1.final ? 1 : 0) })
-            else { return nil }
-            let head = best.arabic.trimmingCharacters(in: .whitespaces)
-            let rest = String(buffer.dropFirst(best.latin.count)).trimmingCharacters(in: .whitespaces)
-            return (head, rest, buffer.count - best.latin.count)
-        }
-    }
-}
 
 /// The newest text waiting to be converted for the preview, and whether a worker is running.
 final class PreviewWork: @unchecked Sendable {  // both fields are behind `lock`
