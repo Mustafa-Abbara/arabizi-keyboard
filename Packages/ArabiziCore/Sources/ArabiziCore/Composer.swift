@@ -238,6 +238,14 @@ public struct Composer {
             session = started
             return .suggest(marked: started.text, selected: started.selected, candidates: started.candidates,
                             replacingLength: nil)
+        case .arrowUp:
+            // Right after a conversion (or a fix), ↑ fixes a word in it, like ⌥Tab; otherwise it is the app's ↑.
+            guard let previous, context.cursorAtLastConversion, let started = startSuggesting(previous) else {
+                return .pass
+            }
+            session = started
+            return .suggest(marked: started.text, selected: started.selected, candidates: started.candidates,
+                            replacingLength: previous.converted.utf16.count)
         case .suggest:
             guard buffer.isEmpty else { return .commit(convertAndRemember(take())) }
             guard let previous, context.cursorAtLastConversion, let started = startSuggesting(previous) else {
@@ -247,7 +255,7 @@ public struct Composer {
             session = started
             return .suggest(marked: started.text, selected: started.selected, candidates: started.candidates,
                             replacingLength: previous.converted.utf16.count)
-        case .arrowLeft, .arrowRight, .arrowDown, .arrowUp, .tab, .backtab, .other:
+        case .arrowLeft, .arrowRight, .arrowDown, .tab, .backtab, .other:
             return buffer.isEmpty ? .pass : .commitAndPass(take())
         }
     }

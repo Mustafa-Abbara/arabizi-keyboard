@@ -239,3 +239,25 @@ func typeAndConvert(_ composer: inout Composer, _ text: String) {
     #expect(!suggestions.isDoubtful("ورايي", latin: "waraye", spelling: spelling))
     #expect(!suggestions.isDoubtful("meeting", latin: "meeting", spelling: spelling))
 }
+
+@Test func upRightAfterAConversionOrAFixOpensTheSpellings() {
+    var composer = suggestingComposer(Recorded())
+    typeAndConvert(&composer, "kifak ya sabiye")
+    let converted = "كيفك يا سبية؟"
+    guard case .suggest(_, _, _, let replacing) = composer.handle(.arrowUp, context: Context(cursorAtLastConversion: true))
+    else { Issue.record("↑ did not open the spellings"); return }
+    #expect(replacing == converted.utf16.count)
+    #expect(composer.handle(.text("1")) == .commit("كيفك يا صبية؟"))
+    // ↑ again right after the fix: another word can be fixed.
+    guard case .suggest = composer.handle(.arrowUp, context: Context(cursorAtLastConversion: true))
+    else { Issue.record("↑ after a fix did not open the spellings"); return }
+    #expect(composer.isSuggesting)
+}
+
+@Test func upIsTheAppsWhenTheCursorMovedOrAnotherKeyCameFirst() {
+    var composer = suggestingComposer(Recorded())
+    typeAndConvert(&composer, "kifak ya sabiye")
+    #expect(composer.handle(.arrowUp, context: Context(cursorAtLastConversion: false)) == .pass)
+    #expect(composer.handle(.arrowUp, context: Context(cursorAtLastConversion: true)) == .pass)  // no longer right after
+    #expect(!composer.isSuggesting)
+}
