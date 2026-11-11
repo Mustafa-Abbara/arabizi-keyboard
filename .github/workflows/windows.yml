@@ -1,5 +1,6 @@
 # The Windows keyboard: the core's tests on Windows, then the package (HarfiTIP.dll, HarfiCoreC.dll, harfi-engine.exe,
-# llama.cpp, the Swift runtime, rules, settings and install.ps1; the model is downloaded by install.ps1). Called by
+# the Harfi window harfi-settings.exe, the installer "Install Harfi.exe", llama.cpp, the Swift runtime, rules,
+# settings and install.ps1; the model is downloaded by install.ps1). Called by
 # ci.yml on every pull request and on main (the package as the harfi-windows artifact), and by release.yml for a
 # version tag (the package as Harfi-Windows-x64.zip on that release, with its line in SHA256SUMS).
 name: windows
@@ -34,12 +35,11 @@ jobs:
           cmake --build build/windows --config Release
           New-Item -ItemType Directory -Force dist/harfi-windows/rules | Out-Null
           Copy-Item build/windows/Release/HarfiTIP.dll dist/harfi-windows/
+          # The Harfi window (settings, your words, help) and the installer people double-click.
+          Copy-Item build/windows/Release/harfi-settings.exe, "build/windows/Release/Install Harfi.exe" dist/harfi-windows/
           # The release build: `swift test` above leaves a debug HarfiCoreC.dll under .build too.
           $bin = swift build -c release --package-path Packages/ArabiziCore --show-bin-path
           Copy-Item "$bin/HarfiCoreC.dll" dist/harfi-windows/
-          # The user's learned words, until a settings window exists (ADR 0033).
-          swift build -c release --package-path Packages/ArabiziCore --product harfi-words -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
-          Copy-Item "$bin/harfi-words.exe" dist/harfi-windows/
           Copy-Item data/rules/arabizi_to_arabic.json, data/rules/arabizi_lexicon.json, data/rules/spelling_options.json, data/rules/english_stopwords.json, data/rules/chat_abbreviations.json, data/rules/spelling_odds.json, data/rules/candidate_ranker.json dist/harfi-windows/rules/
           Copy-Item Apps/HarfiWindows/install.ps1, Apps/HarfiWindows/status.ps1 dist/harfi-windows/
           New-Item -ItemType Directory -Force dist/harfi-windows/fonts | Out-Null
