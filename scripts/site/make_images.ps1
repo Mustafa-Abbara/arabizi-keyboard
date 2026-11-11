@@ -31,3 +31,37 @@ Shoot "scripts/site/og.html" "site/og.png" 1200 630
 Icon "site/icon.svg" "site/icon-32.png" 32
 Icon "scripts/site/icon-square.svg" "site/apple-touch-icon.png" 180
 Get-Item (Join-Path $root "site/og.png"), (Join-Path $root "site/icon-32.png"), (Join-Path $root "site/apple-touch-icon.png") | Format-Table Name, Length
+
+# The Windows programs' icon (the Harfi window and the installer): Apps/HarfiWindows/src/settings/harfi.ico, from the
+# same site/icon.svg. Drawn once at 256 px, scaled down to the sizes Windows asks for, each stored as a PNG.
+Add-Type -AssemblyName System.Drawing
+New-Item -ItemType Directory -Force (Join-Path $root "build") | Out-Null
+$large = Join-Path $root "build/icon-256.png"  # build/ is not committed
+Icon "site/icon.svg" "build/icon-256.png" 256
+$source = [Drawing.Image]::FromFile($large)
+$images = foreach ($size in 16, 20, 24, 32, 40, 48, 64, 256) {
+    $bitmap = New-Object Drawing.Bitmap $size, $size, ([Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.DrawImage($source, 0, 0, $size, $size)
+    $graphics.Dispose()
+    $stream = New-Object IO.MemoryStream
+    $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png)
+    $bitmap.Dispose()
+    [pscustomobject]@{ Size = $size; Bytes = $stream.ToArray() }
+}
+$source.Dispose()
+$ico = New-Object IO.MemoryStream
+$writer = New-Object IO.BinaryWriter $ico
+$writer.Write([uint16]0); $writer.Write([uint16]1); $writer.Write([uint16]$images.Count)
+$offset = 6 + 16 * $images.Count
+foreach ($image in $images) {
+    $writer.Write([byte]($image.Size % 256)); $writer.Write([byte]($image.Size % 256))  # 0 means 256
+    $writer.Write([byte]0); $writer.Write([byte]0); $writer.Write([uint16]1); $writer.Write([uint16]32)
+    $writer.Write([uint32]$image.Bytes.Length); $writer.Write([uint32]$offset)
+    $offset += $image.Bytes.Length
+}
+foreach ($image in $images) { $writer.Write($image.Bytes) }
+[IO.File]::WriteAllBytes((Join-Path $root "Apps/HarfiWindows/src/settings/harfi.ico"), $ico.ToArray())
+Get-Item (Join-Path $root "Apps/HarfiWindows/src/settings/harfi.ico") | Format-Table Name, Length

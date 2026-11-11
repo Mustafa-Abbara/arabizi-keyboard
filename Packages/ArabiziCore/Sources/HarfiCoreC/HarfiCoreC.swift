@@ -119,6 +119,8 @@ final class Core: Sendable {
     let engine: EngineClient?
     /// Its conversions for the live preview, made in the background.
     let ahead: PreviewConversions?
+    /// The user's settings (the settings window writes the file).
+    let settings = UserSettingsFile()
     #endif
 
     /// What Enter sends: the engine's answer within its deadline (the model, with its own rule fallback), else the
@@ -169,6 +171,8 @@ final class Core: Sendable {
         var pending = false
         #if os(Windows)
         if arabic == nil, let ahead { pending = ahead.request(head) }
+        // "Live preview" switched off: no box, but the engine still converts ahead, so Enter does not wait.
+        guard settings.current.livePreview else { return [:] }
         #endif
         if arabic == nil { arabic = yours(head, convert(head)) }
         let words = (arabic ?? "").trimmingCharacters(in: .whitespaces).components(separatedBy: " ")

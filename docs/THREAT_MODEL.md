@@ -47,6 +47,7 @@ The same goal on Windows: what a user types never leaves the PC and is never wri
 |---|---|---|
 | Text being typed (Latin and its Arabic) | Memory of the keyboard in the app being typed in, and of the engine for the request; the live preview keeps the engine's last 16 conversions per app in memory | Never. Not logged, not stored |
 | Corrections, and habits the user refused (ADR 0027, 0033) | `%LOCALAPPDATA%\Harfi\words\corrections.bin` and `refused.bin`, AES-GCM encrypted (swift-crypto), entries older than 30 days dropped; the key in `corrections.key` beside them. The installer gives `words\` owner-only access (the account and SYSTEM). `install.ps1 -Uninstall` deletes them | Never. `harfi-words forget`, `refuse` and `wipe` change or delete them |
+| Settings (the Harfi window) | `%LOCALAPPDATA%\Harfi\settings.json`: on/off switches only (live preview, faster preview), no text | Never |
 | Tip counters | `HKCU\Software\Harfi` (how many times a tip was shown or a feature used: numbers only) | Never |
 | Engine log | `%LOCALAPPDATA%\Harfi\engine.log`: start, model state, each conversion's outcome and time | Only if the user shares it. Never the text |
 | Debug log (off unless `HKCU\Software\Harfi\DebugLog` is 1) | `%LOCALAPPDATA%\Harfi\debug.log`: lifecycle events and the app's name | Only if shared. Never the text |

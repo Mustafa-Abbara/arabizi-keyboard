@@ -1,7 +1,9 @@
-# Installs (or removes) the Windows keyboard from this folder for the current user (ADR 0032, test builds).
-#   Right-click > Run with PowerShell, or:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Uninstall]
+# Installs (or removes) the Windows keyboard from this folder for the current user (ADR 0032).
+#   Double-click "Install Harfi.exe" (a window on this script), or right-click this file > Run with PowerShell, or:
+#   powershell -ExecutionPolicy Bypass -File install.ps1 [-Uninstall]
 # Copies the files to %LOCALAPPDATA%\Harfi, registers HarfiTIP.dll, and asks for administrator rights only if
-# Windows needs them to register the keyboard profile. The conversion model (808 MB) comes with this folder when it
+# Windows needs them to register the keyboard profile. Adds "Harfi" to the Start menu (the Harfi window: settings,
+# your words, help) and to Windows' list of installed apps, where it can be uninstalled. The conversion model (808 MB) comes with this folder when it
 # holds models\; otherwise it is downloaded once from the model release, in parts, each checked, as on the Mac.
 param([switch]$Uninstall)
 $ErrorActionPreference = "Stop"
@@ -9,6 +11,8 @@ $target = Join-Path $env:LOCALAPPDATA "Harfi"
 $dll = Join-Path $target "HarfiTIP.dll"
 $modelRelease = "https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/download/model-v3"
 $modelParts = "Llama-3.2-1B-Harfi-v3-Q4_K_M.gguf"  # the release's part names: .part01 ... and .parts.sha256
+$shortcut = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Harfi.lnk"
+$uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Harfi"
 
 # The engine keeps its files open; the keyboard starts it again when it is next needed.
 function Stop-Engine {
@@ -68,6 +72,9 @@ function Register([string]$arguments) {
 if ($Uninstall) {
     Stop-Engine
     if (Test-Path $dll) { [void](Register "/s /u `"$dll`"") }
+    Get-Process harfi-settings -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Remove-Item -Force $shortcut -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force $uninstallKey -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
     Write-Host "Harfi removed. If it still shows as a keyboard, remove it in Settings > Language & region."
     exit 0
@@ -132,9 +139,28 @@ icacls $words /inheritance:r /grant:r "*${me}:(OI)(CI)F" "*S-1-5-18:(OI)(CI)F" /
 icacls $words /remove:g "*S-1-15-2-1" /Q | Out-Null
 if (Get-ChildItem $words -Force) { icacls (Join-Path $words "*") /reset /T /Q | Out-Null }
 if (-not (Register "/s `"$dll`"")) { Write-Host "Registration failed."; exit 1 }
+# "Harfi" in the Start menu opens the Harfi window, and Windows' installed apps list can remove Harfi.
+$window = Join-Path $target "harfi-settings.exe"
+if (Test-Path $window) {
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)
+    $link.TargetPath = $window
+    $link.WorkingDirectory = $target
+    $link.Description = "Harfi: settings, your words and help"
+    $link.Save()
+}
+New-Item -Force $uninstallKey | Out-Null
+$remove = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $target 'install.ps1')`" -Uninstall"
+Set-ItemProperty $uninstallKey -Name DisplayName -Value "Harfi"
+Set-ItemProperty $uninstallKey -Name Publisher -Value "Harfi (open source)"
+Set-ItemProperty $uninstallKey -Name InstallLocation -Value $target
+Set-ItemProperty $uninstallKey -Name UninstallString -Value $remove
+Set-ItemProperty $uninstallKey -Name DisplayIcon -Value $window
+Set-ItemProperty $uninstallKey -Name NoModify -Value 1 -Type DWord
+Set-ItemProperty $uninstallKey -Name NoRepair -Value 1 -Type DWord
 Write-Host @"
 Harfi is installed in $target.
 Turn it on once: Settings > Time & language > Language & region > Arabic (Lebanon) > Language options >
 Add a keyboard > Harfi. (Add the Arabic (Lebanon) language first if it is not listed.)
 Then switch with Win+Space, open Notepad, type: shu 3am ta3mel   and press Enter.
+"Harfi" in the Start menu has the settings, your words and help.
 "@

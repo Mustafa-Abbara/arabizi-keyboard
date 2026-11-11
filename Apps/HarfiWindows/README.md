@@ -8,10 +8,7 @@ A TSF text input processor (`HarfiTIP.dll`, C++) that uses the same core as the 
 
 Every spelling you pick from the chip row is recorded on this computer only (one word per entry, encrypted, kept 30 days, never sent; `%LOCALAPPDATA%\Harfi\words`) and puts your earlier choices first among the suggestions. When you have picked the same spelling for a typed word 3 times on 2 different days (with no other choice since), it becomes a habit: a tip says "Harfi will now write flfoul as فليفلة", Esc while it shows refuses it, and from then on that word is written your way after the model, in the preview and on Enter ([ADR 0033](../../docs/decisions/0033-learned-habits.md)). To see or change them:
 
-```bat
-"%LOCALAPPDATA%\Harfi\harfi-words.exe"                 :: your habits, refused ones, fixes recorded
-"%LOCALAPPDATA%\Harfi\harfi-words.exe" refuse flfoul   :: stop a habit (also: allow, forget WORD, wipe)
-```
+**Harfi** in the Start menu opens the Harfi window (`harfi-settings.exe`): **Your words** lists your habits and every spelling you taught, with a button to stop a habit, allow it again, forget a word, or forget them all. The same window has the settings (**Typing**: the live preview, and "Faster preview", [ADR 0037](../../docs/decisions/0037-incremental-conversion.md)), a first-steps page (**Welcome**), **Privacy** and the keys (**Help**). The settings are two switches in `%LOCALAPPDATA%\Harfi\settings.json`; the keyboard picks a change up within two seconds.
 
 ## How the model runs
 
@@ -22,11 +19,11 @@ As on the Mac (the XPC service, ADR 0020), the model is never loaded inside the 
 On an x64 Windows 10 or 11 PC:
 
 1. Download `Harfi-Windows-x64.zip` from the [latest release](https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest) and extract it (right-click → Extract All); to try a pull request, take the `harfi-windows` artifact of its CI run instead (Actions → the run → Artifacts). It holds `HarfiTIP.dll`, `HarfiCoreC.dll`, `harfi-engine.exe`, the llama.cpp and Swift runtime DLLs, `rules\`, `config\` and `install.ps1`.
-2. Right-click `install.ps1` → **Run with PowerShell** (a normal PowerShell window, not a terminal inside a Store app such as Claude: Windows would put the files in that app's private storage, and the installer stops). It copies the files to `%LOCALAPPDATA%\Harfi`, downloads the model once (808 MB, from the `model-v3` release, each part checked), and registers the keyboard; if Windows needs administrator rights for that, it asks once.
+2. Double-click **Install Harfi.exe** and press Install (Windows may warn that it does not know the publisher: Harfi is not signed with a paid certificate; More info → Run anyway). It runs `install.ps1` from the same folder and shows the model download's progress; right-click `install.ps1` → **Run with PowerShell** does the same in a normal PowerShell window (not a terminal inside a Store app such as Claude: Windows would put the files in that app's private storage, and the installer stops). It copies the files to `%LOCALAPPDATA%\Harfi`, downloads the model once (808 MB, from the `model-v3` release, each part checked), and registers the keyboard; if Windows needs administrator rights for that, it asks once.
 3. Settings → Time & language → Language & region → Arabic (Lebanon) → Language options → Add a keyboard → **Harfi**. Switch with Win+Space.
 4. Type `shu 3am ta3mel` in Notepad and press Enter: شو عم تعمل.
 
-Remove it with `install.ps1 -Uninstall` (this also removes your recorded words).
+Remove it in Windows' Settings → Apps → Installed apps → Harfi → Uninstall, or with `install.ps1 -Uninstall` (this also removes your recorded words and settings).
 
 Which build is installed, which running apps use it, and whether the engine has its model: `status.ps1` (in the same folder). An app keeps the build it loaded until it is restarted; the script marks those "OLDER: restart this app".
 
@@ -34,7 +31,6 @@ Which build is installed, which running apps use it, and whether the engine has 
 
 ```bat
 swift build -c release --package-path Packages/ArabiziCore --product HarfiCoreC -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
-swift build -c release --package-path Packages/ArabiziCore --product harfi-words -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 cmake -S Apps/HarfiWindows -B build/windows -A x64
 cmake --build build/windows --config Release
 ```

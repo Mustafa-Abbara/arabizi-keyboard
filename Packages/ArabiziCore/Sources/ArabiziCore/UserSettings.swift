@@ -7,12 +7,15 @@ public struct UserSettings: Codable, Equatable, Sendable {
     /// Incremental conversion while typing (ADR 0037): faster, and an answer can differ by a word from the same
     /// text converted on its own.
     public var fasterPreview = true
+    /// The box above the text that shows the Arabic while typing.
+    public var livePreview = true
 
     public init() {}
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         fasterPreview = try container.decodeIfPresent(Bool.self, forKey: .fasterPreview) ?? true
+        livePreview = try container.decodeIfPresent(Bool.self, forKey: .livePreview) ?? true
     }
 
     /// The settings in `file`; the defaults when it is missing or cannot be read.
