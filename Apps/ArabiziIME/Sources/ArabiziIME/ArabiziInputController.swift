@@ -133,7 +133,8 @@ final class ArabiziInputController: IMKInputController {
     private func schedulePreview() {
         let latin = composer.buffer
         let generation = previewState.next()
-        guard Self.livePreviewEnabled, latin.contains(where: \.isLetter), !composer.isSuggesting else { return }
+        // Converted ahead even with the preview box off, so Enter does not wait for the engine.
+        guard PreviewPolicy.convertsAhead(latin, fixing: composer.isSuggesting) else { return }
         if latin.last?.isWhitespace == true, !Self.previews.endsWithClitic(latin) {
             // A finished word: the rules at once, then the model. After a small word (el, w, b) the next word
             // decides its Arabic, so that waits for the next word or a pause.
@@ -171,8 +172,8 @@ final class ArabiziInputController: IMKInputController {
     /// The preview box above the typed text: the Arabic of what has been converted, then the Latin typed since.
     /// Hidden when nothing is converted yet or the user is not composing.
     private func showPreview() {
-        guard !composer.isSuggesting, let client = client(),
-              let text = Self.previews.display(for: composer.buffer) else { return hidePreview() }
+        guard PreviewPolicy.shows(livePreview: Self.livePreviewEnabled, fixing: composer.isSuggesting),
+              let client = client(), let text = Self.previews.display(for: composer.buffer) else { return hidePreview() }
         let marked = client.markedRange()
         let index = marked.location == NSNotFound ? client.selectedRange().location : marked.location
         let line = lineRect(client, at: [index])
