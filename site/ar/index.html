@@ -93,10 +93,11 @@
       <p>على حاسوب يعمل بنظام Windows 10 أو 11 (64 بت):</p>
       <ol>
         <li><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Windows-x64.zip">نزّل حرفي لنظام Windows</a>، ثم انقر بزر الماوس الأيمن على الملف المضغوط واختر <strong lang="en">Extract All</strong>.</li>
-        <li>في المجلد المستخرج، انقر بزر الماوس الأيمن على <code>install.ps1</code> واختر <strong lang="en">Run with PowerShell</strong>. يثبّت حرفي لحسابك فقط وينزّل نموذجه (808 ميغابايت، مع التحقق من كل جزء)، وإذا طلب Windows صلاحيات المسؤول فوافق مرة واحدة.</li>
+        <li>في المجلد المستخرج، انقر نقراً مزدوجاً على <strong lang="en">Install Harfi</strong> ثم اضغط <strong lang="en">Install</strong>. يثبّت حرفي لحسابك فقط وينزّل نموذجه (808 ميغابايت، مع التحقق من كل جزء)، وإذا طلب Windows صلاحيات المسؤول فوافق مرة واحدة.</li>
         <li>فعّله مرة واحدة: <span class="path">Settings → Time &amp; language → Language &amp; region → Arabic (Lebanon) → Language options → Add a keyboard → Harfi</span>. وأضف لغة <span lang="en">Arabic (Lebanon)</span> أولاً إن لم تكن موجودة.</li>
         <li>انتقل إليه بالضغط على <kbd>Win</kbd> <kbd>Space</kbd> وابدأ الكتابة.</li>
       </ol>
+      <p class="note">تجد في قائمة ابدأ <strong lang="en">Harfi</strong>: الإعدادات والكلمات التي علّمتها له والمفاتيح.</p>
       <p class="note">يعمل النموذج على المعالج، لذلك يستغرق التحويل الأول بعد التشغيل بضع ثوانٍ. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md">الدليل الكامل (بالإنجليزية)</a></p>
     </div>
   </section>
@@ -141,7 +142,7 @@
       </details>
       <details>
         <summary>يحذّرني Windows أو يطلب صلاحيات المسؤول. هل هذا آمن؟</summary>
-        <p>حرفي غير موقَّع بشهادة مدفوعة، لذا قد يسألك Windows قبل تشغيل <code>install.ps1</code>. إضافة لوحة مفاتيح إلى Windows تحتاج صلاحيات المسؤول مرة واحدة، وكل ما عدا ذلك يُثبَّت لحسابك فقط. والشيفرة مفتوحة على GitHub ليتحقّق منها أي شخص.</p>
+        <p>حرفي غير موقَّع بشهادة مدفوعة، لذا قد يقول Windows إنه لا يعرف الناشر عند فتح <strong lang="en">Install Harfi</strong>: اختر <span lang="en">More info → Run anyway</span>. إضافة لوحة مفاتيح إلى Windows تحتاج صلاحيات المسؤول مرة واحدة، وكل ما عدا ذلك يُثبَّت لحسابك فقط. والشيفرة مفتوحة على GitHub ليتحقّق منها أي شخص.</p>
       </details>
       <details>
         <summary>في أي تطبيقات يعمل؟</summary>
@@ -157,13 +158,13 @@
       </details>
       <details>
         <summary>كيف أحدّثه؟</summary>
-        <p>Mac: شغّل سطر التثبيت مرة أخرى. Windows: نزّل أحدث ملف مضغوط وشغّل <code>install.ps1</code> مرة أخرى. ولا يُنزَّل النموذج من جديد إلا إذا تغيّر.</p>
+        <p>Mac: شغّل سطر التثبيت مرة أخرى. Windows: نزّل أحدث ملف مضغوط وشغّل <strong lang="en">Install Harfi</strong> مرة أخرى. ولا يُنزَّل النموذج من جديد إلا إذا تغيّر.</p>
       </details>
       <details>
         <summary>كيف أزيله؟</summary>
         <p>Mac: شغّل هذا السطر في Terminal، ثم أزل حرفي من <span lang="en">Input Sources</span> (−). وتبقى الكلمات التي تعلّمها حرفي ما لم تختر <strong lang="en">Forget all my words</strong> في نافذته قبل ذلك.</p>
         <div class="cmd"><code>curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash -s -- --uninstall</code><button type="button" data-copied="تم النسخ" data-failed="حدّد وانسخ">نسخ</button></div>
-        <p>Windows: شغّل <code dir="ltr" style="white-space:nowrap">install.ps1 -Uninstall</code> من المجلد المستخرج. وهذا يزيل أيضاً الكلمات التي تعلّمها حرفي.</p>
+        <p>Windows: <span class="path">Settings → Apps → Installed apps → Harfi → Uninstall</span>. وهذا يزيل أيضاً الكلمات التي تعلّمها حرفي.</p>
       </details>
       <details>
         <summary>هل هو مجاني؟</summary>
