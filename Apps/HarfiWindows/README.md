@@ -18,7 +18,7 @@ As on the Mac (the XPC service, ADR 0020), the model is never loaded inside the 
 
 On an x64 Windows 10 or 11 PC:
 
-1. Download `Harfi-Windows-x64.zip` from the [latest release](https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest) and extract it (right-click → Extract All); to try a pull request, take the `harfi-windows` artifact of its CI run instead (Actions → the run → Artifacts). It holds `HarfiTIP.dll`, `HarfiCoreC.dll`, `harfi-engine.exe`, the llama.cpp and Swift runtime DLLs, `rules\`, `config\` and `install.ps1`.
+1. Download `Harfi-Setup.exe` from the [latest release](https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest) and double-click it: it unpacks the package to a temporary folder and starts the install in step 2 by itself. Or download `Harfi-Windows-x64.zip` and extract it (right-click → Extract All). To try a pull request, take the `harfi-windows-setup` or `harfi-windows` artifact of its CI run instead (Actions → the run → Artifacts). The package holds `HarfiTIP.dll`, `HarfiCoreC.dll`, `harfi-engine.exe`, the llama.cpp and Swift runtime DLLs, `rules\`, `config\` and `install.ps1`.
 2. Double-click **Install Harfi.exe** and press Install (Windows may warn that it does not know the publisher: Harfi is not signed with a paid certificate; More info → Run anyway). It runs `install.ps1` from the same folder and shows the model download's progress; right-click `install.ps1` → **Run with PowerShell** does the same in a normal PowerShell window (not a terminal inside a Store app such as Claude: Windows would put the files in that app's private storage, and the installer stops). It copies the files to `%LOCALAPPDATA%\Harfi`, registers the keyboard (if Windows needs administrator rights for that, it asks once), adds it to your keyboards under Arabic (Lebanon), adding that language if it is not there, and then downloads the model once (808 MB, from the `model-v3` release, each part checked). Harfi works on its rules while the model downloads.
 3. Switch to Harfi with Win+Space. If the installer could not add it, add it once by hand: Settings → Time & language → Language & region → Arabic (Lebanon) → Language options → Add a keyboard → **Harfi**.
 4. Type `shu 3am ta3mel` in Notepad and press Enter: شو عم تعمل.
@@ -46,7 +46,7 @@ cd ../..
 swift build -c release --package-path Packages/ArabiziEngine --product harfi-engine -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
 ```
 
-The workflow `.github/workflows/windows.yml` does the same, runs the core's tests on Windows, and puts the package together (without the model, which `install.ps1` downloads): for every pull request as the `harfi-windows` artifact (ci.yml), and for a version tag as `Harfi-Windows-x64.zip` on its release, next to the Mac's zip (release.yml).
+The workflow `.github/workflows/windows.yml` does the same, runs the core's tests on Windows, and puts the package together (without the model, which `install.ps1` downloads): for every pull request as the `harfi-windows` and `harfi-windows-setup` artifacts (ci.yml), and for a version tag as `Harfi-Setup.exe` (Inno Setup, `setup.iss`) and `Harfi-Windows-x64.zip` on its release, next to the Mac's zip (release.yml).
 
 ## Known gaps
 

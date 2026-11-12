@@ -1,8 +1,9 @@
 # The Windows keyboard: the core's tests on Windows, then the package (HarfiTIP.dll, HarfiCoreC.dll, harfi-engine.exe,
 # the Harfi window harfi-settings.exe, the installer "Install Harfi.exe", llama.cpp, the Swift runtime, rules,
-# settings and install.ps1; the model is downloaded by install.ps1). Called by
-# ci.yml on every pull request and on main (the package as the harfi-windows artifact), and by release.yml for a
-# version tag (the package as Harfi-Windows-x64.zip on that release, with its line in SHA256SUMS).
+# settings and install.ps1; the model is downloaded by install.ps1), and the package as one file, Harfi-Setup.exe
+# (Apps/HarfiWindows/setup.iss). Called by ci.yml on every pull request and on main (the harfi-windows and
+# harfi-windows-setup artifacts), and by release.yml for a version tag (Harfi-Setup.exe and Harfi-Windows-x64.zip on
+# that release, with their lines in SHA256SUMS).
 name: windows
 
 on:
@@ -91,6 +92,21 @@ jobs:
         with:
           name: harfi-windows
           path: dist/harfi-windows
+      - name: the one-file installer (Harfi-Setup.exe, Inno Setup)
+        shell: pwsh
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $version = if ($env:RELEASE) { $env:RELEASE.TrimStart('v') } else { '0.0.0' }
+          & $iscc /Q "/DVersion=$version" Apps/HarfiWindows/setup.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-Item dist/Harfi-Setup.exe | Format-Table Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: harfi-windows-setup
+          path: dist/Harfi-Setup.exe
       - name: add the package to the release
         if: inputs.release != ''
         shell: pwsh
@@ -99,8 +115,10 @@ jobs:
           RELEASE: ${{ inputs.release }}
         run: |
           Compress-Archive -Path dist/harfi-windows/* -DestinationPath dist/Harfi-Windows-x64.zip
-          # The Mac's release job made SHA256SUMS; the Windows zip gets its line in it.
+          # The Mac's release job made SHA256SUMS; the Windows files get their lines in it.
           gh release download $env:RELEASE --pattern SHA256SUMS --dir dist/sums
-          $hash = (Get-FileHash dist/Harfi-Windows-x64.zip -Algorithm SHA256).Hash.ToLower()
-          [IO.File]::AppendAllText((Resolve-Path dist/sums/SHA256SUMS), "$hash  Harfi-Windows-x64.zip`n")  # LF, as on the Mac
-          gh release upload $env:RELEASE dist/Harfi-Windows-x64.zip dist/sums/SHA256SUMS --clobber
+          foreach ($file in "Harfi-Windows-x64.zip", "Harfi-Setup.exe") {
+            $hash = (Get-FileHash "dist/$file" -Algorithm SHA256).Hash.ToLower()
+            [IO.File]::AppendAllText((Resolve-Path dist/sums/SHA256SUMS), "$hash  $file`n")  # LF, as on the Mac
+          }
+          gh release upload $env:RELEASE dist/Harfi-Setup.exe dist/Harfi-Windows-x64.zip dist/sums/SHA256SUMS --clobber

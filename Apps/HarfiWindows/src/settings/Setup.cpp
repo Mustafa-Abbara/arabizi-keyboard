@@ -4,6 +4,7 @@
 // install.ps1 stays the one place that knows how to install; this only puts a window on it.
 //
 //   "Install Harfi.exe"
+//   "Install Harfi.exe" --install   starts installing at once (Harfi-Setup.exe runs it so: one click, not two)
 //   "Install Harfi.exe" --render FILE.png [--state intro|installing|done|failed]   a picture of the window, and exit
 #include <windows.h>
 #include <windowsx.h>
@@ -336,8 +337,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     int count = 0;
     wchar_t **arguments = CommandLineToArgvW(GetCommandLineW(), &count);
     std::wstring render;
+    bool start = false;
     for (int i = 1; arguments && i < count; ++i) {
         std::wstring argument = arguments[i];
+        if (argument == L"--install") start = true;
         if (argument == L"--render" && i + 1 < count) render = arguments[++i];
         if (argument == L"--state" && i + 1 < count) {
             std::wstring name = arguments[++i];
@@ -385,6 +388,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
                                 (GetSystemMetrics(SM_CYSCREEN) - h) / 2, w, h, nullptr, nullptr, instance, nullptr);
     if (!hwnd) return 1;
     ShowWindow(hwnd, show);
+    if (start) Do(hwnd, Action::Install);
     MSG message;
     while (GetMessageW(&message, nullptr, 0, 0) > 0) {
         TranslateMessage(&message);

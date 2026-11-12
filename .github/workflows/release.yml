@@ -1,8 +1,8 @@
 # Publishes a Harfi release when a version tag (v0.1.0, ...) is pushed: the app without the model and its checksum
 # (scripts/package_release.sh). The model is published once, in its own release
 # (scripts/upload_model.sh), so app releases stay small. Ad-hoc signed, no Developer ID (docs/INSTALL.md).
-# Then the Windows keyboard (windows.yml) adds Harfi-Windows-x64.zip and its checksum to the same release; the
-# website's download link points at it (releases/latest/download/Harfi-Windows-x64.zip).
+# Then the Windows keyboard (windows.yml) adds Harfi-Setup.exe, Harfi-Windows-x64.zip and their checksums to the same
+# release; the website's download link points at the latest release's files (releases/latest/download/...).
 name: release
 
 on:
