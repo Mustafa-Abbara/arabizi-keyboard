@@ -4,7 +4,8 @@
 # Copies the files to %LOCALAPPDATA%\Harfi, registers HarfiTIP.dll, adds it to the keyboards (under Arabic (Lebanon)), and asks for administrator rights only if
 # Windows needs them to register the keyboard profile. Adds "Harfi" to the Start menu (the Harfi window: settings,
 # your words, help) and to Windows' list of installed apps, where it can be uninstalled. The conversion model (808 MB) comes with this folder when it
-# holds models\; otherwise it is downloaded once from the model release, in parts, each checked, as on the Mac.
+# holds models\; otherwise it is downloaded once from the model release, in parts, each checked, as on the Mac. The
+# download comes last: the keyboard works on its rules meanwhile.
 param([switch]$Uninstall)
 $ErrorActionPreference = "Stop"
 $target = Join-Path $env:LOCALAPPDATA "Harfi"
@@ -151,14 +152,6 @@ if ($source -ne (Resolve-Path $target).Path.TrimEnd("\")) {
 # this user's own now.
 Get-ChildItem $target -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -notlike (Join-Path $target "words\*") } | Unblock-File -ErrorAction SilentlyContinue
-$model = Get-Model $target
-if ($model) {
-    $modelFile = Join-Path $target "models\$($model.file)"
-    if (-not ((Test-Path $modelFile) -and (Get-Item $modelFile).Length -eq $model.size)) {
-        New-Item -ItemType Directory -Force (Split-Path $modelFile) | Out-Null
-        Get-ModelFile $model $modelFile
-    }
-}
 # Run from inside a packaged app (a terminal in the Claude or another Store app), Windows quietly puts new AppData
 # folders in that app's private storage, where no other app can load the keyboard from.
 $private = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Packages\*\LocalCache\Local\Harfi\HarfiTIP.dll") -ErrorAction SilentlyContinue |
@@ -211,3 +204,16 @@ Then switch with Win+Space, open Notepad, type: shu 3am ta3mel   and press Enter
 "@
 }
 Write-Host '"Harfi" in the Start menu has the settings, your words and help.'
+# The model last: Harfi already converts on its rules while it downloads, and the engine uses the model from its
+# next start.
+$model = Get-Model $target
+if ($model) {
+    $modelFile = Join-Path $target "models\$($model.file)"
+    if (-not ((Test-Path $modelFile) -and (Get-Item $modelFile).Length -eq $model.size)) {
+        Write-Host "You can type with Harfi now: it uses its rules (less accurate) until the model arrives."
+        New-Item -ItemType Directory -Force (Split-Path $modelFile) | Out-Null
+        Get-ModelFile $model $modelFile
+        Stop-Engine
+        Write-Host "Model downloaded: Harfi uses it from the next sentence."
+    }
+}

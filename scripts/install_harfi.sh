@@ -54,10 +54,10 @@ if grep -q "Already enabled" "$WORK/setup.log"; then
   echo "Harfi is updated. Switch to another keyboard and back with Ctrl+Space to start the new version."
   exit 0
 fi
-cat <<'EOF'
-
-Almost there: turn Harfi on once.
-  System Settings → Keyboard → Input Sources → Edit… → + → Arabic → Harfi → Add
-Then switch to it with Ctrl+Space (or the input menu in the menu bar) and type: kifak?
-If Harfi is not in the list, log out and back in once.
-EOF
+echo
+if grep -q "Harfi is on" "$WORK/setup.log"; then
+  echo "Harfi is ready: switch to it with Ctrl+Space (or the input menu in the menu bar) and type: kifak?"
+else
+  echo "Almost there: in the Keyboard settings that opened, Edit… → + → Arabic → Harfi → Add."
+  echo "Then switch to it with Ctrl+Space and type: kifak?  (If Harfi is not in the list, log out and back in once.)"
+fi

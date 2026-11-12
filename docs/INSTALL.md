@@ -12,7 +12,7 @@ Open **Terminal** (press ⌘Space, type Terminal, press Enter), paste this line 
 curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash
 ```
 
-It installs Harfi and downloads its model (808 MB). If your connection drops, it carries on where it stopped; if you close Terminal, run the same line again and it resumes.
+It installs Harfi and turns it on, then downloads its model (808 MB). You can type while it downloads: until the model arrives, Harfi uses its rules, which are less accurate, and its window shows how far the download has got. If your connection drops, it carries on where it stopped; if you close Terminal, run the same line again and it resumes.
 
 ## 2. Turn it on (once)
 

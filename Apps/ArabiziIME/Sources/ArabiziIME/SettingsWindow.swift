@@ -1,5 +1,6 @@
 import AppKit
 import ArabiziCore
+import ArabiziEngineClient
 import SwiftUI
 
 /// The keyboard's settings, shared by the menu, the window and the controller (the keyboard's own defaults).
@@ -116,6 +117,9 @@ enum Settings {
     private let store = CorrectionStore.standard()
 
     @Published private(set) var practice: Set<Settings.Practice> = []
+    /// The model's download, while the installer is still getting it (Harfi converts on its rules until then).
+    @Published private(set) var download: ModelDownload = .ready
+    private var downloadTimer: Timer?
     private var practiceObserver: NSObjectProtocol?
 
     init() {
@@ -134,8 +138,33 @@ enum Settings {
         tab = .privacy
     }
 
+    func reloadDownload() {
+        let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "Harfi")
+        download = ModelDownload.state(app: Bundle.main.bundleURL, cache: cache)
+        if download == .ready {
+            downloadTimer?.invalidate()
+            downloadTimer = nil
+        } else if downloadTimer == nil {
+            downloadTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reloadDownload() }
+            }
+        }
+    }
+
+    var downloadNote: String? {
+        switch download {
+        case .ready: return nil
+        case .downloading(let fraction):
+            return "Downloading the model: \(Int(fraction * 100))%. Until it's here, Harfi uses its rules (less accurate)."
+        case .stopped:
+            return "The model isn't downloaded yet, so Harfi uses its rules (less accurate). Run the install line "
+                + "again to finish: it carries on where it stopped."
+        }
+    }
+
     func reload() {
         reloadPractice()
+        reloadDownload()
         livePreview = Settings.livePreview
         personality = Settings.personality
         largerText = Settings.largerText
@@ -201,6 +230,10 @@ struct SettingsView: View {
                     Text(greeting).font(Font(Theme.arabic(16))).foregroundStyle(Color.muted)
                 }
                 Text("Harfi").font(.system(size: 22, weight: .medium)).foregroundStyle(Color.ink)
+                if let note = model.downloadNote {
+                    Text(note).font(.system(size: 12)).foregroundStyle(Color.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             HStack(spacing: 4) {
                 ForEach(SettingsModel.Tab.allCases) { tab in
