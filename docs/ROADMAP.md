@@ -90,10 +90,10 @@ About 8–12 hours in W1, spread over the week:
 **Deliverables:** protected `main`, board with P0–P7 issues, ADR 0001, ADR 0010, ADR 0011, `doctor.py` clean.
 
 **Gate (pass before P1–P4 merge anything):**
-- [ ] A test PR was opened, reviewed (self-review checklist + `/code-review`, see CONTRIBUTING) and merged. A direct push to `main` is rejected (try it).
-- [ ] Push protection blocks a fake secret (commit a dummy AWS-style key on a branch; GitHub should block it, then delete the branch).
-- [ ] `swift --version`, `xcodebuild -version` and `docker run hello-world` work.
-- [ ] A GPU notebook starts on Kaggle or Colab.
+- [ ] A test PR was opened, reviewed (self-review checklist + `/code-review`, see CONTRIBUTING) and merged. A direct push to `main` is rejected (try it). *Reviewed and merged: [#40](https://github.com/Mustafa-Abbara/arabizi-keyboard/pull/40), [#41](https://github.com/Mustafa-Abbara/arabizi-keyboard/pull/41), [#42](https://github.com/Mustafa-Abbara/arabizi-keyboard/pull/42) (review comment with replies). `protect-main` requires a pull request and allows no force-push. Not done: trying a direct push.*
+- [ ] Push protection blocks a fake secret (commit a dummy AWS-style key on a branch; GitHub should block it, then delete the branch). *Secret scanning and push protection are on (repository settings, 12 Nov 2026), and gitleaks runs in the required `hygiene` check. Not done: the fake-secret push.*
+- [ ] `swift --version`, `xcodebuild -version` and `docker run hello-world` work. *Swift builds in CI and on the Mac; nothing in the project uses Docker. To check on the Mac (`docs/process/MAC_CHECKS.md`).*
+- [x] A GPU notebook starts on Kaggle or Colab. *Every fine-tune ran on a Kaggle T4: `train/runs/` (v1 16 Oct, v2 17 Oct, v3 29 Oct 2026).*
 
 **Rubric mapping:** Bonus (project management, PRs, reviews, branch protection, secret scanning); Software engineering 10%.
 
@@ -121,6 +121,8 @@ About 8–12 hours in W1, spread over the week:
 - [ ] At least 5 of 7 apps pass cases 1–5. Each failure has a written per-app workaround.
 - [ ] Password fields in Safari and Chrome: no marked text, keys pass through.
 - [ ] No crash in 10 minutes of continuous typing.
+
+*P1 gate, 12 Nov 2026: by hand on a Mac (`docs/process/MAC_CHECKS.md`). The matrix has WhatsApp and Notes for cases 1–3 so far; the secure-input rule is unit-tested (`secureInputNeverComposes`).*
 
 **Rubric mapping:** Reliability & security 15% (secure fields, Enter safety); real-world constraint identified (app compatibility).
 
@@ -171,10 +173,10 @@ About 8–12 hours in W1, spread over the week:
 **Deliverables:** `docs/SPELLING.md`, `docs/DATA.md`, `data/pairs/` + `manifest.json` + tag `testset-v1.0`, `data/tools/variants.py`, `data/rules/arabizi_variants.json`.
 
 **Gate:**
-- [ ] Test + dev ≥ 300 human-written sentences, each with a delayed self-check; the freeze check fails CI when one test line is edited on a branch.
-- [ ] Training set ≥ 2,000 pairs with `method` and `checked_by` on every row; the schema test passes.
-- [ ] No training row matches a dev/test row (duplicate check in CI).
-- [ ] Every source in `docs/DATA.md` has a licence line, and every `ai_checked` batch has its provider-terms note.
+- [x] Test + dev ≥ 300 human-written sentences, each with a delayed self-check; the freeze check fails CI when one test line is edited on a branch. *347 (test 243 + dev 104), all `method: hand`, `checked_by: moustafa-delayed`; `test_freeze.py` and `test_repository_pairs_are_valid` fail on an edited line, in the required `python` check, and `testset guard` refuses a manifest change without its label.*
+- [ ] Training set ≥ 2,000 pairs with `method` and `checked_by` on every row; the schema test passes. *18,039 rows, `method` on every row, the schema test passes. Not met: 1,687 rows of `train-hand.jsonl` (`own-chat-published`, Moustafa's own messages, 14 Oct 2026) have `checked_by: null`.*
+- [x] No training row matches a dev/test row (duplicate check in CI). *`pairs.validate` reports a training row that repeats a held-out one ("train row leaks held-out row"); `test_repository_pairs_are_valid` runs it on every PR in the required `python` check.*
+- [ ] Every source in `docs/DATA.md` has a licence line, and every `ai_checked` batch has its provider-terms note. *The four `ai_checked` batches have the Anthropic terms note. Not met: no source has a licence line (the repository is MIT; the data's licence is not stated), and the "full datasheet" DATA.md points to (#126) does not exist.*
 
 **Rubric mapping:** Agent performance/evaluation 20% (data, held-out test, provenance); guardrail "public/authorised data, respect ToS"; Documentation 10%.
 
@@ -210,10 +212,10 @@ About 8–12 hours in W1, spread over the week:
 **Deliverables:** `eval/` with tests, `results/` for B0 and B1 on dev, `docs/MODELS.md`, ADR 0003 (runtime), ADR 0004 (base model choice).
 
 **Gate:**
-- [ ] `pytest eval/tests` passes in CI.
-- [ ] Baseline table on **dev**: B0 and each B1 model, word accuracy with 95% CI, CER, Keep-Latin F1, number preservation, latency p50/p95 and RSS on the 8 GB Air.
+- [x] `pytest eval/tests` passes in CI. *The required `python` check runs `pytest -q` on every PR.*
+- [x] Baseline table on **dev**: B0 and each B1 model, word accuracy with 95% CI, CER, Keep-Latin F1, number preservation, latency p50/p95 and RSS on the 8 GB Air. *[EVAL.md](EVAL.md), "B1: base models without fine-tuning" (14 Oct 2026).*
 - [x] Re-running one baseline from a fresh clone gives the same accuracy (temperature 0) and latency within 20%. (B0 on dev, 11 Nov 2026: every accuracy metric identical, p50 latency +10%; [EVAL.md](EVAL.md#reproducing-a-baseline-from-a-fresh-clone-11-nov-2026).)
-- [ ] At least one model fits the memory budget. If none fits the latency budget, write it down and plan for the smaller model in P4.
+- [x] At least one model fits the memory budget. If none fits the latency budget, write it down and plan for the smaller model in P4. *All B1 models fit 1.5 GB; the 5-shot runs fit the latency budget ([EVAL.md](EVAL.md), B1 findings).*
 
 **Rubric mapping:** Agent performance/evaluation 20% (baselines, held-out evaluation); real-world constraint (latency/RAM) measured.
 
@@ -296,10 +298,10 @@ arabizi-keyboard/
 **Deliverables:** packages + XPC service + CLI compiling, `docs/API_CONTRACTS.md`, schemas, CI green and required, CodeQL first scan, Dependabot.
 
 **Gate:**
-- [ ] `arabizi-cli` reproduces the P4 test accuracy within 1 point (Swift engine = Python numbers). *On dev: 0.770 vs 0.768 (ADR 0019); the test check needs one engine run on test.*
+- [x] `arabizi-cli` reproduces the P4 test accuracy within 1 point (Swift engine = Python numbers). *On dev: 0.770 vs 0.768 (ADR 0019). On test, v3 (29 Oct 2026): the engine 0.836 vs the model through `llama-server` 0.836 (frozen test), 0.826 vs 0.827 (others test) ([EVAL.md](EVAL.md), v3).*
 - [x] Unit tests: placeholders survive round trips (URLs, emoji, `100$`, `2pm`); `3am` is not protected; a forced timeout and a forced bad output both return the rule fallback. *`ProtectedSpansTests`, `EngineTests` (ADR 0016, 0019).*
 - [x] The XPC service has no network entitlement (`codesign -d --entitlements -` output saved in the PR), and a test request to the network from inside it fails. *Sandbox only; kernel log `deny(1) network-outbound` (ADR 0020).*
-- [ ] CI is required on `main`; a PR with a failing test cannot merge (prove it once).
+- [x] CI is required on `main`; a PR with a failing test cannot merge (prove it once). *`protect-main` requires `python`, `swift`, `hygiene` and `testset guard`. [#76](https://github.com/Mustafa-Abbara/arabizi-keyboard/pull/76) failed `swift` on purpose and could not be merged; closed unmerged, 11 Nov 2026.*
 
 **Rubric mapping:** Software engineering 10% (modular, contracts, config); Reliability & security 15% (sandbox, fallback); Bonus (CI/CD, CodeQL, Dependabot).
 
@@ -331,6 +333,8 @@ arabizi-keyboard/
 - [ ] Password fields: still pass-through.
 - [ ] No text from the user appears in any log (grep the unified log during a 5-minute session).
 
+*P6 gate, 12 Nov 2026: by hand on a Mac (`docs/process/MAC_CHECKS.md`). Latency so far is from `arabizi-cli` on the Air, not the keyboard: p95 945 ms (frozen test) and 753 ms (frozen dev, with the kept instruction) ([EVAL.md](EVAL.md)).*
+
 **Rubric mapping:** Reliability & security 15%; user-facing quality; real-world deployment constraint.
 
 ---
@@ -349,7 +353,7 @@ arabizi-keyboard/
 **Gate (final):**
 - [ ] Every P1–P6 gate is ticked with linked evidence.
 - [ ] The reproducibility drill passes using only the docs.
-- [ ] Every failure-matrix row has a passing test.
+- [ ] Every failure-matrix row has a passing test. *12 Nov 2026: 36 of 53 rows name a test, and every named test exists; 17 rows are checked by hand (most on Windows: the engine's pipe, app containers, installs over open apps).*
 
 **Rubric mapping:** all categories; Documentation 10%.
 
@@ -391,7 +395,7 @@ Starting Phase 2 needs a new ADR and a revised roadmap section.
 ## 8. Final submission checklist
 
 - [ ] Repo: README with install steps, licence, `docs/` complete, CI green, tagged `v1.0`.
-- [ ] Model: GGUF hash in `docs/MODELS.md`, `scripts/fetch_models.sh` works, licences listed.
+- [ ] Model: GGUF hash in `docs/MODELS.md`, `scripts/fetch_models.sh` works, licences listed. *The shipped v3 file's SHA-256 is in MODELS.md (12 Nov 2026); the installers download and check it from the `model-v3` release. `scripts/fetch_models.py` fetches the base models only.*
 - [ ] Data: `docs/DATA.md` datasheet, frozen test set + manifest, provenance on every row.
-- [ ] Evaluation: `docs/EVAL.md` with CIs, ablations, latency/RSS on the 8 GB Air.
+- [ ] Evaluation: `docs/EVAL.md` with CIs, ablations, latency/RSS on the 8 GB Air. *CIs and latency on the Air: yes. Not done: the data ablations, and v3's peak memory (EVAL.md, "Not done").*
 - [ ] Demo: live demo in WhatsApp/Slack + backup video.
