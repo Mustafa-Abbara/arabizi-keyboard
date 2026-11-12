@@ -69,6 +69,7 @@ public:
     std::vector<std::wstring> lines;  // what the script said last, for when it fails
     unsigned long long modelBytes = 0;  // the size of the model being downloaded, 0 when none is
     float progress = 0;                 // of the download, 0 to 1
+    bool on = false;                    // install.ps1 added Harfi to the keyboards itself
     float scale = 1;
 
     void Draw(Gdiplus::Graphics &graphics, SIZE size) {
@@ -134,6 +135,13 @@ public:
                 break;
             }
             case State::Done:
+                if (on) {
+                    heading(L"Harfi is on");
+                    paragraph(L"Switch to it with Win+Space in any app, type Arabizi and press Enter.", colours.text);
+                    paragraph(L"It is in your keyboards under Arabic (Lebanon).", colours.muted);
+                    button(L"Show me how to use it", Action::Open, false);
+                    break;
+                }
                 heading(L"Harfi is installed");
                 paragraph(L"Turn it on once, in Windows' language settings:", colours.text);
                 paragraph(L"Arabic (Lebanon)  \x2192  Language options  \x2192  Add a keyboard  \x2192  Harfi\n"
@@ -169,6 +177,7 @@ public:
         wchar_t start = line[first];
         if ((start >= L'0' && start <= L'9') || start == L'%' || line.find(L"Dload") != std::wstring::npos) return;
         status = line.substr(first);
+        if (status.rfind(L"Harfi is on", 0) == 0) on = true;
         lines.push_back(status);
         if (lines.size() > 4) lines.erase(lines.begin());
         size_t mb = line.find(L" MB, once");  // "Downloading the conversion model (770 MB, once)..."
@@ -241,6 +250,7 @@ void Do(HWND hwnd, Action action) {
             setup.lines.clear();
             setup.modelBytes = 0;
             setup.progress = 0;
+            setup.on = false;
             SetTimer(hwnd, ProgressTimer, 500, nullptr);
             CloseHandle(CreateThread(nullptr, 0, Run, hwnd, 0, nullptr));
             break;
@@ -336,6 +346,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
             setup.Said(L"Downloading the conversion model (770 MB, once)...");
             setup.progress = 0.42f;
         }
+        if (setup.state == State::Done) setup.Said(L"Harfi is on: switch to it with Win+Space.");
         if (setup.state == State::Failed) setup.Said(L"Downloading Llama-3.2-1B-Harfi-v3-Q4_K_M.gguf.part03 failed. Run install.ps1 again to resume.");
         SIZE size = {static_cast<LONG>(Width * setup.scale), static_cast<LONG>(Height * setup.scale)};
         Gdiplus::Bitmap bitmap(size.cx, size.cy, PixelFormat32bppARGB);
