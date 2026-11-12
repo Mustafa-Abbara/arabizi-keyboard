@@ -55,7 +55,7 @@
     <p class="lead">يحوّل حرفي العربيزي اللبناني إلى أحرف عربية أثناء الكتابة، في كل التطبيقات على جهاز Mac أو حاسوب Windows. وبخصوصية تامة: لا يغادر شيء مما تكتبه جهازك.</p>
     <div class="actions">
       <a class="button" href="#install" data-platform="mac">التثبيت على Mac</a>
-      <a class="button secondary" href="#install" data-platform="windows">التثبيت على Windows</a>
+      <a class="button secondary" href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Setup.exe" data-platform="windows">التنزيل لـ Windows</a>
     </div>
     <p class="note">مجاني · Mac: معالج Apple مع macOS 14 أو أحدث · Windows 10 أو 11 (64 بت)، نسخة تجريبية</p>
     <!-- The pages workflow writes the latest release's version in place of the comment below. -->
@@ -81,24 +81,25 @@
       <h3>Mac</h3>
       <p>افتح <strong>Terminal</strong> (اضغط <kbd>⌘</kbd> <kbd>Space</kbd> واكتب Terminal)، ثم الصق هذا السطر واضغط Enter:</p>
       <div class="cmd"><code>curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash</code><button type="button" data-copied="تم النسخ" data-failed="حدّد وانسخ">نسخ</button></div>
-      <ol>
-        <li>يثبّت حرفي وينزّل نموذجه (808 ميغابايت). وإذا انقطع الاتصال، يكمل من حيث توقّف.</li>
-        <li>فعّله مرة واحدة: <span class="path">System Settings → Keyboard → Input Sources → Edit… → + → Arabic → Harfi</span></li>
-        <li>انتقل إليه بالضغط على <kbd>Ctrl</kbd> <kbd>Space</kbd> وابدأ الكتابة.</li>
-      </ol>
+      <p>ثم انتقل إلى حرفي بالضغط على <kbd>Ctrl</kbd> <kbd>Space</kbd> وابدأ الكتابة. يعمل خلال ثوانٍ، ويمكنك الكتابة بينما ينزّل نموذجه (808 ميغابايت) في الخلفية.</p>
+      <p class="note">إذا طلب macOS نقرة، يفتح المثبّت إعدادات لوحة المفاتيح: <span class="path">Edit… → + → Arabic → Harfi → Add</span></p>
       <p class="note">لماذا Terminal؟ انظر <a href="#faq-terminal">الأسئلة الشائعة</a> أدناه. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/INSTALL.md">الدليل الكامل (بالإنجليزية)</a></p>
     </div>
     <div class="install platform" data-platform="windows" role="tabpanel">
       <h3>Windows <span class="badge">تجريبي</span></h3>
       <p>على حاسوب يعمل بنظام Windows 10 أو 11 (64 بت):</p>
       <ol>
-        <li><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Windows-x64.zip">نزّل حرفي لنظام Windows</a>، ثم انقر بزر الماوس الأيمن على الملف المضغوط واختر <strong lang="en">Extract All</strong>.</li>
-        <li>في المجلد المستخرج، انقر نقراً مزدوجاً على <strong lang="en">Install Harfi</strong> ثم اضغط <strong lang="en">Install</strong>. يثبّت حرفي لحسابك فقط وينزّل نموذجه (808 ميغابايت، مع التحقق من كل جزء)، وإذا طلب Windows صلاحيات المسؤول فوافق مرة واحدة.</li>
-        <li>فعّله مرة واحدة: <span class="path">Settings → Time &amp; language → Language &amp; region → Arabic (Lebanon) → Language options → Add a keyboard → Harfi</span>. وأضف لغة <span lang="en">Arabic (Lebanon)</span> أولاً إن لم تكن موجودة.</li>
-        <li>انتقل إليه بالضغط على <kbd>Win</kbd> <kbd>Space</kbd> وابدأ الكتابة.</li>
+        <li><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Setup.exe">نزّل <span lang="en">Harfi-Setup.exe</span></a> وانقر عليه نقراً مزدوجاً. إذا قال Windows إنه لا يعرف الناشر، اختر <span class="path">More info → Run anyway</span>، وإذا طلب صلاحيات المسؤول فوافق مرة واحدة.</li>
+        <li>انتقل إلى حرفي بالضغط على <kbd>Win</kbd> <kbd>Space</kbd> وابدأ الكتابة. يعمل خلال دقيقة، ويمكنك الكتابة بينما ينزّل نموذجه (808 ميغابايت).</li>
       </ol>
       <p class="note">تجد في قائمة ابدأ <strong lang="en">Harfi</strong>: الإعدادات والكلمات التي علّمتها له والمفاتيح.</p>
-      <p class="note">يعمل النموذج على المعالج، لذلك يستغرق التحويل الأول بعد التشغيل بضع ثوانٍ. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md">الدليل الكامل (بالإنجليزية)</a></p>
+      <p class="note">تفضّل ملفاً مضغوطاً؟ <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Windows-x64.zip"><span lang="en">Harfi-Windows-x64.zip</span></a>: استخرجه وانقر نقراً مزدوجاً على <strong lang="en">Install Harfi</strong>. يعمل النموذج على المعالج، لذلك يستغرق التحويل الأول بعد التشغيل بضع ثوانٍ. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md">الدليل الكامل (بالإنجليزية)</a></p>
+    </div>
+    <div class="check">
+      <h3 id="check-title">تأكّد أنه يعمل</h3>
+      <p>انتقل إلى حرفي، واكتب <code>kifak</code> في المربع واضغط Enter.</p>
+      <input type="text" id="try" lang="ar" dir="auto" autocomplete="off" spellcheck="false" aria-labelledby="check-title" aria-describedby="check-result">
+      <p class="note" id="check-result" role="status" data-ok="حرفي يعمل. اكتب ما شئت." data-latin="النص ما زال بالأحرف اللاتينية: اختر حرفي بالضغط على Ctrl Space على Mac أو Win Space على Windows، ثم حاول مجدداً.">لا يغادر أي شيء تكتبه هنا هذه الصفحة.</p>
     </div>
   </section>
 
@@ -142,7 +143,7 @@
       </details>
       <details>
         <summary>يحذّرني Windows أو يطلب صلاحيات المسؤول. هل هذا آمن؟</summary>
-        <p>حرفي غير موقَّع بشهادة مدفوعة، لذا قد يقول Windows إنه لا يعرف الناشر عند فتح <strong lang="en">Install Harfi</strong>: اختر <span lang="en">More info → Run anyway</span>. إضافة لوحة مفاتيح إلى Windows تحتاج صلاحيات المسؤول مرة واحدة، وكل ما عدا ذلك يُثبَّت لحسابك فقط. والشيفرة مفتوحة على GitHub ليتحقّق منها أي شخص.</p>
+        <p>حرفي غير موقَّع بشهادة مدفوعة، لذا قد يقول Windows إنه لا يعرف الناشر عند فتح <strong lang="en">Harfi-Setup.exe</strong>: اختر <span lang="en">More info → Run anyway</span>. إضافة لوحة مفاتيح إلى Windows تحتاج صلاحيات المسؤول مرة واحدة، وكل ما عدا ذلك يُثبَّت لحسابك فقط. والشيفرة مفتوحة على GitHub ليتحقّق منها أي شخص.</p>
       </details>
       <details>
         <summary>في أي تطبيقات يعمل؟</summary>
@@ -158,7 +159,7 @@
       </details>
       <details>
         <summary>كيف أحدّثه؟</summary>
-        <p>Mac: شغّل سطر التثبيت مرة أخرى. Windows: نزّل أحدث ملف مضغوط وشغّل <strong lang="en">Install Harfi</strong> مرة أخرى. ولا يُنزَّل النموذج من جديد إلا إذا تغيّر.</p>
+        <p>Mac: شغّل سطر التثبيت مرة أخرى. Windows: نزّل <span lang="en">Harfi-Setup.exe</span> مرة أخرى وشغّله. ولا يُنزَّل النموذج من جديد إلا إذا تغيّر.</p>
       </details>
       <details>
         <summary>كيف أزيله؟</summary>
