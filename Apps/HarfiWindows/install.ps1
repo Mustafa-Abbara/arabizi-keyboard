@@ -1,7 +1,7 @@
 # Installs (or removes) the Windows keyboard from this folder for the current user (ADR 0032).
 #   Double-click "Install Harfi.exe" (a window on this script), or right-click this file > Run with PowerShell, or:
 #   powershell -ExecutionPolicy Bypass -File install.ps1 [-Uninstall]
-# Copies the files to %LOCALAPPDATA%\Harfi, registers HarfiTIP.dll, and asks for administrator rights only if
+# Copies the files to %LOCALAPPDATA%\Harfi, registers HarfiTIP.dll, adds it to the keyboards (under Arabic (Lebanon)), and asks for administrator rights only if
 # Windows needs them to register the keyboard profile. Adds "Harfi" to the Start menu (the Harfi window: settings,
 # your words, help) and to Windows' list of installed apps, where it can be uninstalled. The conversion model (808 MB) comes with this folder when it
 # holds models\; otherwise it is downloaded once from the model release, in parts, each checked, as on the Mac.
@@ -13,6 +13,9 @@ $modelRelease = "https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/dow
 $modelParts = "Llama-3.2-1B-Harfi-v3-Q4_K_M.gguf"  # the release's part names: .part01 ... and .parts.sha256
 $shortcut = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Harfi.lnk"
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Harfi"
+# The keyboard as Windows' language list names it: Arabic (Lebanon), the text service's class and its profile.
+$language = "ar-LB"
+$tip = "3001:{7164FD3D-2A9F-4AED-9CD1-2C059C40C6E0}{94104DFB-A9FC-4FCD-8962-236D0615351C}"
 
 # The engine keeps its files open; the keyboard starts it again when it is next needed.
 function Stop-Engine {
@@ -65,6 +68,40 @@ function Get-ModelFile($model, [string]$file) {
     Remove-Item -Recurse -Force $parts
 }
 
+# Adds Harfi to this user's keyboards, under Arabic (Lebanon), so Win+Space reaches it with no visit to Settings. The
+# other languages and keyboards stay. A language added here gets Harfi alone, not Windows' Arabic (101) as well.
+function Enable-Keyboard {
+    try {
+        $list = Get-WinUserLanguageList
+        $arabic = $list | Where-Object LanguageTag -eq $language | Select-Object -First 1
+        $added = -not $arabic
+        if ($added) {
+            $list.Add($language)
+            $arabic = $list | Where-Object LanguageTag -eq $language | Select-Object -First 1
+        }
+        if ($arabic.InputMethodTips -notcontains $tip) {
+            if ($added) { $arabic.InputMethodTips.Clear() }
+            $arabic.InputMethodTips.Add($tip)
+            Set-WinUserLanguageList $list -Force
+        }
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# Takes Harfi out of the keyboards, and Arabic (Lebanon) too when Harfi was its only keyboard.
+function Disable-Keyboard {
+    try {
+        $list = Get-WinUserLanguageList
+        $arabic = $list | Where-Object LanguageTag -eq $language | Select-Object -First 1
+        if (-not $arabic -or $arabic.InputMethodTips -notcontains $tip) { return }
+        [void]$arabic.InputMethodTips.Remove($tip)
+        if ($arabic.InputMethodTips.Count -eq 0) { [void]$list.Remove($arabic) }
+        Set-WinUserLanguageList $list -Force
+    } catch {}
+}
+
 function Register([string]$arguments) {
     $process = Start-Process regsvr32.exe -ArgumentList $arguments -Wait -PassThru
     if ($process.ExitCode -ne 0) {
@@ -76,12 +113,13 @@ function Register([string]$arguments) {
 
 if ($Uninstall) {
     Stop-Engine
+    Disable-Keyboard
     if (Test-Path $dll) { [void](Register "/s /u `"$dll`"") }
     Get-Process harfi-settings -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item -Force $shortcut -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $uninstallKey -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
-    Write-Host "Harfi removed. If it still shows as a keyboard, remove it in Settings > Language & region."
+    Write-Host "Harfi removed."
     exit 0
 }
 
@@ -162,10 +200,14 @@ Set-ItemProperty $uninstallKey -Name UninstallString -Value $remove
 Set-ItemProperty $uninstallKey -Name DisplayIcon -Value $window
 Set-ItemProperty $uninstallKey -Name NoModify -Value 1 -Type DWord
 Set-ItemProperty $uninstallKey -Name NoRepair -Value 1 -Type DWord
-Write-Host @"
-Harfi is installed in $target.
+Write-Host "Harfi is installed in $target."
+if (Enable-Keyboard) {
+    Write-Host "Harfi is on: switch to it with Win+Space, open Notepad, type: shu 3am ta3mel   and press Enter."
+} else {
+    Write-Host @"
 Turn it on once: Settings > Time & language > Language & region > Arabic (Lebanon) > Language options >
 Add a keyboard > Harfi. (Add the Arabic (Lebanon) language first if it is not listed.)
 Then switch with Win+Space, open Notepad, type: shu 3am ta3mel   and press Enter.
-"Harfi" in the Start menu has the settings, your words and help.
 "@
+}
+Write-Host '"Harfi" in the Start menu has the settings, your words and help.'

@@ -1,9 +1,10 @@
-// Registers an installed input method with macOS so it appears in System Settings → Keyboard → Input Sources,
-// then prints whether it is visible and enabled. It does not enable it: the user does that in System Settings.
+// Registers an installed input method with macOS and turns it on, so it can be chosen with Ctrl+Space without a visit
+// to System Settings. Some macOS versions accept a newly copied input method only after the next login; then it opens
+// Keyboard settings and says what to click there.
 // Built into the app (Contents/MacOS/harfi-register) so installing needs no developer tools.
 // Usage: harfi-register "$HOME/Library/Input Methods/ArabiziIME.app"
+import AppKit
 import Carbon
-import Foundation
 
 let bundleID = "lb.aub.arabizi.inputmethod.ArabiziIME"
 let url = URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL
@@ -11,23 +12,37 @@ let url = URL(fileURLWithPath: CommandLine.arguments[1]) as CFURL
 let status = TISRegisterInputSource(url)
 print(status == noErr ? "Registered with macOS." : "TISRegisterInputSource returned \(status).")
 
-let filter = [kTISPropertyBundleID as String: bundleID] as CFDictionary
-let sources = (TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource]) ?? []
-if sources.isEmpty {
-    print("Not visible yet. Log out and back in once, then check Input Sources again.")
+func sources() -> [TISInputSource] {
+    let filter = [kTISPropertyBundleID as String: bundleID] as CFDictionary
+    return (TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource]) ?? []
 }
-for source in sources {
-    func flag(_ key: CFString) -> Bool {
-        guard let raw = TISGetInputSourceProperty(source, key) else { return false }
-        return CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(raw).takeUnretainedValue())
+
+func flag(_ source: TISInputSource, _ key: CFString) -> Bool {
+    guard let raw = TISGetInputSourceProperty(source, key) else { return false }
+    return CFBooleanGetValue(Unmanaged<CFBoolean>.fromOpaque(raw).takeUnretainedValue())
+}
+
+/// The keyboard is on when the source the user picks (selectable) is enabled.
+func isOn() -> Bool {
+    sources().contains { flag($0, kTISPropertyInputSourceIsSelectCapable) && flag($0, kTISPropertyInputSourceIsEnabled) }
+}
+
+let wasOn = isOn()
+if !wasOn {
+    for source in sources() where !flag(source, kTISPropertyInputSourceIsEnabled) {
+        let result = TISEnableInputSource(source)
+        if result != noErr { print("TISEnableInputSource returned \(result).") }
     }
-    let id = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
-        .map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String } ?? "?"
-    let enabled = flag(kTISPropertyInputSourceIsEnabled)
-    print("Found \(id): enabled=\(enabled), selectable=\(flag(kTISPropertyInputSourceIsSelectCapable))")
-    if enabled {
-        print("Already enabled: switch to another input source and back (Ctrl+Space) to load the new version.")
-    } else {
-        print("Next: System Settings → Keyboard → Input Sources → Edit… → + → Arabic → \"Harfi\".")
+}
+
+if wasOn {
+    print("Already enabled: switch to another keyboard and back (Ctrl+Space) to load the new version.")
+} else if isOn() {
+    print("Harfi is on: switch to it with Ctrl+Space (or the input menu in the menu bar).")
+} else {
+    print("macOS needs one click to turn Harfi on. In the window that opens: Edit… → + → Arabic → Harfi → Add.")
+    print("(If Harfi is not in that list yet, log out and back in once.)")
+    if let settings = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+        NSWorkspace.shared.open(settings)
     }
 }

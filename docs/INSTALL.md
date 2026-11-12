@@ -16,6 +16,8 @@ It installs Harfi and downloads its model (808 MB). If your connection drops, it
 
 ## 2. Turn it on (once)
 
+The installer turns Harfi on itself. If macOS asks for a click instead, the installer opens Keyboard settings:
+
 1. Open **System Settings → Keyboard**, and under **Text Input** click **Edit…** next to Input Sources.
 2. Click **+**, choose **Arabic**, select **Harfi**, and click **Add**.
 3. If Harfi is not in the list, log out and back in once, then try again.
