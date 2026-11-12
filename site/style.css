@@ -57,6 +57,17 @@ html[lang="ar"] h1 { line-height: 1.35; }
           padding: 13px 26px; font-weight: 600; text-decoration: none; }
 .button:hover { filter: brightness(1.06); }
 .button.secondary { background: var(--surface); color: var(--accent); border: 1px solid var(--border); }
+/* The other system's button, once the page knows the visitor's: a plain link. */
+.button.other { background: none; color: var(--accent); padding: 13px 10px; font-weight: 500; text-decoration: underline;
+                text-underline-offset: 3px; }
+.check { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-top: 16px; }
+.check h3 { margin: 0 0 6px; font-size: 18px; }
+.check p { margin: 0 0 10px; }
+.check input { width: 100%; box-sizing: border-box; font: inherit; font-size: 20px; padding: 10px 14px; color: var(--text);
+               background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+.check input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.check .note { margin: 10px 0 0; }
+.check .ok { color: var(--accent); font-weight: 600; }
 .note { color: var(--muted); font-size: 14px; margin-top: 10px; }
 .version a { color: var(--muted); }
 .version a:hover { color: var(--accent); }

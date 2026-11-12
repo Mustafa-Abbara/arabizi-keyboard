@@ -52,14 +52,21 @@ tabs.hidden = false;
 function show(platform) {
   tabs.querySelectorAll("button").forEach(tab => tab.setAttribute("aria-selected", String(tab.dataset.platform === platform)));
   document.querySelectorAll(".platform").forEach(part => { part.hidden = part.dataset.platform !== platform; });
-  document.querySelectorAll(".actions .button").forEach(button =>
-    button.classList.toggle("secondary", button.dataset.platform !== platform));
+  // The visitor's own system gets the big button; the other one is a small link next to it.
+  document.querySelectorAll(".actions .button").forEach(button => {
+    button.classList.remove("secondary");
+    button.classList.toggle("other", button.dataset.platform !== platform);
+  });
 }
 const system = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
 show(/win/i.test(system) ? "windows" : "mac");
 tabs.addEventListener("click", event => { const tab = event.target.closest("button"); if (tab) show(tab.dataset.platform); });
+// Windows' button downloads Harfi-Setup.exe; the page then shows what to do with it.
 document.querySelectorAll(".actions .button").forEach(button =>
-  button.addEventListener("click", () => show(button.dataset.platform)));
+  button.addEventListener("click", () => {
+    show(button.dataset.platform);
+    if (!button.getAttribute("href").startsWith("#")) setTimeout(() => { location.hash = "install"; }, 300);
+  }));
 
 // Copy buttons: the command in the same box. Their words: data-copied, data-failed, and the button's own text.
 document.querySelectorAll(".cmd button").forEach(button => {
@@ -69,4 +76,25 @@ document.querySelectorAll(".cmd button").forEach(button => {
     catch { button.textContent = button.dataset.failed; }
     setTimeout(() => { button.textContent = label; }, 1800);
   });
+});
+
+// "Check it works": Arabic in the box means Harfi converted it; Latin after Enter means another keyboard is selected.
+// The page only looks at the box: nothing is sent anywhere. Its words come from the result's data attributes.
+const tryBox = document.getElementById("try"), result = document.getElementById("check-result");
+const hasArabic = text => /[\u0600-\u06FF]/.test(text);
+function checked() {
+  if (!hasArabic(tryBox.value)) return false;
+  result.textContent = result.dataset.ok;
+  result.classList.add("ok");
+  return true;
+}
+tryBox.addEventListener("input", checked);
+tryBox.addEventListener("keydown", event => {
+  if (event.key !== "Enter" || event.isComposing) return;
+  // Harfi turns the text into Arabic on this Enter; give it a moment before looking.
+  setTimeout(() => {
+    if (checked() || !/[a-z]/i.test(tryBox.value)) return;
+    result.textContent = result.dataset.latin;
+    result.classList.remove("ok");
+  }, 150);
 });

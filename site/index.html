@@ -55,8 +55,8 @@
     <h1>Type Arabizi. Get Arabic.</h1>
     <p class="lead">Harfi turns Lebanese Arabizi into Arabic as you type, in every app on your Mac or Windows PC. Privately: nothing you type ever leaves your computer.</p>
     <div class="actions">
-      <a class="button" href="#install" data-platform="mac">Install for Mac</a>
-      <a class="button secondary" href="#install" data-platform="windows">Install for Windows</a>
+      <a class="button" href="#install" data-platform="mac">Install on Mac</a>
+      <a class="button secondary" href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Setup.exe" data-platform="windows">Download for Windows</a>
     </div>
     <p class="note">Free · Mac: Apple silicon, macOS 14 or later · Windows 10 or 11 (64-bit), preview</p>
     <!-- The pages workflow writes the latest release's version in place of the comment below. -->
@@ -83,9 +83,8 @@
       <p>Open <strong>Terminal</strong> (press <kbd>⌘</kbd> <kbd>Space</kbd>, type Terminal), paste this line and press Enter:</p>
       <div class="cmd"><code>curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/main/scripts/install_harfi.sh | bash</code><button type="button" data-copied="Copied" data-failed="Select and copy">Copy</button></div>
       <ol>
-        <li>It installs Harfi and downloads its model (808 MB). If your connection drops, it carries on where it stopped.</li>
-        <li>Turn it on once: System Settings → Keyboard → Input Sources → Edit… → + → Arabic → Harfi.</li>
-        <li>Switch to it with <kbd>Ctrl</kbd> <kbd>Space</kbd> and type.</li>
+        <li>macOS asks you to allow Harfi, once: click <strong>Allow</strong>.</li>
+        <li>Switch to Harfi with <kbd>Ctrl</kbd> <kbd>Space</kbd> and type. You can type while its model (808 MB) downloads in the background.</li>
       </ol>
       <p class="note">Why Terminal? See <a href="#faq-terminal">the questions</a> below. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/INSTALL.md">Full guide</a></p>
     </div>
@@ -93,13 +92,17 @@
       <h3>Windows <span class="badge">Preview</span></h3>
       <p>On a 64-bit Windows 10 or 11 PC:</p>
       <ol>
-        <li><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Windows-x64.zip">Download Harfi for Windows</a>, then right-click the zip → <strong>Extract All</strong>.</li>
-        <li>In the extracted folder, double-click <strong>Install Harfi</strong> and press Install. It installs Harfi for you only and downloads its model (808 MB, each part checked); if Windows asks for administrator rights, allow it once.</li>
-        <li>Turn it on once: Settings → Time &amp; language → Language &amp; region → Arabic (Lebanon) → Language options → Add a keyboard → Harfi. Add Arabic (Lebanon) first if it isn't listed.</li>
-        <li>Switch to it with <kbd>Win</kbd> <kbd>Space</kbd> and type.</li>
+        <li><a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Setup.exe">Download Harfi-Setup.exe</a> and double-click it. If Windows says it doesn't know the publisher, choose More info → Run anyway; if it asks for administrator rights, allow it once.</li>
+        <li>Switch to Harfi with <kbd>Win</kbd> <kbd>Space</kbd> and type. It's on within a minute, and you can type while its model (808 MB) downloads.</li>
       </ol>
       <p class="note"><strong>Harfi</strong> in the Start menu has the settings, the words you taught it and the keys.</p>
-      <p class="note">The model runs on the processor, so the first conversion after starting takes a few seconds. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md">Full guide</a></p>
+      <p class="note">Prefer a zip? <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/latest/download/Harfi-Windows-x64.zip">Harfi-Windows-x64.zip</a>: extract it and double-click <strong>Install Harfi</strong>. The model runs on the processor, so the first conversion after starting takes a few seconds. <a href="https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md">Full guide</a></p>
+    </div>
+    <div class="check">
+      <h3 id="check-title">Check it works</h3>
+      <p>Switch to Harfi, type <code>kifak</code> in the box and press Enter.</p>
+      <input type="text" id="try" lang="ar" dir="auto" autocomplete="off" spellcheck="false" aria-labelledby="check-title" aria-describedby="check-result">
+      <p class="note" id="check-result" role="status" data-ok="Harfi is working. Type away." data-latin="That's still Latin: pick Harfi with Ctrl Space on the Mac or Win Space on Windows, then try again.">Nothing you type here leaves this page.</p>
     </div>
   </section>
 
@@ -143,7 +146,7 @@
       </details>
       <details>
         <summary>Windows warns me or asks for administrator rights. Is that safe?</summary>
-        <p>Harfi isn't signed with a paid certificate, so Windows may say it doesn't know the publisher when you open <strong>Install Harfi</strong>: choose More info → Run anyway. Adding a keyboard to Windows needs administrator rights once; everything else installs for your account only. The code is open on GitHub for anyone to check.</p>
+        <p>Harfi isn't signed with a paid certificate, so Windows may say it doesn't know the publisher when you open <strong>Harfi-Setup.exe</strong>: choose More info → Run anyway. Adding a keyboard to Windows needs administrator rights once; everything else installs for your account only. The code is open on GitHub for anyone to check.</p>
       </details>
       <details>
         <summary>Which apps does it work in?</summary>
@@ -159,7 +162,7 @@
       </details>
       <details>
         <summary>How do I update?</summary>
-        <p>Mac: run the install line again. Windows: download the latest zip and run <strong>Install Harfi</strong> again. The model is only downloaded again if it changed.</p>
+        <p>Mac: run the install line again. Windows: download Harfi-Setup.exe again and run it. The model is only downloaded again if it changed.</p>
       </details>
       <details>
         <summary>How do I remove it?</summary>
