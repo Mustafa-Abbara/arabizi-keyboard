@@ -14,6 +14,9 @@ $modelRelease = "https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/dow
 $modelParts = "Llama-3.2-1B-Harfi-v3-Q4_K_M.gguf"  # the release's part names: .part01 ... and .parts.sha256
 $shortcut = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Harfi.lnk"
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Harfi"
+# Files an earlier version installed that this one no longer has: an update removes them (copying never does).
+#   harfi-words.exe: the user's words in a terminal, until 0.3.0's Harfi window replaced it.
+$retired = @("harfi-words.exe")
 # The keyboard as Windows' language list names it: Arabic (Lebanon), the text service's class and its profile.
 $language = "ar-LB"
 $tip = "3001:{7164FD3D-2A9F-4AED-9CD1-2C059C40C6E0}{94104DFB-A9FC-4FCD-8962-236D0615351C}"
@@ -148,6 +151,13 @@ if ($source -ne (Resolve-Path $target).Path.TrimEnd("\")) {
         Copy-Item -Force $_.FullName $existing
     }
 }
+foreach ($name in $retired) {
+    $old = Join-Path $target $name
+    if (Test-Path $old) {
+        try { Remove-Item -Force $old }
+        catch { Rename-Item $old "$name.$([guid]::NewGuid().ToString('N')).old" -ErrorAction SilentlyContinue }
+    }
+}
 # Files from a downloaded zip carry the internet's mark (Zone.Identifier), and a copy keeps it; the installed ones are
 # this user's own now.
 Get-ChildItem $target -Recurse -File -ErrorAction SilentlyContinue |
@@ -188,6 +198,10 @@ New-Item -Force $uninstallKey | Out-Null
 $remove = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $target 'install.ps1')`" -Uninstall"
 Set-ItemProperty $uninstallKey -Name DisplayName -Value "Harfi"
 Set-ItemProperty $uninstallKey -Name Publisher -Value "Harfi (open source)"
+$versionFile = Join-Path $target "version.txt"
+if (Test-Path $versionFile) {
+    Set-ItemProperty $uninstallKey -Name DisplayVersion -Value (Get-Content -Raw $versionFile).Trim()
+}
 Set-ItemProperty $uninstallKey -Name InstallLocation -Value $target
 Set-ItemProperty $uninstallKey -Name UninstallString -Value $remove
 Set-ItemProperty $uninstallKey -Name DisplayIcon -Value $window
