@@ -111,13 +111,20 @@ public:
                 heading(L"Type Arabizi, get Arabic");
                 paragraph(L"This puts the Harfi keyboard on this PC, for your account only. It converts what you "
                           L"type on this PC; nothing you type is sent anywhere.", colours.muted);
-                paragraph(L"The first time, it downloads the conversion model (about 800 MB), so it can take a few "
-                          L"minutes. Windows may ask once for permission to add the keyboard.", colours.muted);
+                paragraph(L"You can type with it within a minute. The first time, it then downloads the conversion "
+                          L"model (about 800 MB) while you type. Windows may ask once for permission to add the "
+                          L"keyboard.", colours.muted);
                 button(L"Install", Action::Install, false);
                 button(L"Cancel", Action::Close, true);
                 break;
             case State::Installing: {
-                heading(L"Installing\x2026");
+                if (on) {  // the keyboard is on and works on its rules; the model is still coming
+                    heading(L"Harfi is on");
+                    paragraph(L"You can type with it now: Win+Space in any app. Until the model below arrives, it "
+                              L"uses its rules, which are less accurate.", colours.text);
+                } else {
+                    heading(L"Installing\x2026");
+                }
                 paragraph(status, colours.muted);
                 if (modelBytes > 0) {
                     Gdiplus::RectF track(x, y + S(6), w, S(8));
@@ -343,6 +350,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     if (!render.empty()) {
         setup.scale = 1.5f;
         if (setup.state == State::Installing) {
+            setup.Said(L"Harfi is on: switch to it with Win+Space.");
             setup.Said(L"Downloading the conversion model (770 MB, once)...");
             setup.progress = 0.42f;
         }
