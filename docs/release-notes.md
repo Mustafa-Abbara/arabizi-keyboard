@@ -1,5 +1,9 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.3.2**
+
+- **On the Mac, clicking Allow is all it takes:** the installer now waits for your answer to macOS's prompt and opens Keyboard settings only if Harfi is still off. In 0.3.1 it opened them every time.
+
 **New in 0.3.1**
 
 - **Installing is quicker:** you can type with Harfi within a minute, while its model downloads in the background. Until the model arrives Harfi uses its rules, which are less accurate, and its window shows how far the download has got.
