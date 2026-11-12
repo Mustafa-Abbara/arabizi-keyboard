@@ -1,6 +1,6 @@
-// Registers an installed input method with macOS and turns it on, so it can be chosen with Ctrl+Space without a visit
-// to System Settings. Some macOS versions accept a newly copied input method only after the next login; then it opens
-// Keyboard settings and says what to click there.
+// Registers an installed input method with macOS and asks macOS to turn it on. macOS 26.6 answers TISEnableInputSource
+// with noErr and leaves the input method off (tested 12 Nov 2026), so then it opens Keyboard settings and says what to
+// click there.
 // Built into the app (Contents/MacOS/harfi-register) so installing needs no developer tools.
 // Usage: harfi-register "$HOME/Library/Input Methods/ArabiziIME.app"
 import AppKit
