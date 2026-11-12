@@ -16,7 +16,7 @@ It installs Harfi and turns it on, then downloads its model (808 MB). You can ty
 
 ## 2. Turn it on (once)
 
-The installer asks macOS to turn Harfi on. macOS 26 leaves that to you, so the installer opens Keyboard settings:
+The installer turns Harfi on: macOS asks you to allow it once, so click **Allow**. If you don't, the installer opens Keyboard settings, where you can turn it on by hand:
 
 1. Open **System Settings → Keyboard**, and under **Text Input** click **Edit…** next to Input Sources.
 2. Click **+**, choose **Arabic**, select **Harfi**, and click **Add**.

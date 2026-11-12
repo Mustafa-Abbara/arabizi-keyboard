@@ -1,6 +1,6 @@
-// Registers an installed input method with macOS and asks macOS to turn it on. macOS 26.6 answers TISEnableInputSource
-// with noErr and leaves the input method off (tested 12 Nov 2026), so then it opens Keyboard settings and says what to
-// click there.
+// Registers an installed input method with macOS and turns it on. macOS 26 asks the user first (an Allow prompt) and
+// turns it on once they allow it (tested 12 Nov 2026), so this waits up to two minutes for the answer. Without it,
+// it opens Keyboard settings and says what to click there.
 // Built into the app (Contents/MacOS/harfi-register) so installing needs no developer tools.
 // Usage: harfi-register "$HOME/Library/Input Methods/ArabiziIME.app"
 import AppKit
@@ -33,6 +33,13 @@ if !wasOn {
         let result = TISEnableInputSource(source)
         if result != noErr { print("TISEnableInputSource returned \(result).") }
     }
+    if !isOn() {
+        print("macOS asks you to allow Harfi: click Allow.")
+        let deadline = Date().addingTimeInterval(120)
+        while !isOn() && Date() < deadline {
+            CFRunLoopRunInMode(.defaultMode, 0.5, false)
+        }
+    }
 }
 
 if wasOn {
@@ -40,7 +47,7 @@ if wasOn {
 } else if isOn() {
     print("Harfi is on: switch to it with Ctrl+Space (or the input menu in the menu bar).")
 } else {
-    print("macOS needs one click to turn Harfi on. In the window that opens: Edit… → + → Arabic → Harfi → Add.")
+    print("Harfi is not on yet. In the Keyboard settings that open: Edit… → + → Arabic → Harfi → Add.")
     print("(If Harfi is not in that list yet, log out and back in once.)")
     if let settings = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
         NSWorkspace.shared.open(settings)
