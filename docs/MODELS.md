@@ -33,13 +33,21 @@ Trained on Kaggle with `train/finetune_lora.py` (ADR 0015) from the frozen data 
 - **Qwen was trained twice:** the first run (`20261016-054238`, validation loss 0.370) finished, but its file was lost when the Kaggle session ended before the download; its run file stays in `train/runs/` as a record. The run above (`20261016-084514`) is the one in `models/` and `config/models.json`. Training is not bit-for-bit repeatable, so the two are different models.
 - **Chosen model:** the Llama fine-tune ([ADR 0005](decisions/0005-final-model.md), accepted 16 Oct 2026).
 
-### The shipped model (v3)
+### The shipped model (v4)
+
+| Id | Run | File | Size | SHA-256 |
+|---|---|---|---|---|
+| `arabizi-llama3.2-1b-v4` | `20261115-160254-llama3.2-1b-lora-v5` (Kaggle T4, rank 32, 448 min, best val. loss 0.183; trained under the tag v5) | `arabizi-llama3.2-1b-v4-Q4_K_M.gguf` | 807,694,016 bytes | `26fcc7569be4339a70b30fd33df451896fb9967b314bed9c452ef316e048ab06` |
+
+Trained with the v3 rows plus 39,340 checked synthetic rows aimed at v3's weak spots ([ADR 0038](decisions/0038-model-v4.md), [MODEL_V4.md](MODEL_V4.md)); test word accuracy 0.864 (frozen) and 0.848 (others) through the keyboard engine ([EVAL.md](EVAL.md)). It is published as the `model-v4` release in 8 parts with their own SHA-256 list; the Mac and Windows installers download the parts, check each, join them and check the whole file against the hash above, which `config/models.json` holds too. The hashes of every other fine-tune are in `config/models.json`, including `arabizi-llama3.2-1b-v4-interim` (the measurement after step 1, `20261115-030439-llama3.2-1b-lora-v4`, SHA-256 `17cea0ff…555a`; not shipped).
+
+### v3 (shipped until 0.4.0)
 
 | Id | Run | File | Size | SHA-256 |
 |---|---|---|---|---|
 | `arabizi-llama3.2-1b-v3` | `20261029-054800-llama3.2-1b-lora-v3` (Kaggle T4, rank 32, best val. loss 0.268) | `arabizi-llama3.2-1b-v3-Q4_K_M.gguf` | 807,694,016 bytes | `8441e6e0d84a83889b748276ab2dd8bd82f7a367af9d2f76421028b36727fd1d` |
 
-Trained with the real rows and the second friends-and-family batch ([ADR 0030](decisions/0030-model-v3.md)); test word accuracy 0.836 (frozen) and 0.826 (others) through the keyboard engine ([EVAL.md](EVAL.md)). It is published as the `model-v3` release in 8 parts with their own SHA-256 list; the Mac and Windows installers download the parts, check each, join them and check the whole file against the hash above, which `config/models.json` holds too. The hashes of every other fine-tune (v1, v2 and the sweep) are in `config/models.json`.
+Trained with the real rows and the second friends-and-family batch ([ADR 0030](decisions/0030-model-v3.md)); test word accuracy 0.836 (frozen) and 0.826 (others). Published as the `model-v3` release, which stays available for 0.3.x installs.
 
 - **Getting the files:** they are not on Hugging Face; download them from the Kaggle run's output (docs/TRAINING.md) and check them against the `.sha256` files. `scripts/fetch_models.py` lists them as skipped.
 - **Licence:** the Llama 3.2 Community License applies to the fine-tune (accepted 14 Oct 2026); "Built with Llama" if it is ever distributed.

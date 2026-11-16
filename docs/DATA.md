@@ -60,6 +60,16 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 | `claude-draft-revised-2026-10-batch02` | 500 | `train-ai_checked.jsonl` (ai-0501 – ai-1000) | `ai_checked`, train only | Same process as above (Claude draft, revised by Moustafa, prompt not kept). Diacritics/tatweel removed from 247 rows. |
 | `claude-draft-revised-2026-10-batch03` | 500 | `train-ai_checked.jsonl` (ai-1001 – ai-1500) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 279 rows. |
 | `claude-draft-revised-2026-10-batch04` | 500 | `train-ai_checked.jsonl` (ai-1501 – ai-2000) | `ai_checked`, train only | Same process. Diacritics/tatweel removed from 342 rows. |
+| `synthetic …` (model v4, [ADR 0038](decisions/0038-model-v4.md)) | 39,340 | `train-ai_checked.jsonl` (after the first 2,000; ids `ai-` + 10 digits) | `ai_checked`, train only | Generated in two steps by sol-6.1, fable-5.2, opus-5.5 and sonnet-5.5 (agent packs and breaker rows), aimed at errors measured on v3 and then on an interim model; cleaned and filtered by `scripts/build_synthetic_dataset.py` (46,104 generated → 39,340 kept for training, 5,342 held out in `data/synthetic/synthetic_test.jsonl`); every kept row checked by Moustafa. `source` records the group, run, original id and kind. Prompts: `data/synthetic/prompts/`. Full account: [MODEL_V4.md](MODEL_V4.md). |
+
+### Synthetic rows for model v4 ([ADR 0038](decisions/0038-model-v4.md))
+
+- **How they were made:** two steps, each aimed at the errors of the model before it (v3's on dev, then the interim model's); kinds of rounds for new word forms, rarely seen and never-seen words, context words, spelling traps, heavy letters typed as plain letters, and English/French kept in Latin. Step 2 enforced real phone-chat style with code (length, emoji, dropped vowels, no 6/9 digits, no final punctuation). Word lists came from the training vocabulary (`scripts/known_words.py`), exclusive across rounds and machines. Breaker rows were run through v3 and record whether it broke.
+- **Cleaning and filtering** (`scripts/build_synthetic_dataset.py`, report in `data/synthetic/BUILD_REPORT.md`): é → e; 6/9 used as letters → the plain letter for the Arabic letter they stand for; Arabic normalised; the repository's row checks; Latin words must be typed; word count within 0.5–2×; nothing equal to or near (80% of words) a dev or test row; no repeats; breaker rows that differed from v3 only by spelling convention dropped. 1,412 rows dropped in all, none for touching dev or test.
+- **Held-out split:** about 10% of target words (by a hash of the word, stable when data is added), and every row about a held-out word in test; earlier splits are frozen when the build is rerun (`--previous`).
+- **Models:** sol-6.1, fable-5.2, opus-5.5 and sonnet-5.5; which run used which was not recorded, so `writer` names all four. The breaker generator's prompt is not in the repository.
+- **Terms:** the reading below applies to every provider used; it was not checked separately for each.
+- **The 50% cap of ADR 0010 no longer applies** (ADR 0038 #4): the v4 export is 67% AI-derived.
 
 ### Real messages by friends and family ([ADR 0021](decisions/0021-real-rows-others-set.md))
 

@@ -1,5 +1,12 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.4.0**
+
+- **A more accurate model (v4):** on the project's test messages it gets more words right (86.4% against 83.6%, and 84.8% against 82.6% on messages by other people) and more whole messages right with nothing to fix. It is better at word forms it has rarely seen, at short words whose meaning depends on the sentence, at ط ص ض ظ typed as t s d z, and at leaving English and French words as you typed them.
+- **"idek" is converted:** it was kept in Latin as an abbreviation, but in Lebanese it is also إيديك ("your hands").
+
+The installer downloads the new model (808 MB) once, from the `model-v4` release, and resumes if the connection drops. The details: [docs/MODEL_V4.md](https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/MODEL_V4.md).
+
 **New in 0.3.2**
 
 - **On the Mac, clicking Allow is all it takes:** the installer now waits for your answer to macOS's prompt and opens Keyboard settings only if Harfi is still off. In 0.3.1 it opened them every time.
@@ -12,7 +19,7 @@ Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own compu
 - **Updating says so:** running the Mac installer again ends with "Harfi is updated", and on Windows the model parts already downloaded are kept.
 - **Fixes:** two apps saving a fix at the same moment now keep both; on the Mac the engine frees its memory after 30 idle minutes as intended, and the preview leaves room for the list of spellings.
 
-The model is unchanged (v3): if you have it, it is not downloaded again.
+The model is unchanged in 0.3.2 (v3): if you have it, it is not downloaded again.
 
 **Mac** (Apple silicon Mac, macOS 14 or later, no admin password):
 
@@ -22,6 +29,6 @@ curl -fsSL https://raw.githubusercontent.com/Mustafa-Abbara/arabizi-keyboard/mai
 
 macOS asks you to allow Harfi once: click Allow, then switch to it with Ctrl+Space. The full guide is [docs/INSTALL.md](https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/INSTALL.md).
 
-The installer then downloads the conversion model (808 MB) from the `model-v3` release while you type, and resumes if the connection drops. Built with Llama: the model is a fine-tune of Llama 3.2 1B Instruct, under the Llama 3.2 Community License.
+The installer then downloads the conversion model (808 MB) from the `model-v4` release while you type, and resumes if the connection drops. Built with Llama: the model is a fine-tune of Llama 3.2 1B Instruct, under the Llama 3.2 Community License.
 
 **Windows** (64-bit Windows 10 or 11, preview): download `Harfi-Setup.exe` below and double-click it (Windows may say it does not know the publisher: More info → Run anyway; if it asks for administrator rights, allow it once). It adds Harfi to your keyboards: switch with Win+Space. The full guide is [Apps/HarfiWindows/README.md](https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/Apps/HarfiWindows/README.md).
