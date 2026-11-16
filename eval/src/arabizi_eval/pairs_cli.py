@@ -989,8 +989,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
-GUESSES_PATH = P.ROOT / "eval" / "results" / "candidates" / "guesses-v3.jsonl"
-RANKER_GUESSES = 5  # the engine offers the model's top 5 guesses (ADR 0036 #5)
+GUESSES_PATH = P.ROOT / "eval" / "results" / "candidates" / "guesses-v4.jsonl"  # v4's dev wrong words
+# What the ranker learns from (ADR 0036, amended by ADR 0039): v4's guesses for its dev wrong words and for a sample of
+# its wrong words on the held-out synthetic test, each word once without the model's guesses (the list the keyboard
+# shows at once, and all it shows until the guesses are turned on) and once with 10 of them (merged in when they come).
+RANKER_FILES = [GUESSES_PATH, P.ROOT / "eval" / "results" / "candidates" / "guesses-v4-synthetic.jsonl"]
+RANKER_STATES = (0, 10)
+RANKER_GUESSES = 5  # the engine's default number of guesses (ADR 0036 #5), used by the report
 
 
 def _guess_rows(path: Path) -> list[dict]:
@@ -1002,6 +1007,13 @@ def _examples(cands, rows: list[dict], guesses: int):
         alts = [(w, lp) for w, lp in r["guesses"][:guesses]]
         found, signals = cands.pool(r["shown"], r["typed_words"], alts)
         yield r, found, signals
+
+
+def ranker_examples(cands, files: list[Path] | None = None) -> list:
+    """The ranker's training examples: every wrong word of every file, in each of RANKER_STATES."""
+    rows = [r for path in (files or RANKER_FILES) for r in _guess_rows(Path(path))]
+    return [(found, signals, r["ref"])
+            for state in RANKER_STATES for r, found, signals in _examples(cands, rows, state)]
 
 
 def cmd_spelling_odds(args: argparse.Namespace) -> int:
@@ -1021,15 +1033,18 @@ def cmd_train_ranker(args: argparse.Namespace) -> int:
     """Train the ↑ list's ranker (ADR 0036) on the model's guesses for public wrong words, write its weights."""
     from arabizi_eval import candidates as C
 
-    rows = [r for r in _guess_rows(Path(args.guesses)) if r["set"] in args.sets]
     cands = C.Candidates(ranker=None)
-    examples = [(found, signals, r["ref"]) for r, found, signals in _examples(cands, rows, RANKER_GUESSES)]
+    files = [Path(f) for f in args.guesses]
+    examples = ranker_examples(cands, files)
     ranker = C.train_ranker(examples)
-    ranker["trained_on_sets"] = sorted(args.sets)
+    ranker["trained_on"] = {"files": [f.name for f in files], "guesses_offered": list(RANKER_STATES),
+                            "sets": sorted({r["set"] for f in files for r in _guess_rows(f)})}
     C.RANKER_PATH.write_text(json.dumps(ranker, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     C.write_fixture()  # the Swift port is tested against this ranker's order
     top = sorted(zip(C.FEATURES, ranker["weights"], strict=True), key=lambda x: -abs(x[1]))[:6]
-    print(f"wrote {C.RANKER_PATH.name}: trained on {len(examples)} wrong words ({', '.join(sorted(args.sets))}); "
+    sets = ", ".join(ranker["trained_on"]["sets"])
+    print(f"wrote {C.RANKER_PATH.name}: trained on {len(examples)} examples ({sets}; "
+          f"{', '.join(str(s) for s in RANKER_STATES)} guesses offered); "
           f"strongest signals: {', '.join(f'{f} {w:+.2f}' for f, w in top)}")
     return 0
 
@@ -1138,8 +1153,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("validate", help="run all checks")
     sub.add_parser("spelling-odds", help="rebuild the letter odds of word suggestions v2 from the public train split")
     rank = sub.add_parser("train-ranker", help="train the word suggestions ranker on public wrong words (ADR 0036)")
-    rank.add_argument("--guesses", default=str(GUESSES_PATH), help="the model's guesses (model_guesses.py)")
-    rank.add_argument("--sets", nargs="+", default=["dev", "dev-others"], help="which sets of the file to train on")
+    rank.add_argument("--guesses", nargs="+", default=[str(f) for f in RANKER_FILES],
+                      help="the model's guesses (model_guesses.py), one or more files")
     rep = sub.add_parser("candidates-report", help="right word first / top 3 / top 7 in the up-arrow list, by set")
     rep.add_argument("--guesses", default=str(GUESSES_PATH), help="the model's guesses (model_guesses.py)")
     args = parser.parse_args(argv)

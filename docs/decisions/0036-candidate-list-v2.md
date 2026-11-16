@@ -43,5 +43,5 @@ Measured on 10 Nov 2026, each set scored while left out of training. "Top 7" mea
 
 - On all four sets (the ranker trained on the other three each time): first 30% → 55%, top 3 43% → 72%, top 7 51% → 80%, two pages of 7 56% → 85%. The right word is in some source for 90%; the other 10% (new words far from what was typed, some merged words) still need "Spell it".
 - Real use should do better: the user's own fixes go first, which the test sets cannot show.
-- **Cost:** two generated files (letter odds, ranker weights); a model request per doubtful word, in the background. The latency target (#5) is measured before the model's guesses are turned on; until then the instant list ships alone.
+- **Cost:** two generated files (letter odds, ranker weights); a model request per doubtful word, in the background. The latency target (#5) is measured before the model's guesses are turned on; until then the instant list ships alone. (16 Nov 2026: on Windows, 5 guesses take p95 383 ms; the ranker is retrained for v4 and for lists with and without guesses, see [ADR 0039](0039-ranker-v4.md). The Mac is still to be measured.)
 - **Limits:** words not written one for one (merged or split by the model) are offered only through the model's guesses; a bigger vocabulary and a v4 model are what would move the remaining 10%.

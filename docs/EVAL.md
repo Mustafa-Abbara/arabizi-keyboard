@@ -44,8 +44,8 @@ uv run --project eval pairs variants && uv run --project eval pairs lexicon
 ```bash
 uv run --project eval pairs spelling-odds      # data/rules/spelling_odds.json: letter odds from the train split
 uv run --project eval --with llama-cpp-python python -m arabizi_eval.model_guesses \
-    eval/results/<run>/predictions.jsonl --set dev --out eval/results/candidates/guesses-v3.jsonl
-uv run --project eval pairs train-ranker       # data/rules/candidate_ranker.json, from dev and dev-others
+    eval/results/<run>/predictions.jsonl --set dev --out eval/results/candidates/guesses-v4.jsonl
+uv run --project eval pairs train-ranker       # data/rules/candidate_ranker.json and its Swift fixture (ADR 0039)
 uv run --project eval pairs candidates-report  # right word first / top 3 / top 7, today's list against v2
 ```
 
