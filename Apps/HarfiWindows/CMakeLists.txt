@@ -5,12 +5,12 @@ project(HarfiWindows LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(HarfiTIP SHARED src/Dll.cpp src/Register.cpp src/TextService.cpp src/Core.cpp src/ChipWindow.cpp
-            src/DisplayAttribute.cpp src/Popup.cpp src/PreviewWindow.cpp src/LangBar.cpp src/HarfiTIP.def
-            src/settings/harfi.rc)  # the icon: Windows' keyboard list and the taskbar show it
+            src/DisplayAttribute.cpp src/Popup.cpp src/PreviewWindow.cpp src/HarfiTIP.def
+            src/settings/harfi.rc)  # the icon: Windows' keyboard list shows it
 target_include_directories(HarfiTIP PRIVATE include)
 target_compile_definitions(HarfiTIP PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
 target_compile_options(HarfiTIP PRIVATE /W4 /utf-8)
-target_link_libraries(HarfiTIP PRIVATE ole32 oleaut32 uuid advapi32 user32 gdi32 gdiplus shell32)
+target_link_libraries(HarfiTIP PRIVATE ole32 oleaut32 uuid advapi32 user32 gdi32 gdiplus)
 
 # The Harfi window (Welcome, Typing, Your words, Privacy, Help): harfi-settings.exe, installed next to the keyboard.
 # It draws with the keyboard's own helpers (Popup.cpp, Theme.h) and reaches the settings and the user's words through

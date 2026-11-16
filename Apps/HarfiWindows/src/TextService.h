@@ -5,7 +5,6 @@
 #include "ChipWindow.h"
 #include "Core.h"
 #include "Globals.h"
-#include "LangBar.h"
 #include "PreviewWindow.h"
 
 class TextService : public ITfTextInputProcessorEx,
@@ -98,7 +97,6 @@ private:
 
     std::atomic<long> references_{1};
     ITfThreadMgr *threadMgr_ = nullptr;
-    LangBarButton *langBar_ = nullptr;  // Harfi's icon in the taskbar while it is the keyboard
     TfClientId clientId_ = TF_CLIENTID_NULL;
     TfGuidAtom inputAtom_ = TF_INVALID_GUIDATOM;  // GUID_HarfiInput, as the attribute property's value
     ITfComposition *composition_ = nullptr;

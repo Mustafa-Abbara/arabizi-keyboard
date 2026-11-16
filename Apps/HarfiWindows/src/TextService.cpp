@@ -255,7 +255,6 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr *threadMgr, TfClientId clientI
         keystrokes->AdviseKeyEventSink(clientId_, static_cast<ITfKeyEventSink *>(this), TRUE);
         keystrokes->Release();
     }
-    langBar_ = AddLangBarButton(threadMgr_);  // Harfi's icon in the taskbar, next to the language
     ITfSource *source = nullptr;
     if (SUCCEEDED(threadMgr_->QueryInterface(IID_ITfSource, reinterpret_cast<void **>(&source)))) {
         if (FAILED(source->AdviseSink(IID_ITfThreadFocusSink, static_cast<ITfThreadFocusSink *>(this),
@@ -270,7 +269,6 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr *threadMgr, TfClientId clientI
 STDMETHODIMP TextService::Deactivate() {
     DebugLog("Deactivate");
     Forget(true);  // switching to another keyboard keeps what was typed, as Latin
-    RemoveLangBarButton(threadMgr_, langBar_);
     if (threadMgr_ && threadFocusCookie_ != TF_INVALID_COOKIE) {
         ITfSource *source = nullptr;
         if (SUCCEEDED(threadMgr_->QueryInterface(IID_ITfSource, reinterpret_cast<void **>(&source)))) {
@@ -279,7 +277,6 @@ STDMETHODIMP TextService::Deactivate() {
         }
         threadFocusCookie_ = TF_INVALID_COOKIE;
     }
-    langBar_ = nullptr;
     if (threadMgr_) {
         ITfKeystrokeMgr *keystrokes = nullptr;
         if (SUCCEEDED(threadMgr_->QueryInterface(IID_ITfKeystrokeMgr, reinterpret_cast<void **>(&keystrokes)))) {

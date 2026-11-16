@@ -21,9 +21,8 @@ Use messages of your own, but never paste private chats into a bug report: descr
 ## 2. Switching to Harfi
 
 - [ ] **Win+Space** switches to Harfi in Notepad.
-- [ ] **Taskbar:** while Harfi is on, the Harfi icon shows next to the language (ع) at the bottom right. Its tooltip says "Harfi".
-- [ ] **Clicking that icon** opens the Harfi window.
-- [ ] **Switching back** to English with Win+Space makes the icon go, and typing is plain English again.
+- [ ] **Keyboard list:** the Win+Space list shows Harfi with its own icon.
+- [ ] **Switching back** to English with Win+Space makes typing plain English again.
 
 ## 3. Typing and sending (the core)
 
@@ -44,6 +43,10 @@ In Notepad, with Harfi on:
 - [ ] **Preview:** after a short pause the preview shows the last word too. A dashed word in the preview means Harfi is unsure of it.
 - [ ] **Enter sends the Arabic** shown in the preview. The cursor ends after the Arabic.
 - [ ] **Esc** while typing keeps the Latin as you typed it.
+- [ ] **Fix a typo with the arrows:** while typing (no Enter), ← and → move inside the sentence; fix a letter and Enter converts the whole sentence.
+- [ ] **Click inside the sentence:** the cursor goes there, the sentence stays underlined, and Enter converts all of it.
+- [ ] **Switch apps mid-sentence:** the preview hides while you are away; back in the app the sentence is still underlined and the preview returns.
+- [ ] **Long sentence:** the preview wraps onto new lines instead of stretching off the screen.
 - [ ] **Backspace** while typing removes Latin letters, and the preview follows.
 - [ ] **Ctrl+Z** right after Enter brings back the Latin you typed.
 - [ ] **Alt+Enter** on selected Latin text converts just that selection.

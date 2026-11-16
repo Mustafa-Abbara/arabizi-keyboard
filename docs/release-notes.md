@@ -11,7 +11,7 @@ Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own compu
 **New in 0.4.2** (Windows)
 
 - **Pointing at a spelling shows it:** in the ↑ list, the word in your text and in the preview now changes to the spelling under the mouse, as it already did with the arrow keys.
-- **Harfi's icon in the taskbar:** while Harfi is your keyboard, its icon shows next to the language at the bottom right. Click it to open the Harfi window. The keyboard list shows the icon too.
+- **Harfi's icon in the keyboard list:** Windows' list of keyboards shows the Harfi icon instead of a plain letter.
 - **"Show me how to use it" opens in front:** the Harfi window no longer opens behind the installer, as a flashing button in the taskbar.
 
 **New in 0.4.1**
