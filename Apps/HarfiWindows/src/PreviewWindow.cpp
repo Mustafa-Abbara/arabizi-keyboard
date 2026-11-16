@@ -3,6 +3,7 @@
 namespace {
 const UINT_PTR PauseTimer = 1;
 const int PadX = 14, PadY = 8, LineGap = 5;  // LineGap: room under the text for the dashed line
+const int MaxWidth = 560, LineSpacing = 6;   // a long sentence wraps onto more lines past this width
 const ULONGLONG GlideTime = 180;             // ms, as on the Mac
 
 Gdiplus::Font ArabicFont() { return Gdiplus::Font(ArabicFamily(), static_cast<float>(Scaled(22)), 0, Gdiplus::UnitPixel); }
@@ -50,7 +51,7 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
     // A space, but never narrower than the highlight needs to sit around a word without touching the next one.
     // Every word sits on one baseline, and the box is centred on the letters as drawn (from the highest to the
     // lowest), not on each font's line, which for Noto Naskh has much more room above and below than Segoe UI.
-    float space = Measure(L" ", arabicFont, true).Width, width = 0;
+    float space = Measure(L" ", arabicFont, true).Width;
     if (space < Scaled(16)) space = static_cast<float>(Scaled(16));
     float high = 0, low = 0;  // the letters' extent above (negative) and below the baseline
     bool any = false;
@@ -64,7 +65,6 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
         bool rtl = run.kind == Kind::Arabic;
         float w = Measure(run.text, font, rtl).Width;
         widths.push_back(w);
-        width += w + (widths.size() > 1 ? (run.kind == Kind::Hint ? 3 * space : space) : 0);
         Gdiplus::RectF ink = Ink(run.text, font, rtl ? ArabicFamily() : LatinFamily(), rtl, w);
         if (ink.Height <= 0) continue;
         high = any ? (ink.Y < high ? ink.Y : high) : ink.Y;
@@ -76,23 +76,54 @@ RECT PreviewWindow::Show(const std::vector<std::wstring> &arabic, const std::vec
         low = LineHeight(arabicFont, ArabicFamily()) + high;
     }
     float height = low - high;
-    // Room under the letters only when a word has the dashed line; otherwise the words sit in the middle.
-    SIZE content = {static_cast<LONG>(width + 0.99f) + 2 * Scaled(PadX),
-                    static_cast<LONG>(height + 0.99f) + 2 * Scaled(PadY) + (anyDotted ? Scaled(LineGap) : 0)};
+    // A long sentence wraps: words fill a line up to a readable width (never wider than most of the screen),
+    // then continue on the next line below, as in a text box. Each line has room under it for the dashed line
+    // when a word has one.
+    HMONITOR monitor = MonitorFromRect(&text, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO screen = {sizeof(screen)};
+    GetMonitorInfoW(monitor, &screen);
+    float limit = static_cast<float>(Scaled(MaxWidth));
+    float screenRoom = 0.8f * static_cast<float>(screen.rcWork.right - screen.rcWork.left) - 2 * Scaled(PadX);
+    if (screenRoom > 0 && screenRoom < limit) limit = screenRoom;
+    std::vector<int> lineOf(runs_.size(), 0);
+    std::vector<float> lineWidths(1, 0.f), gapBefore(runs_.size(), 0.f);
+    for (size_t i = 0; i < runs_.size(); ++i) {
+        float gap = lineWidths.back() == 0 ? 0 : runs_[i].kind == Kind::Hint ? 3 * space : space;
+        if (lineWidths.back() > 0 && lineWidths.back() + gap + widths[i] > limit) {  // the next line
+            lineWidths.push_back(0.f);
+            gap = 0;
+        }
+        lineOf[i] = static_cast<int>(lineWidths.size()) - 1;
+        gapBefore[i] = gap;
+        lineWidths.back() += gap + widths[i];
+    }
+    float widest = 0;
+    for (float w : lineWidths) widest = w > widest ? w : widest;
+    float lineStep = height + static_cast<float>(Scaled(LineSpacing)) + (anyDotted ? Scaled(LineGap) : 0);
+    int lines = static_cast<int>(lineWidths.size());
+    SIZE content = {static_cast<LONG>(widest + 0.99f) + 2 * Scaled(PadX),
+                    static_cast<LONG>(height + 0.99f + (lines - 1) * lineStep) + 2 * Scaled(PadY) +
+                        (anyDotted ? Scaled(LineGap) : 0)};
     baseline_ = Scaled(PadY) - high;
-    // Left to right when no word is Arabic (an English sentence, sent as it is), as the app will show it.
+    // Left to right when no word is Arabic (an English sentence, sent as it is), as the app will show it;
+    // otherwise each line starts on the right.
     bool leftToRight = true;
     for (const Run &run : runs_) leftToRight = leftToRight && run.kind != Kind::Arabic;
-    float right = static_cast<float>(content.cx - Scaled(PadX)), left = static_cast<float>(Scaled(PadX));
+    float right = 0, left = 0;
     for (size_t i = 0; i < runs_.size(); ++i) {
-        float gap = i == 0 ? 0 : runs_[i].kind == Kind::Hint ? 3 * space : space;
+        if (i == 0 || lineOf[i] != lineOf[i - 1]) {
+            right = static_cast<float>(content.cx - Scaled(PadX));
+            left = static_cast<float>(Scaled(PadX));
+        }
+        float baseline = baseline_ + lineOf[i] * lineStep;
+        runs_[i].baseline = baseline;
         if (leftToRight) {
-            left += gap;
-            runs_[i].box = Gdiplus::RectF(left, baseline_ + high, widths[i], height);
+            left += gapBefore[i];
+            runs_[i].box = Gdiplus::RectF(left, baseline + high, widths[i], height);
             left += widths[i];
         } else {
-            right -= gap;
-            runs_[i].box = Gdiplus::RectF(right - widths[i], baseline_ + high, widths[i], height);
+            right -= gapBefore[i];
+            runs_[i].box = Gdiplus::RectF(right - widths[i], baseline + high, widths[i], height);
             right -= widths[i];
         }
     }
@@ -153,17 +184,17 @@ void PreviewWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
         switch (run.kind) {
             case Kind::Arabic:
                 WriteOnBaseline(graphics, run.text, arabicFont, ArabicFamily(), onCedar ? colours.onAccent : colours.text,
-                                x, w, baseline_, true);
+                                x, w, run.baseline, true);
                 break;
             case Kind::English:
                 WriteOnBaseline(graphics, run.text, englishFont, LatinFamily(), onCedar ? colours.onAccent : colours.text,
-                                x, w, baseline_, false);
+                                x, w, run.baseline, false);
                 break;
             case Kind::Latin:
-                WriteOnBaseline(graphics, run.text, latinFont, LatinFamily(), colours.latin, x, w, baseline_, false);
+                WriteOnBaseline(graphics, run.text, latinFont, LatinFamily(), colours.latin, x, w, run.baseline, false);
                 break;
             case Kind::Hint:
-                WriteOnBaseline(graphics, run.text, hintFont, LatinFamily(), colours.accent, x, w, baseline_, false);
+                WriteOnBaseline(graphics, run.text, hintFont, LatinFamily(), colours.accent, x, w, run.baseline, false);
                 break;
         }
         if (run.doubtful && !onCedar) {  // a dashed amber line below the lowest letters: this word may be wrong

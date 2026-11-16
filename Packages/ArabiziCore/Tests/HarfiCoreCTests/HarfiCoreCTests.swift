@@ -181,3 +181,21 @@ private func json(_ text: String) -> [String: Any] {
     let again = json(call({ harfi_composer_highlight(composer, $0) }, offered[1]))
     #expect(again["effect"] as? String == "none")
 }
+
+@Test func arrowsAndClicksMoveInsideTheTextBeingTyped() throws {
+    // Windows: ← and a click keep the sentence and move the cursor in it; the reply says where the cursor is.
+    let core = try #require(rules.path.withCString { harfi_core_open($0) })
+    defer { harfi_core_close(core) }
+    let composer = try #require(harfi_composer_new(core))
+    defer { harfi_composer_free(composer) }
+    func key(_ request: String) -> [String: Any] { json(call({ harfi_composer_key(composer, $0) }, request)) }
+    for letter in "kfak" { _ = key(#"{"key":"text","text":"\#(letter)"}"#) }
+    let left = key(#"{"key":"arrowLeft"}"#)
+    #expect(left["effect"] as? String == "update")
+    #expect(left["caret"] as? Int == 3)
+    #expect(harfi_composer_caret(composer, 1) == 1)
+    let typed = key(#"{"key":"text","text":"i"}"#)
+    #expect(typed["marked"] as? String == "kifak")
+    #expect(typed["caret"] as? Int == 2)
+    #expect(harfi_composer_caret(composer, 40) == 0)
+}

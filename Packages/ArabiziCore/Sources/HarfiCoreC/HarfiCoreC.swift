@@ -13,6 +13,7 @@
 //   harfi_composer_guesses(composer)    -> the ↑ list re-ranked once the model's guesses are here (ADR 0036 #5)
 //   harfi_composer_highlight(composer, text) -> a spelling pointed at in the chip row: shown in the text, as ↓/↑ do
 //   harfi_composer_buffer(composer)     -> the Latin text being typed
+//   harfi_composer_caret(composer, at)  -> a click inside the text being typed: the cursor goes there (1) or not (0)
 //   harfi_free(string), harfi_composer_free(composer), harfi_core_close(core)
 import ArabiziCore
 import Foundation
@@ -206,6 +207,7 @@ final class ComposerBox {
         self.core = core
         composer = Composer(convert: { [core] in core.convertForSending($0) }, suggester: core.suggester,
                             ready: { [core] in core.ready($0) })
+        composer.editsInPlace = true  // ← → and clicks move inside the text being typed (the reply's "caret")
     }
 }
 
@@ -321,6 +323,16 @@ public func harfi_composer_highlight(_ composer: UnsafeMutableRawPointer?,
     return owned(reply(box, effect))
 }
 
+/// The user clicked inside the text being typed, `offset` UTF-16 units from its start: the composer's cursor goes
+/// there, so the next letters go there and Enter converts the whole text. 1 when it moved, 0 when the offset is
+/// not inside the text (the text service then lets the text go, as before).
+@_cdecl("harfi_composer_caret")
+public func harfi_composer_caret(_ composer: UnsafeMutableRawPointer?, _ offset: Int32) -> Int32 {
+    guard let composer else { return 0 }
+    let box = Unmanaged<ComposerBox>.fromOpaque(composer).takeUnretainedValue()
+    return box.composer.moveCaret(toUTF16: Int(offset)) ? 1 : 0
+}
+
 @_cdecl("harfi_composer_pick")
 public func harfi_composer_pick(_ composer: UnsafeMutableRawPointer?,
                                 _ candidate: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
@@ -332,6 +344,9 @@ public func harfi_composer_pick(_ composer: UnsafeMutableRawPointer?,
 /// The effect with what the chip row shows: the spellings offered, the one highlighted, the word being fixed.
 private func reply(_ box: ComposerBox, _ effect: Effect) -> String {
     var reply = effectJSON(effect)
+    // Where the cursor goes in the text being typed, in UTF-16 units from its start (its end unless ← → or a click
+    // moved it).
+    if case .update = effect { reply["caret"] = box.composer.caret }
     reply["candidates"] = box.composer.currentCandidates
     if let choice = box.composer.currentChoice { reply["choice"] = choice }
     if let word = box.composer.selectedText {

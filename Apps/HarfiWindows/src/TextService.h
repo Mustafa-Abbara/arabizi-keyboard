@@ -11,6 +11,7 @@
 class TextService : public ITfTextInputProcessorEx,
                     public ITfKeyEventSink,
                     public ITfCompositionSink,
+                    public ITfTextEditSink,
                     public ITfDisplayAttributeProvider {
 public:
     TextService();
@@ -36,6 +37,9 @@ public:
 
     // ITfCompositionSink: the app ended the composition (focus moved, clicked elsewhere).
     STDMETHODIMP OnCompositionTerminated(TfEditCookie cookie, ITfComposition *composition) override;
+
+    // ITfTextEditSink: a click inside the text being typed moves the cursor in it instead of letting it go.
+    STDMETHODIMP OnEndEdit(ITfContext *context, TfEditCookie cookie, ITfEditRecord *record) override;
 
     // ITfDisplayAttributeProvider: how apps draw the text being typed (DisplayAttribute.h).
     STDMETHODIMP EnumDisplayAttributeInfo(IEnumTfDisplayAttributeInfo **attributes) override;
@@ -70,7 +74,13 @@ private:
     // The screen rectangle of the text being typed (or of the cursor): from the app, else the caret, else the last
     // good one, else the mouse.
     RECT TextRect(ITfContext *context, TfEditCookie cookie);
-    void SetComposition(ITfContext *context, TfEditCookie cookie, const std::wstring &text, int replacingLength);
+    // `caret`: where the cursor goes in `text` (UTF-16 units); -1: at its end.
+    void SetComposition(ITfContext *context, TfEditCookie cookie, const std::wstring &text, int replacingLength,
+                        int caret = -1);
+    // Where the app's cursor is inside `range` (UTF-16 units from its start), or -1: not inside it, or a selection.
+    static int OffsetIn(ITfContext *context, TfEditCookie cookie, ITfRange *range);
+    // Listens to the edits in `context` (clicks moving the cursor), or stops listening.
+    void WatchEdits(ITfContext *context, bool on);
     void Commit(ITfContext *context, TfEditCookie cookie, const std::wstring &text);
     // Marks `range` as text being typed (underlined), or clears the mark.
     void Underline(ITfContext *context, TfEditCookie cookie, ITfRange *range, bool on);
@@ -91,6 +101,7 @@ private:
     RECT lastRect_ = {};
     bool hasLastRect_ = false;
     ITfContext *context_ = nullptr;  // where the last key was typed: chip clicks act there
+    DWORD editSinkCookie_ = TF_INVALID_COOKIE;  // the ITfTextEditSink advised on context_
     bool decided_ = false;
     WPARAM decidedKey_ = 0;
     std::string decidedJson_;  // the key as sent to the composer, without the field's context

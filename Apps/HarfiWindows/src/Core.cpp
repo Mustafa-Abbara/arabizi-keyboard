@@ -137,6 +137,7 @@ struct Core::Library {
     decltype(&harfi_habit_refuse) refuse = nullptr;  // optional: without it a habit cannot be refused here
     decltype(&harfi_composer_guesses) guesses = nullptr;  // optional: without it the list never has the model's guesses
     decltype(&harfi_composer_highlight) highlight = nullptr;  // optional: without it hovering only lights the chip
+    decltype(&harfi_composer_caret) caret = nullptr;  // optional: without it a click lets the typed text go
     decltype(&harfi_free) free = nullptr;
 };
 
@@ -158,6 +159,7 @@ Core::Core(const std::wstring &folder) {
         library->refuse = Load<decltype(library->refuse)>(module, "harfi_habit_refuse");
         library->guesses = Load<decltype(library->guesses)>(module, "harfi_composer_guesses");
         library->highlight = Load<decltype(library->highlight)>(module, "harfi_composer_highlight");
+        library->caret = Load<decltype(library->caret)>(module, "harfi_composer_caret");
         library->free = Load<decltype(library->free)>(module, "harfi_free");
         if (!open || !library->newComposer || !library->freeComposer || !library->key || !library->pick ||
             !library->buffer || !library->free) return nullptr;
@@ -185,6 +187,10 @@ Effect Core::Highlight(const std::wstring &candidate) {
     none.effect = "none";
     if (!composer_ || !library_->highlight) return none;
     return Read(library_->highlight(composer_, Narrow(candidate).c_str()));
+}
+
+bool Core::Caret(int offset) {
+    return composer_ && library_->caret && library_->caret(composer_, offset) == 1;
 }
 
 Effect Core::Guesses() {
@@ -241,6 +247,7 @@ Effect Core::Read(char *reply) {
     effect.word = Widen(JsonString(json, "word"));
     effect.wordDoubtful = JsonBool(json, "wordDoubtful");
     effect.choice = JsonInt(json, "choice", -1);
+    effect.caret = JsonInt(json, "caret", -1);
     effect.spelling = JsonBool(json, "spelling");
     effect.typed = Widen(JsonString(json, "typed"));
     effect.typedStart = JsonInt(json, "typedStart", -1);

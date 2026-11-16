@@ -206,6 +206,8 @@ STDMETHODIMP TextService::QueryInterface(REFIID riid, void **object) {
         *object = static_cast<ITfKeyEventSink *>(this);
     } else if (riid == IID_ITfCompositionSink) {
         *object = static_cast<ITfCompositionSink *>(this);
+    } else if (riid == IID_ITfTextEditSink) {
+        *object = static_cast<ITfTextEditSink *>(this);
     } else if (riid == IID_ITfDisplayAttributeProvider) {
         *object = static_cast<ITfDisplayAttributeProvider *>(this);
     }
@@ -270,6 +272,7 @@ STDMETHODIMP TextService::Deactivate() {
         threadMgr_ = nullptr;
     }
     if (context_) {
+        WatchEdits(context_, false);
         context_->Release();
         context_ = nullptr;
     }
@@ -283,9 +286,68 @@ STDMETHODIMP TextService::OnSetFocus(BOOL) { return S_OK; }
 void TextService::Follow(ITfContext *context) {
     if (context == context_) return;
     Forget(false);
-    if (context_) context_->Release();
+    if (context_) {
+        WatchEdits(context_, false);
+        context_->Release();
+    }
     context_ = context;
     context_->AddRef();
+    WatchEdits(context_, true);
+}
+
+void TextService::WatchEdits(ITfContext *context, bool on) {
+    ITfSource *source = nullptr;
+    if (!context || FAILED(context->QueryInterface(IID_ITfSource, reinterpret_cast<void **>(&source)))) return;
+    if (on && editSinkCookie_ == TF_INVALID_COOKIE) {
+        if (FAILED(source->AdviseSink(IID_ITfTextEditSink, static_cast<ITfTextEditSink *>(this), &editSinkCookie_))) {
+            editSinkCookie_ = TF_INVALID_COOKIE;
+        }
+    } else if (!on && editSinkCookie_ != TF_INVALID_COOKIE) {
+        source->UnadviseSink(editSinkCookie_);
+        editSinkCookie_ = TF_INVALID_COOKIE;
+    }
+    source->Release();
+}
+
+int TextService::OffsetIn(ITfContext *context, TfEditCookie cookie, ITfRange *range) {
+    TF_SELECTION selection = {};
+    ULONG fetched = 0;
+    if (!range || FAILED(context->GetSelection(cookie, TF_DEFAULT_SELECTION, 1, &selection, &fetched)) || fetched != 1) {
+        return -1;
+    }
+    int offset = -1;
+    BOOL empty = FALSE;
+    LONG startVsCursor = 0, endVsCursor = 0;
+    if (SUCCEEDED(selection.range->IsEmpty(cookie, &empty)) && empty &&
+        SUCCEEDED(range->CompareStart(cookie, selection.range, TF_ANCHOR_START, &startVsCursor)) && startVsCursor <= 0 &&
+        SUCCEEDED(range->CompareEnd(cookie, selection.range, TF_ANCHOR_START, &endVsCursor)) && endVsCursor >= 0) {
+        ITfRange *before = nullptr;  // from the text's start to the cursor
+        if (SUCCEEDED(range->Clone(&before))) {
+            if (SUCCEEDED(before->ShiftEndToRange(cookie, selection.range, TF_ANCHOR_START))) {
+                wchar_t text[1024];
+                ULONG length = 0;
+                if (SUCCEEDED(before->GetText(cookie, 0, text, 1024, &length))) offset = static_cast<int>(length);
+            }
+            before->Release();
+        }
+    }
+    selection.range->Release();
+    return offset;
+}
+
+STDMETHODIMP TextService::OnEndEdit(ITfContext *context, TfEditCookie cookie, ITfEditRecord *record) {
+    // The cursor moved (a click) while Latin is being typed: if it is inside that text, the composer's cursor
+    // follows, so the next letters go there and Enter still converts the whole text. Harfi's own edits put the
+    // cursor where the composer already has it, so they change nothing.
+    if (!composition_ || !core_ || context != context_ || !record) return S_OK;
+    BOOL moved = FALSE;
+    if (FAILED(record->GetSelectionStatus(&moved)) || !moved) return S_OK;
+    ITfRange *range = nullptr;
+    if (FAILED(composition_->GetRange(&range))) return S_OK;
+    int offset = OffsetIn(context, cookie, range);
+    range->Release();
+    if (offset >= 0) core_->Caret(offset);
+    return S_OK;
 }
 
 void TextService::Forget(bool sync) {
@@ -465,9 +527,27 @@ STDMETHODIMP TextService::OnPreservedKey(ITfContext *, REFGUID, BOOL *eaten) {
 
 STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie cookie, ITfComposition *composition) {
     if (composition_ != composition) return S_OK;
-    // The app ended it (a click elsewhere, the focus moved): the Latin stays as typed and the composer starts over.
     ITfRange *range = nullptr;
     if (context_ && SUCCEEDED(composition->GetRange(&range))) {
+        // Some apps end it on any click. A click inside the text being typed keeps it: the composition starts again
+        // over the same text, with the composer's cursor where the click was.
+        int offset = core_ ? OffsetIn(context_, cookie, range) : -1;
+        if (offset >= 0 && core_->Caret(offset)) {
+            ITfContextComposition *compositions = nullptr;
+            ITfComposition *again = nullptr;
+            if (SUCCEEDED(context_->QueryInterface(IID_ITfContextComposition, reinterpret_cast<void **>(&compositions)))) {
+                compositions->StartComposition(cookie, range, static_cast<ITfCompositionSink *>(this), &again);
+                compositions->Release();
+            }
+            if (again) {
+                composition_->Release();
+                composition_ = again;
+                Underline(context_, cookie, range, true);
+                range->Release();
+                return S_OK;
+            }
+        }
+        // The app ended it (a click elsewhere, the focus moved): the Latin stays as typed and the composer starts over.
         Underline(context_, cookie, range, false);
         range->Release();
     }
@@ -501,7 +581,7 @@ void TextService::Apply(ITfContext *context, const Effect &effect, const std::st
         }
         const std::string &kind = effect.effect;
         if (kind == "update" || kind == "suggest" || kind == "restore") {
-            SetComposition(context, cookie, effect.marked, effect.replacingLength);
+            SetComposition(context, cookie, effect.marked, effect.replacingLength, kind == "update" ? effect.caret : -1);
         } else if (kind == "commit" || kind == "commitAndPass" || kind == "replaceSelection") {
             Commit(context, cookie, effect.text);
         } else if (kind == "commitAndCompose") {
@@ -671,7 +751,7 @@ void TextService::Underline(ITfContext *context, TfEditCookie cookie, ITfRange *
 // `replacingLength` UTF-16 units before the cursor (the converted text, for Ctrl+Z, and ↑ or Alt+Tab after converting). An empty `text`
 // ends the composition, so the app never holds an empty one.
 void TextService::SetComposition(ITfContext *context, TfEditCookie cookie, const std::wstring &text,
-                                 int replacingLength) {
+                                 int replacingLength, int caret) {
     if (text.empty()) {
         Commit(context, cookie, text);
         return;
@@ -706,7 +786,14 @@ void TextService::SetComposition(ITfContext *context, TfEditCookie cookie, const
     if (FAILED(composition_->GetRange(&range))) return;
     range->SetText(cookie, 0, text.c_str(), static_cast<LONG>(text.size()));
     Underline(context, cookie, range, true);
-    range->Collapse(cookie, TF_ANCHOR_END);  // the cursor after the text
+    if (caret >= 0 && caret < static_cast<int>(text.size())) {  // ← → or a click moved it inside the text
+        LONG moved = 0;
+        range->Collapse(cookie, TF_ANCHOR_START);
+        range->ShiftEnd(cookie, caret, &moved, nullptr);
+        range->Collapse(cookie, TF_ANCHOR_END);
+    } else {
+        range->Collapse(cookie, TF_ANCHOR_END);  // the cursor after the text
+    }
     TF_SELECTION selection = {};
     selection.range = range;
     selection.style.ase = TF_AE_NONE;

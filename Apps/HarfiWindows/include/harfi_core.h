@@ -43,6 +43,9 @@ char *harfi_composer_guesses(harfi_composer composer);
    do. The same reply as harfi_composer_key with effect "suggest", or {"effect": "none"} when nothing changes. */
 char *harfi_composer_highlight(harfi_composer composer, const char *candidate);
 char *harfi_composer_buffer(harfi_composer composer);
+/* A click inside the text being typed, `offset` UTF-16 units from its start: the cursor goes there (1), or the
+   offset is outside it (0). Replies with effect "update" carry "caret": where the cursor is in that text. */
+int harfi_composer_caret(harfi_composer composer, int offset);
 void harfi_free(char *text);
 
 #ifdef __cplusplus
