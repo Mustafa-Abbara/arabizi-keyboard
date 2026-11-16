@@ -89,6 +89,9 @@ private:
     void WatchEdits(ITfContext *context, bool on);
     // Lets go of a kept sentence (parked_): it stays in the app as typed, in Latin.
     void DropParked();
+    // Underlines a kept sentence again where the cursor still is in it (else lets it go), and shows its preview;
+    // in an edit session after the current one.
+    void PickUp();
     void Commit(ITfContext *context, TfEditCookie cookie, const std::wstring &text);
     // Marks `range` as text being typed (underlined), or clears the mark.
     void Underline(ITfContext *context, TfEditCookie cookie, ITfRange *range, bool on);

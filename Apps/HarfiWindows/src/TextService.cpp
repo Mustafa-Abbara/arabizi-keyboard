@@ -432,25 +432,40 @@ STDMETHODIMP TextService::OnKillThreadFocus() {
 STDMETHODIMP TextService::OnSetThreadFocus() {
     // Back in this app: a sentence still being typed gets its preview again, and one the app let go of while away
     // is underlined again (where the cursor still is in it); otherwise it stays as typed.
-    if (!context_ || !core_ || core_->Buffer().empty() || (!composition_ && !parked_)) return S_OK;
+    PickUp();
+    return S_OK;
+}
+
+void TextService::PickUp() {
+    if (!context_ || !core_ || core_->Buffer().empty() || (!composition_ && !parked_)) return;
     ITfContext *field = context_;
     auto *session = new EditSession(static_cast<ITfTextInputProcessorEx *>(this), field,
                                     [this, field](TfEditCookie cookie) {
         if (parked_ && !composition_) {
             int offset = OffsetIn(field, cookie, parked_);
+            wchar_t text[1024];
+            ULONG length = 0;
+            bool unchanged = SUCCEEDED(parked_->GetText(cookie, 0, text, 1024, &length)) &&
+                             std::wstring(text, length) == core_->Buffer();
+            if (!unchanged) {  // the app changed or emptied it (a chat box after sending): never bring it back
+                DebugLog("kept sentence: the app changed it, let go");
+                DropParked();
+                return;
+            }
             if (offset < 0) {
+                DebugLog("kept sentence: the cursor left it, let go");
                 DropParked();
                 return;
             }
             core_->Caret(offset);
             SetComposition(field, cookie, core_->Buffer(), 0, offset);
+            DebugLog(composition_ ? "kept sentence: picked up again" : "kept sentence: could not start it again");
         }
         if (composition_) ShowPreview(field, cookie, true);
     });
     HRESULT result = S_OK;
     field->RequestEditSession(clientId_, session, TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, &result);
     session->Release();
-    return S_OK;
 }
 
 TextService::Field TextService::ReadField(ITfContext *context, bool wantSelection) {
@@ -601,36 +616,30 @@ STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie cookie, ITfCompos
     if (composition_ != composition) return S_OK;
     ITfRange *range = nullptr;
     if (context_ && SUCCEEDED(composition->GetRange(&range))) {
-        // Some apps end it on any click. A click inside the text being typed keeps it: the composition starts again
-        // over the same text, with the composer's cursor where the click was.
-        int offset = core_ ? OffsetIn(context_, cookie, range) : -1;
-        if (offset >= 0 && core_->Caret(offset)) {
-            ITfContextComposition *compositions = nullptr;
-            ITfComposition *again = nullptr;
-            if (SUCCEEDED(context_->QueryInterface(IID_ITfContextComposition, reinterpret_cast<void **>(&compositions)))) {
-                compositions->StartComposition(cookie, range, static_cast<ITfCompositionSink *>(this), &again);
-                compositions->Release();
-            }
-            if (again) {
-                composition_->Release();
-                composition_ = again;
-                Underline(context_, cookie, range, true);
-                range->Release();
-                return S_OK;
-            }
-        }
-        // The app ended it because another app came to the front (Notepad does): keep the sentence, to pick it up
-        // again on coming back (OnSetThreadFocus, or the next key with the cursor still in it).
-        if (core_ && !core_->Buffer().empty() && !InFront()) {
+        // Some apps (Notepad) end it on any click, and when another app comes to the front. Harfi keeps the sentence
+        // then: after a click inside it, it is picked up again once the app has finished ending it (a composition
+        // cannot start again from inside this call); after switching apps, on coming back (OnSetThreadFocus, or the
+        // next key with the cursor still in it). A click outside it lets it go, as before.
+        bool inFront = InFront();
+        int offset = core_ && !core_->Buffer().empty() ? OffsetIn(context_, cookie, range) : -1;
+        if (offset >= 0 || (core_ && !core_->Buffer().empty() && !inFront)) {
+            if (offset >= 0) core_->Caret(offset);
             if (parked_) parked_->Release();
             parked_ = range;  // the range's reference moves to parked_
             composition_->Release();
             composition_ = nullptr;
-            chips_.Hide();
-            preview_.CancelPause();
-            preview_.Hide();
+            if (inFront) {
+                DebugLog("composition ended by the app with the cursor inside: picking it up again");
+                PickUp();
+            } else {
+                DebugLog("composition ended by the app for another app: kept for coming back");
+                chips_.Hide();
+                preview_.CancelPause();
+                preview_.Hide();
+            }
             return S_OK;
         }
+        DebugLog("composition ended by the app, cursor outside it: let go");
         // The app ended it (a click elsewhere, the focus moved): the Latin stays as typed and the composer starts over.
         Underline(context_, cookie, range, false);
         range->Release();
