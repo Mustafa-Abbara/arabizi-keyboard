@@ -174,6 +174,7 @@ void Count(const wchar_t *name) {
 const DWORD FixHintTimes = 5, FixHintUses = 3, PreviewFixUses = 3;
 const UINT PreviewPause = 300;    // ms without a key before the word being typed shows in the preview
 const UINT PreviewRecheck = 150;  // ms between looks for the model's conversion while it is on its way
+const UINT GuessRecheck = 50;     // ms between looks for the model's guesses for the ↑ list (ADR 0036 #5)
 
 // A rectangle that can be a line of text on a screen (apps sometimes report an empty or absurd one).
 bool Plausible(const RECT &rect) {
@@ -535,6 +536,8 @@ void TextService::UpdateBoxes(ITfContext *context, TfEditCookie cookie, const Ef
                 [this] {  // "Spell it": the same as Alt+Tab a second time
                     if (core_ && context_) Apply(context_, core_->Key(R"({"key":"suggest"})"), {}, false);
                 });
+            // The list shows at once; the model's guesses re-rank it when they arrive (never if they are late).
+            if (effect.guessesPending) RecheckGuesses();
         } else {
             chips_.Hide();
         }
@@ -600,6 +603,15 @@ void TextService::RefreshPreviewAfter(UINT milliseconds, bool whole) {
         HRESULT result = S_OK;
         field->RequestEditSession(clientId_, session, TF_ES_ASYNCDONTCARE | TF_ES_READ, &result);
         session->Release();
+    });
+}
+
+void TextService::RecheckGuesses() {
+    chips_.After(GuessRecheck, [this] {
+        if (!core_ || !context_) return;
+        Effect effect = core_->Guesses();
+        if (effect.effect == "suggest") Apply(context_, effect, {}, false);  // the same text, the chips re-ranked
+        else if (effect.guessesPending) RecheckGuesses();
     });
 }
 

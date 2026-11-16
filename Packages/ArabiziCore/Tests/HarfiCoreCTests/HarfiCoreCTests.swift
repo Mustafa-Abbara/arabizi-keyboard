@@ -147,3 +147,18 @@ private func json(_ text: String) -> [String: Any] {
     #expect(picked["effect"] as? String == "commit")
     #expect((picked["text"] as? String)?.hasSuffix(offered) == true)
 }
+
+@Test func withoutTheEngineTheListNeverWaitsForGuesses() throws {
+    // data/rules has no harfi-engine.exe beside it: no guesses are asked for, and the list stays as it opened.
+    let core = try #require(rules.path.withCString { harfi_core_open($0) })
+    defer { harfi_core_close(core) }
+    let composer = try #require(harfi_composer_new(core))
+    defer { harfi_composer_free(composer) }
+    func key(_ request: String) -> [String: Any] { json(call({ harfi_composer_key(composer, $0) }, request)) }
+    for letter in "shu 3am" { _ = key(#"{"key":"text","text":"\#(letter)"}"#) }
+    let fix = key(#"{"key":"arrowUp"}"#)
+    #expect(fix["effect"] as? String == "suggest")
+    #expect(fix["guessesPending"] as? Bool == false)
+    let guesses = json(call({ _ in harfi_composer_guesses(composer) }, ""))
+    #expect(guesses["effect"] as? String == "none" && guesses["guessesPending"] as? Bool == false)
+}

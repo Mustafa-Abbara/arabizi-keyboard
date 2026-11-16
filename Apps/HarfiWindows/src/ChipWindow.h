@@ -20,6 +20,8 @@ public:
     // A one-line tip in the same place, gone after `milliseconds` (or when chips replace it).
     void ShowHint(const std::wstring &hint, const RECT &text, UINT milliseconds = 3000);
     void Hide();
+    // Calls `due` once after `milliseconds` while the chips show (each call starts the wait again; Hide cancels it).
+    void After(UINT milliseconds, std::function<void()> due);
 
 protected:
     void Draw(Gdiplus::Graphics &graphics, const Palette &colours) override;
@@ -54,4 +56,5 @@ private:
     int hovered_ = -1;
     Pick pick_;
     SpellIt spellIt_;
+    std::function<void()> due_;
 };

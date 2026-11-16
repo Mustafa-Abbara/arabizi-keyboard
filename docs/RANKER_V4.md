@@ -114,7 +114,7 @@ Of the real wrong words needing Spell it with 5 guesses:
 
 So the ranker gets the list close to what its candidates allow. For Spell it to be needed for fewer than 1% of words (today 2.93%; 2.51% with guesses), these would have to move, in order of size:
 
-1. **Turn the model's guesses on in both keyboards** (5 guesses; −0.4 points of all words). This is measured on Windows (p95 383 ms) and still needs measuring on the 8 GB Air. Neither keyboard asks for them today.
+1. **Turn the model's guesses on in both keyboards** (5 guesses; −0.4 points of all words). This is measured on Windows (p95 383 ms) and still needs measuring on the 8 GB Air. Since 16 Nov 2026 both keyboards can ask for them (ADR 0036, update): on in Windows, off on the Mac until the Air is measured.
 2. **New candidates for what cannot be a candidate now:** merging two typed words into one Arabic word and splitting one into two, a wider beam for the model's guesses, and a second page of the list.
 3. **Fewer wrong words in the first place:** v4 gets 8.8% of words wrong on real messages. At today's rate, each point of model accuracy removes about 0.3 points of Spell it.
 

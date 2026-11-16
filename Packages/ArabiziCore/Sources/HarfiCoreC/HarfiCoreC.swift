@@ -10,6 +10,7 @@
 //   harfi_composer_new(core)            -> a composer: the key-by-key typing behaviour
 //   harfi_composer_key(composer, json)  -> what to do in the app after a key, as JSON (see `effectJSON`)
 //   harfi_composer_pick(composer, text) -> the same for a spelling (or letter) clicked in the chip row
+//   harfi_composer_guesses(composer)    -> the ↑ list re-ranked once the model's guesses are here (ADR 0036 #5)
 //   harfi_composer_buffer(composer)     -> the Latin text being typed
 //   harfi_free(string), harfi_composer_free(composer), harfi_core_close(core)
 import ArabiziCore
@@ -31,6 +32,9 @@ final class Core: Sendable {
     private let pointedOut = PointedOut()
     /// How sure the model was of each word of the last conversions, by the text shown: ↑ starts on the least sure.
     let confidences: WordConfidences
+    /// The model's guesses for words of the ↑ list (ADR 0036 #5), asked of harfi-engine in the background; nil
+    /// without the engine.
+    let guesses: WordGuesses?
 
     init(rulesDirectory: URL) throws {
         let confidences = WordConfidences()
@@ -51,6 +55,17 @@ final class Core: Sendable {
             ? CorrectionStore.standard(folder: keyboard.appending(path: "words")).map { PersonalWords(store: $0) }
             : nil
         self.personal = personal
+        #if os(Windows)
+        // The keyboard's folder holds rules\, config\ and harfi-engine.exe.
+        let engine = EngineClient(folder: rulesDirectory.deletingLastPathComponent())
+        self.engine = engine
+        ahead = engine.map { PreviewConversions(engine: $0) }
+        if let engine { Thread.detachNewThread { engine.warmUp() } }  // never delays the keyboard's start
+        let guesses = engine.map { engine in WordGuesses(ask: { engine.wordGuesses($0.text, before: $0.before) }) }
+        #else
+        let guesses: WordGuesses? = nil
+        #endif
+        self.guesses = guesses
         // Word suggestions v2 (ADR 0036), loaded in the background; the first list until it is ready.
         let candidates = BackgroundCandidateList(rulesDirectory: rulesDirectory)
         suggester = Suggester(
@@ -63,14 +78,16 @@ final class Core: Sendable {
             record: { correction in personal?.record(correction) },
             spelling: spelling,
             doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false },
-            confidence: { [confidences] converted in confidences.of(converted) })
-        #if os(Windows)
-        // The keyboard's folder holds rules\, config\ and harfi-engine.exe.
-        let engine = EngineClient(folder: rulesDirectory.deletingLastPathComponent())
-        self.engine = engine
-        ahead = engine.map { PreviewConversions(engine: $0) }
-        if let engine { Thread.detachNewThread { engine.warmUp() } }  // never delays the keyboard's start
-        #endif
+            confidence: { [confidences] converted in confidences.of(converted) },
+            guesses: guesses,
+            // The model's 5 guesses as the list's first source, once they are here (ADR 0039 #5). Without the v2
+            // list (still loading) there is nothing to put them in: the first list stays.
+            candidatesWithGuesses: { shown, latin, guesses in
+                let past = personal?.store.all() ?? []
+                return candidates.list?.personalized(for: shown, latin: latin, past: past,
+                                                     guesses: guesses.map { ($0.word, $0.logProbability) })
+                    ?? suggestions.personalized(for: shown, latin: latin, past: past)
+            })
     }
 
     /// The engine's conversion of exactly this text, made ahead for the preview: Enter sends it without asking again.
@@ -273,6 +290,24 @@ public func harfi_composer_key(_ composer: UnsafeMutableRawPointer?,
     return owned(reply(box, box.composer.handle(request.key, context: request.context)))
 }
 
+/// The ↑ list with the model's guesses, once they have arrived for the word shown (ADR 0036 #5): the same reply as
+/// harfi_composer_key with effect "suggest" and the re-ranked candidates (the highlighted spelling and those above it
+/// stay in place), or {"effect": "none", "guessesPending": still coming} when nothing changes. The text service asks
+/// again shortly while "guessesPending" is true; late guesses never come, and the list stays as it is.
+@_cdecl("harfi_composer_guesses")
+public func harfi_composer_guesses(_ composer: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
+    guard let composer else { return owned(#"{"effect":"none"}"#) }
+    let box = Unmanaged<ComposerBox>.fromOpaque(composer).takeUnretainedValue()
+    if let effect = box.composer.guessesArrived() { return owned(reply(box, effect)) }
+    return owned(encode(["effect": "none", "guessesPending": guessesPending(box)]))
+}
+
+/// Whether the model's guesses for the word shown are coming (asked for now) or here and not yet in the list.
+private func guessesPending(_ box: ComposerBox) -> Bool {
+    guard let query = box.composer.guessQuery, let guesses = box.core.guesses else { return false }
+    return guesses.request(query) || guesses.guesses(for: query) != nil
+}
+
 @_cdecl("harfi_composer_pick")
 public func harfi_composer_pick(_ composer: UnsafeMutableRawPointer?,
                                 _ candidate: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
@@ -306,6 +341,11 @@ private func reply(_ box: ComposerBox, _ effect: Effect) -> String {
         reply["learnedLatin"] = habit.latin
         reply["learnedSpelling"] = habit.spelling
     }
+    // The list shows without the model's guesses: ask for them; the text service asks again for the re-ranked list.
+    reply["guessesPending"] = guessesPending(box)
+    // Right after a conversion, a word that looks wrong (dashed) has its guesses asked for at once, so the list
+    // already has them when ↑ opens it (ADR 0036 #5).
+    if case .commit = effect, let query = box.composer.prefetchQuery { box.core.guesses?.request(query) }
     if let fix = box.composer.fixingBeforeSending {  // the preview stays on screen around the chips
         reply["fixingWords"] = fix.words
         reply["fixingIndex"] = fix.index

@@ -45,3 +45,14 @@ Measured on 10 Nov 2026, each set scored while left out of training. "Top 7" mea
 - Real use should do better: the user's own fixes go first, which the test sets cannot show.
 - **Cost:** two generated files (letter odds, ranker weights); a model request per doubtful word, in the background. The latency target (#5) is measured before the model's guesses are turned on; until then the instant list ships alone. (16 Nov 2026: on Windows, 5 guesses take p95 383 ms; the ranker is retrained for v4 and for lists with and without guesses, see [ADR 0039](0039-ranker-v4.md). The Mac is still to be measured.)
 - **Limits:** words not written one for one (merged or split by the model) are offered only through the model's guesses; a bigger vocabulary and a v4 model are what would move the remaining 10%.
+
+## Update: the model's guesses wired into both keyboards (16 Nov 2026)
+
+#4 and #5 are built. Both keyboards share the logic in `ArabiziCore` (`WordGuesses`, `Composer.guessQuery`, `guessesArrived()`, `prefetchQuery`):
+
+- **Instant first.** ↑ opens the list at once without the guesses. The keyboard asks the engine for **5 guesses** (ADR 0039 #5) with a **600 ms deadline** for the word shown, in the background. When they arrive, the list is re-ranked with them. The highlighted spelling and those above it keep their places; only the places below change, and the text shown does not change.
+- **Late guesses change nothing.** Past the deadline the engine answers with none (`fallbackTimeout`) and the keyboard stops waiting 300 ms later; the instant list stays, and that word is not asked again. Guesses for a word the user has left (←/→, Esc, a pick, Spell it) are kept but not shown; they are used at once if the user comes back to the word. One request runs at a time and only the newest word waits for it.
+- **Asked ahead.** Right after a conversion, if the word ↑ would open on looks wrong (dashed), its guesses are asked for at once. When ↑ opens on it after they arrived, the list has them from the start.
+- **Windows:** `HarfiCoreC` asks harfi-engine on its pipe. The text service polls `harfi_composer_guesses` every 50 ms while `guessesPending` is set, as it already did for the preview. **On** (5 guesses: p95 383 ms over 124 words in RANKER_V4, 484 ms over 302 dev-others words in docs/EVAL.md; under 1% past the 600 ms deadline).
+- **Mac:** the IME asks the XPC service (`EngineClient.wordGuesses`) and re-ranks on the main thread when they arrive. **Off until measured on the 8 GB Air** (`Settings.modelGuesses`, read at start; `defaults write lb.aub.arabizi.inputmethod.ArabiziIME modelGuesses -bool true` turns it on to try). `scripts/word_guess_latency.py` measures it; the result goes in docs/EVAL.md and decides the default.
+- Tests: `WordGuessesTests` (ArabiziCore: on time, late, the word left, the list closed, the highlight kept, spelling, asked ahead), `HarfiCoreCTests`, and the Mac client's deadline (`EngineClientTests`).

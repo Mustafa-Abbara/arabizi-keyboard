@@ -64,6 +64,8 @@ private:
     void ShowPreview(ITfContext *context, TfEditCookie cookie, bool whole);
     // Shows the preview again after `milliseconds` (a pause in typing, or the model's conversion coming).
     void RefreshPreviewAfter(UINT milliseconds, bool whole);
+    // Looks again shortly for the model's guesses for the word shown, and re-ranks the chips when they are here.
+    void RecheckGuesses();
     // The screen rectangle of the text being typed (or of the cursor): from the app, else the caret, else the last
     // good one, else the mouse.
     RECT TextRect(ITfContext *context, TfEditCookie cookie);

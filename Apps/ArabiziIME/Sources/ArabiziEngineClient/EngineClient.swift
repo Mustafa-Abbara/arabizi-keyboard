@@ -98,6 +98,28 @@ public final class EngineClient: @unchecked Sendable {  // `link` is behind `loc
         log.info("converted by the engine: \(response.outcome.rawValue, privacy: .public) in \(response.latencyMs) ms")
         return response
     }
+
+    /// How long past the guesses' deadline the keyboard waits for them (the service may be finishing a conversion).
+    static let guessMarginMs = 300
+
+    /// The model's guesses for the word after `before` in its answer to `text` (ADR 0036 #5), best first; nil when
+    /// there are none in time (no service, no model yet, the deadline passed): the ↑ list then stays as it is.
+    public func wordGuesses(_ text: String, before: String) -> WordGuesses.Guesses? {
+        let deadlineMs = WordGuesses.deadlineMs
+        guard let proxy = proxy(),
+              let request = try? encoder.encode(WordGuessRequest(text: text, before: before, count: WordGuesses.count,
+                                                                 deadlineMs: deadlineMs)) else { return nil }
+        let box = ReplyBox()
+        proxy.wordGuesses(request) { data in box.set(data) }
+        guard let data = box.wait(milliseconds: deadlineMs + Self.guessMarginMs),
+              let response = try? JSONDecoder().decode(WordGuessResponse.self, from: data) else {
+            log.info("no word guesses in time")
+            return nil
+        }
+        log.info("word guesses: \(response.outcome.rawValue, privacy: .public), \(response.guesses.count) in \(response.latencyMs) ms")
+        guard response.outcome == .model else { return nil }
+        return response.guesses.map { (word: $0.word, logProbability: $0.logProbability) }
+    }
 }
 
 /// The reply of one XPC call, handed from the XPC queue to the waiting keyboard thread.
