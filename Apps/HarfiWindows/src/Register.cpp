@@ -53,7 +53,7 @@ bool RegisterProfile() {
     const wchar_t name[] = L"Harfi";
     HRESULT result = profiles->RegisterProfile(CLSID_HarfiTextService, HarfiLanguage, GUID_HarfiProfile, name,
                                                static_cast<ULONG>(wcslen(name)), path, static_cast<ULONG>(wcslen(path)),
-                                               0, nullptr, 0, TRUE, 0);  // icon 0: Harfi's (harfi.rc)
+                                               0, nullptr, 0, TRUE, 0);
     profiles->Release();
     // No substitute layout: an English one under an Arabic (Lebanon) keyboard made Chromium browsers (Brave, Edge)
     // refuse the switch to Harfi. Earlier builds registered one; remove what they left.

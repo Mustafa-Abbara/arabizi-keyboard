@@ -459,7 +459,16 @@ void TextService::PickUp() {
             }
             core_->Caret(offset);
             SetComposition(field, cookie, core_->Buffer(), 0, offset);
-            DebugLog(composition_ ? "kept sentence: picked up again" : "kept sentence: could not start it again");
+            if (composition_) {
+                DebugLog("kept sentence: picked up again");
+                pickUpTries_ = 0;
+            } else if (++pickUpTries_ <= 10) {  // the app is still busy with the click: again a moment later
+                DebugLog("kept sentence: not yet, trying again");
+                chips_.After(100, [this] { PickUp(); });
+            } else {
+                DebugLog("kept sentence: could not start it again; kept until the next key");
+                pickUpTries_ = 0;
+            }
         }
         if (composition_) ShowPreview(field, cookie, true);
     });
@@ -851,7 +860,8 @@ void TextService::SetComposition(ITfContext *context, TfEditCookie cookie, const
     }
     if (!composition_) {
         ITfRange *range = nullptr;
-        if (parked_) {  // the kept sentence is still in the app: the composition goes back over it
+        bool kept = parked_ != nullptr;
+        if (kept) {  // the kept sentence is still in the app: the composition goes back over it
             range = parked_;
             parked_ = nullptr;
         } else if (replacingLength > 0) {
@@ -874,6 +884,13 @@ void TextService::SetComposition(ITfContext *context, TfEditCookie cookie, const
             SUCCEEDED(context->QueryInterface(IID_ITfContextComposition, reinterpret_cast<void **>(&compositions)))) {
             compositions->StartComposition(cookie, range, static_cast<ITfCompositionSink *>(this), &composition_);
             compositions->Release();
+        }
+        if (!composition_ && kept) {
+            // The app would not start it again yet (Notepad, still handling the click): the sentence stays kept,
+            // with the typed text in it, so Enter replaces it instead of inserting a second copy.
+            range->SetText(cookie, 0, text.c_str(), static_cast<LONG>(text.size()));
+            parked_ = range;
+            return;
         }
         if (range) range->Release();
         if (!composition_) return;

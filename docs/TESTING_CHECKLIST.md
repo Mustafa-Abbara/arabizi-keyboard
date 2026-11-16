@@ -21,7 +21,7 @@ Use messages of your own, but never paste private chats into a bug report: descr
 ## 2. Switching to Harfi
 
 - [ ] **Win+Space** switches to Harfi in Notepad.
-- [ ] **Keyboard list:** the Win+Space list shows Harfi with its own icon.
+- [ ] **Keyboard list:** the Win+Space list shows Harfi under Arabic (Lebanon).
 - [ ] **Switching back** to English with Win+Space makes typing plain English again.
 
 ## 3. Typing and sending (the core)

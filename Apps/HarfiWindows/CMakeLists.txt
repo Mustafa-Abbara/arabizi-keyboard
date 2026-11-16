@@ -5,8 +5,9 @@ project(HarfiWindows LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(HarfiTIP SHARED src/Dll.cpp src/Register.cpp src/TextService.cpp src/Core.cpp src/ChipWindow.cpp
-            src/DisplayAttribute.cpp src/Popup.cpp src/PreviewWindow.cpp src/HarfiTIP.def
-            src/settings/harfi.rc)  # the icon: Windows' keyboard list shows it
+            src/DisplayAttribute.cpp src/Popup.cpp src/PreviewWindow.cpp src/HarfiTIP.def)
+# No icon in the keyboard file: Windows would show it in the taskbar beside the language letter (ع), where it adds
+# nothing.
 target_include_directories(HarfiTIP PRIVATE include)
 target_compile_definitions(HarfiTIP PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
 target_compile_options(HarfiTIP PRIVATE /W4 /utf-8)

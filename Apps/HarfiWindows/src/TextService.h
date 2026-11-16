@@ -116,6 +116,7 @@ private:
     // The sentence being typed when the app let go of it because another app came to the front (Notepad does):
     // the composer keeps it, and it is underlined again on coming back if the cursor is still in it.
     ITfRange *parked_ = nullptr;
+    int pickUpTries_ = 0;  // PickUp tried again while the app would not start the composition
     bool decided_ = false;
     WPARAM decidedKey_ = 0;
     std::string decidedJson_;  // the key as sent to the composer, without the field's context
