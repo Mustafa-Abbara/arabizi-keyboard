@@ -251,12 +251,15 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr *threadMgr, TfClientId clientI
         keystrokes->AdviseKeyEventSink(clientId_, static_cast<ITfKeyEventSink *>(this), TRUE);
         keystrokes->Release();
     }
+    langBar_ = AddLangBarButton(threadMgr_);  // Harfi's icon in the taskbar, next to the language
     return S_OK;
 }
 
 STDMETHODIMP TextService::Deactivate() {
     DebugLog("Deactivate");
     Forget(true);  // switching to another keyboard keeps what was typed, as Latin
+    RemoveLangBarButton(threadMgr_, langBar_);
+    langBar_ = nullptr;
     if (threadMgr_) {
         ITfKeystrokeMgr *keystrokes = nullptr;
         if (SUCCEEDED(threadMgr_->QueryInterface(IID_ITfKeystrokeMgr, reinterpret_cast<void **>(&keystrokes)))) {
@@ -535,6 +538,11 @@ void TextService::UpdateBoxes(ITfContext *context, TfEditCookie cookie, const Ef
                 },
                 [this] {  // "Spell it": the same as Alt+Tab a second time
                     if (core_ && context_) Apply(context_, core_->Key(R"({"key":"suggest"})"), {}, false);
+                },
+                [this](const std::wstring &candidate) {  // the mouse on a spelling: shown in the text, as Down/Up do
+                    if (!core_ || !context_) return;
+                    Effect effect = core_->Highlight(candidate);
+                    if (effect.effect == "suggest") Apply(context_, effect, {}, false);
                 });
             // The list shows at once; the model's guesses re-rank it when they arrive (never if they are late).
             if (effect.guessesPending) RecheckGuesses();

@@ -162,3 +162,22 @@ private func json(_ text: String) -> [String: Any] {
     let guesses = json(call({ _ in harfi_composer_guesses(composer) }, ""))
     #expect(guesses["effect"] as? String == "none" && guesses["guessesPending"] as? Bool == false)
 }
+
+@Test func pointingAtASpellingShowsItInTheTextAndThePreview() throws {
+    // The mouse on a chip does what ↓/↑ do: the text and the preview show that spelling, not the one highlighted
+    // before. Pointing at it again changes nothing.
+    let core = try #require(rules.path.withCString { harfi_core_open($0) })
+    defer { harfi_core_close(core) }
+    let composer = try #require(harfi_composer_new(core))
+    defer { harfi_composer_free(composer) }
+    for letter in "ma bade" { _ = call({ harfi_composer_key(composer, $0) }, #"{"key":"text","text":"\#(letter)"}"#) }
+    let fix = json(call({ harfi_composer_key(composer, $0) }, #"{"key":"arrowUp"}"#))
+    let offered = try #require(fix["candidates"] as? [String])
+    try #require(offered.count >= 2)
+    let pointed = json(call({ harfi_composer_highlight(composer, $0) }, offered[1]))
+    #expect(pointed["effect"] as? String == "suggest")
+    #expect(pointed["choice"] as? Int == 1)
+    #expect((pointed["fixingWords"] as? [String])?.last == offered[1])
+    let again = json(call({ harfi_composer_highlight(composer, $0) }, offered[1]))
+    #expect(again["effect"] as? String == "none")
+}

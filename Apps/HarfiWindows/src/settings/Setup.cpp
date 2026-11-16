@@ -265,11 +265,26 @@ void Do(HWND hwnd, Action action) {
         case Action::Language:
             ShellExecuteW(hwnd, L"open", L"ms-settings:regionlanguage", nullptr, nullptr, SW_SHOWNORMAL);
             break;
-        case Action::Open:
-            ShellExecuteW(hwnd, L"open", (Installed() + L"\\harfi-settings.exe").c_str(), L"--welcome", nullptr,
-                          SW_SHOWNORMAL);
+        case Action::Open: {
+            // Windows lets a new window come to the front only if the window in front allows it: allow the settings
+            // app, and stay until its window is up, so it opens in front instead of only flashing in the taskbar.
+            std::wstring app = Installed() + L"\\harfi-settings.exe";
+            SHELLEXECUTEINFOW run = {sizeof(run)};
+            run.fMask = SEE_MASK_NOCLOSEPROCESS;
+            run.hwnd = hwnd;
+            run.lpVerb = L"open";
+            run.lpFile = app.c_str();
+            run.lpParameters = L"--welcome";
+            run.nShow = SW_SHOWNORMAL;
+            AllowSetForegroundWindow(ASFW_ANY);
+            if (ShellExecuteExW(&run) && run.hProcess) {
+                AllowSetForegroundWindow(GetProcessId(run.hProcess));
+                WaitForInputIdle(run.hProcess, 3000);
+                CloseHandle(run.hProcess);
+            }
             DestroyWindow(hwnd);
             return;
+        }
         case Action::Close: DestroyWindow(hwnd); return;
     }
     InvalidateRect(hwnd, nullptr, FALSE);

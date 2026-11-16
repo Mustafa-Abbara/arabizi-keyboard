@@ -46,11 +46,17 @@ const wchar_t Pencil[] = L"\uE70F";  // "Edit" in Windows' icon font, before "Sp
 
 ChipWindow::ChipWindow() : Popup(L"HarfiChips", false) {}
 
-void ChipWindow::Show(const Effect &effect, const RECT &text, Pick pick, SpellIt spellIt) {
+void ChipWindow::Show(const Effect &effect, const RECT &text, Pick pick, SpellIt spellIt, Point point) {
     pick_ = std::move(pick);
     spellIt_ = std::move(spellIt);
+    point_ = std::move(point);
     if (!Ensure()) return;
     KillTimer(window_, HintTimer);
+    // The same spellings as now (only the highlight moved): the row keeps its place.
+    std::vector<std::wstring> before, after;
+    for (const Chip &chip : chips_) if (chip.style == Style::Spelling) before.push_back(chip.value);
+    after.assign(effect.candidates.begin(), effect.candidates.end());
+    keepPlace_ = IsWindowVisible(window_) && !before.empty() && before == after && !effect.spelling;
     chips_.clear();
     typed_ = effect.typed;
     bool traced = effect.typedStart >= 0 && effect.typedLength > 0 &&
@@ -202,7 +208,8 @@ void ChipWindow::Arrange(const RECT &text) {
         right -= widths[i] + Scaled(Gap);
     }
     hovered_ = -1;
-    Present(PlaceAbove(text, content), content);
+    RECT box = Box();
+    Present(keepPlace_ ? POINT{box.left, box.top} : PlaceAbove(text, content), content);
 }
 
 void ChipWindow::Draw(Gdiplus::Graphics &graphics, const Palette &colours) {
@@ -320,6 +327,12 @@ void ChipWindow::Hover(POINT at) {
     if (index == hovered_) return;
     hovered_ = index;
     Redraw();
+    // A spelling pointed at is shown in the text and the preview, as ↓/↑ would (the row may be drawn again).
+    if (index >= 0 && point_ && chips_[index].style == Style::Spelling) {
+        std::wstring value = chips_[index].value;
+        Point point = point_;
+        point(value);
+    }
 }
 
 bool ChipWindow::HandAt(POINT at) { return ChipAt(at) >= 0; }
