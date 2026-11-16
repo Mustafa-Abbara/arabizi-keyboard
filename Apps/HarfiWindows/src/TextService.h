@@ -12,6 +12,7 @@ class TextService : public ITfTextInputProcessorEx,
                     public ITfKeyEventSink,
                     public ITfCompositionSink,
                     public ITfTextEditSink,
+                    public ITfThreadFocusSink,
                     public ITfDisplayAttributeProvider {
 public:
     TextService();
@@ -41,6 +42,11 @@ public:
     // ITfTextEditSink: a click inside the text being typed moves the cursor in it instead of letting it go.
     STDMETHODIMP OnEndEdit(ITfContext *context, TfEditCookie cookie, ITfEditRecord *record) override;
 
+    // ITfThreadFocusSink: switching to another app hides the boxes; coming back shows them again, and picks up a
+    // sentence the app let go of when it lost the focus.
+    STDMETHODIMP OnSetThreadFocus() override;
+    STDMETHODIMP OnKillThreadFocus() override;
+
     // ITfDisplayAttributeProvider: how apps draw the text being typed (DisplayAttribute.h).
     STDMETHODIMP EnumDisplayAttributeInfo(IEnumTfDisplayAttributeInfo **attributes) override;
     STDMETHODIMP GetDisplayAttributeInfo(REFGUID guid, ITfDisplayAttributeInfo **info) override;
@@ -51,6 +57,7 @@ private:
         bool secure = false;            // a password or PIN field
         bool atLastConversion = false;  // the cursor is right after the text Harfi last inserted
         std::wstring selected;          // the selected text, read only for Alt+Enter
+        int parkedOffset = -1;          // the cursor inside a sentence kept while away (parked_), or -1
     };
 
     // The composer's effect for this key, computed once in OnTestKeyDown and carried out in OnKeyDown.
@@ -81,6 +88,8 @@ private:
     static int OffsetIn(ITfContext *context, TfEditCookie cookie, ITfRange *range);
     // Listens to the edits in `context` (clicks moving the cursor), or stops listening.
     void WatchEdits(ITfContext *context, bool on);
+    // Lets go of a kept sentence (parked_): it stays in the app as typed, in Latin.
+    void DropParked();
     void Commit(ITfContext *context, TfEditCookie cookie, const std::wstring &text);
     // Marks `range` as text being typed (underlined), or clears the mark.
     void Underline(ITfContext *context, TfEditCookie cookie, ITfRange *range, bool on);
@@ -102,6 +111,10 @@ private:
     bool hasLastRect_ = false;
     ITfContext *context_ = nullptr;  // where the last key was typed: chip clicks act there
     DWORD editSinkCookie_ = TF_INVALID_COOKIE;  // the ITfTextEditSink advised on context_
+    DWORD threadFocusCookie_ = TF_INVALID_COOKIE;  // the ITfThreadFocusSink advised on the thread manager
+    // The sentence being typed when the app let go of it because another app came to the front (Notepad does):
+    // the composer keeps it, and it is underlined again on coming back if the cursor is still in it.
+    ITfRange *parked_ = nullptr;
     bool decided_ = false;
     WPARAM decidedKey_ = 0;
     std::string decidedJson_;  // the key as sent to the composer, without the field's context

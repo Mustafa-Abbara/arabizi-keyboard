@@ -208,6 +208,8 @@ STDMETHODIMP TextService::QueryInterface(REFIID riid, void **object) {
         *object = static_cast<ITfCompositionSink *>(this);
     } else if (riid == IID_ITfTextEditSink) {
         *object = static_cast<ITfTextEditSink *>(this);
+    } else if (riid == IID_ITfThreadFocusSink) {
+        *object = static_cast<ITfThreadFocusSink *>(this);
     } else if (riid == IID_ITfDisplayAttributeProvider) {
         *object = static_cast<ITfDisplayAttributeProvider *>(this);
     }
@@ -254,6 +256,14 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr *threadMgr, TfClientId clientI
         keystrokes->Release();
     }
     langBar_ = AddLangBarButton(threadMgr_);  // Harfi's icon in the taskbar, next to the language
+    ITfSource *source = nullptr;
+    if (SUCCEEDED(threadMgr_->QueryInterface(IID_ITfSource, reinterpret_cast<void **>(&source)))) {
+        if (FAILED(source->AdviseSink(IID_ITfThreadFocusSink, static_cast<ITfThreadFocusSink *>(this),
+                                      &threadFocusCookie_))) {
+            threadFocusCookie_ = TF_INVALID_COOKIE;
+        }
+        source->Release();
+    }
     return S_OK;
 }
 
@@ -261,6 +271,14 @@ STDMETHODIMP TextService::Deactivate() {
     DebugLog("Deactivate");
     Forget(true);  // switching to another keyboard keeps what was typed, as Latin
     RemoveLangBarButton(threadMgr_, langBar_);
+    if (threadMgr_ && threadFocusCookie_ != TF_INVALID_COOKIE) {
+        ITfSource *source = nullptr;
+        if (SUCCEEDED(threadMgr_->QueryInterface(IID_ITfSource, reinterpret_cast<void **>(&source)))) {
+            source->UnadviseSink(threadFocusCookie_);
+            source->Release();
+        }
+        threadFocusCookie_ = TF_INVALID_COOKIE;
+    }
     langBar_ = nullptr;
     if (threadMgr_) {
         ITfKeystrokeMgr *keystrokes = nullptr;
@@ -380,10 +398,62 @@ void TextService::Forget(bool sync) {
         lastCommitEnd_->Release();
         lastCommitEnd_ = nullptr;
     }
+    if (parked_) {
+        parked_->Release();
+        parked_ = nullptr;
+    }
     chips_.Hide();
     preview_.CancelPause();
     preview_.Hide();
     if (core_) core_->Reset();
+}
+
+void TextService::DropParked() {
+    if (!parked_) return;
+    parked_->Release();
+    parked_ = nullptr;
+    if (core_) core_->Reset();
+}
+
+namespace {
+// True while a window of this process is in front: false once the user has switched to another app.
+bool InFront() {
+    DWORD process = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &process);
+    return process == GetCurrentProcessId();
+}
+}  // namespace
+
+STDMETHODIMP TextService::OnKillThreadFocus() {
+    // Another app is in front: the boxes go with this one (the sentence and the composer stay).
+    chips_.Hide();
+    preview_.CancelPause();
+    preview_.Hide();
+    return S_OK;
+}
+
+STDMETHODIMP TextService::OnSetThreadFocus() {
+    // Back in this app: a sentence still being typed gets its preview again, and one the app let go of while away
+    // is underlined again (where the cursor still is in it); otherwise it stays as typed.
+    if (!context_ || !core_ || core_->Buffer().empty() || (!composition_ && !parked_)) return S_OK;
+    ITfContext *field = context_;
+    auto *session = new EditSession(static_cast<ITfTextInputProcessorEx *>(this), field,
+                                    [this, field](TfEditCookie cookie) {
+        if (parked_ && !composition_) {
+            int offset = OffsetIn(field, cookie, parked_);
+            if (offset < 0) {
+                DropParked();
+                return;
+            }
+            core_->Caret(offset);
+            SetComposition(field, cookie, core_->Buffer(), 0, offset);
+        }
+        if (composition_) ShowPreview(field, cookie, true);
+    });
+    HRESULT result = S_OK;
+    field->RequestEditSession(clientId_, session, TF_ES_ASYNCDONTCARE | TF_ES_READWRITE, &result);
+    session->Release();
+    return S_OK;
 }
 
 TextService::Field TextService::ReadField(ITfContext *context, bool wantSelection) {
@@ -423,6 +493,7 @@ TextService::Field TextService::ReadField(ITfContext *context, bool wantSelectio
         }
         field.secure = IsSecret(context, cookie, selection.range);
         selection.range->Release();
+        if (parked_) field.parkedOffset = OffsetIn(context, cookie, parked_);
     });
     HRESULT result = S_OK;
     context->RequestEditSession(clientId_, session, TF_ES_SYNC | TF_ES_READ, &result);
@@ -448,6 +519,10 @@ bool TextService::Decide(ITfContext *context, WPARAM wParam, LPARAM lParam) {
     std::string key = KeyJson(wParam, lParam);
     decidedJson_ = key;
     Field field = ReadField(context, key == R"({"key":"convertSelection"})");
+    if (parked_) {  // a sentence kept while away: typing goes on in it if the cursor is still there, else it is let go
+        if (field.parkedOffset >= 0) core_->Caret(field.parkedOffset);
+        else DropParked();
+    }
     // ↑ right after a conversion, with the cursor still just after it, fixes a word in it (as Alt+Tab does; Windows
     // keeps Alt+Tab for switching windows, so it rarely reaches a keyboard). Anywhere else ↑ is the app's.
     bool upFixes = key == R"({"key":"arrowUp"})" && field.atLastConversion && core_->Buffer().empty() &&
@@ -546,6 +621,18 @@ STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie cookie, ITfCompos
                 range->Release();
                 return S_OK;
             }
+        }
+        // The app ended it because another app came to the front (Notepad does): keep the sentence, to pick it up
+        // again on coming back (OnSetThreadFocus, or the next key with the cursor still in it).
+        if (core_ && !core_->Buffer().empty() && !InFront()) {
+            if (parked_) parked_->Release();
+            parked_ = range;  // the range's reference moves to parked_
+            composition_->Release();
+            composition_ = nullptr;
+            chips_.Hide();
+            preview_.CancelPause();
+            preview_.Hide();
+            return S_OK;
         }
         // The app ended it (a click elsewhere, the focus moved): the Latin stays as typed and the composer starts over.
         Underline(context_, cookie, range, false);
@@ -758,7 +845,10 @@ void TextService::SetComposition(ITfContext *context, TfEditCookie cookie, const
     }
     if (!composition_) {
         ITfRange *range = nullptr;
-        if (replacingLength > 0) {
+        if (parked_) {  // the kept sentence is still in the app: the composition goes back over it
+            range = parked_;
+            parked_ = nullptr;
+        } else if (replacingLength > 0) {
             TF_SELECTION selection = {};
             ULONG fetched = 0;
             if (SUCCEEDED(context->GetSelection(cookie, TF_DEFAULT_SELECTION, 1, &selection, &fetched)) && fetched == 1) {
@@ -820,6 +910,16 @@ void TextService::Commit(ITfContext *context, TfEditCookie cookie, const std::ws
         composition_->EndComposition(cookie);
         composition_->Release();
         composition_ = nullptr;
+    } else if (parked_) {  // a sentence kept while away (still in the app as typed): the text replaces it
+        ITfRange *range = parked_;
+        parked_ = nullptr;
+        range->SetText(cookie, 0, text.c_str(), static_cast<LONG>(text.size()));
+        Underline(context, cookie, range, false);
+        range->Collapse(cookie, TF_ANCHOR_END);
+        TF_SELECTION selection = {};
+        selection.range = range;
+        context->SetSelection(cookie, 1, &selection);
+        end = range;
     } else if (!text.empty()) {
         ITfInsertAtSelection *insert = nullptr;
         if (SUCCEEDED(context->QueryInterface(IID_ITfInsertAtSelection, reinterpret_cast<void **>(&insert)))) {
