@@ -249,9 +249,13 @@ final class ArabiziInputController: IMKInputController {
         nonisolated(unsafe) let chips = chips, controller = self
         MainActor.assumeIsolated {
             chips.show(word: current?.shown, doubtful: doubtful, candidates: candidates, spelling: spelling,
-                       choice: choice, typed: typed, above: line, preview: preview,
+                       choice: choice, typed: typed, above: line, preview: preview, side: listAbove,
                        pick: { controller.chipPicked($0) }, hover: { controller.chipHovered($0) },
                        spellIt: { controller.spellFromChip() })
+        }
+        // The side chosen when the list opened stays until it closes, so moving between words never flips it.
+        if listAbove == nil, let placed = MainActor.assumeIsolated({ chips.placed }) {
+            listAbove = StackPlacement.isAbove(placed.box, placed.line)
         }
     }
 
@@ -262,15 +266,17 @@ final class ArabiziInputController: IMKInputController {
         guard let fix = composer.fixingBeforeSending else { return nil }
         let doubtful = Self.doubtfulWords(fix.words, latin: fix.latin)
         nonisolated(unsafe) let window = previewWindow
+        let side = listAbove
         return { height in
             MainActor.assumeIsolated {
                 window.show(arabic: fix.words, doubtful: doubtful, selected: fix.index, latin: "", above: line,
-                            reserve: height)
+                            reserve: height, side: side)
             }
         }
     }
 
     private func hideCandidates() {
+        listAbove = nil
         nonisolated(unsafe) let chips = chips
         MainActor.assumeIsolated { chips.hide() }
     }
@@ -349,6 +355,9 @@ final class ArabiziInputController: IMKInputController {
     /// reported it, and where the converted text ends (an app such as Notes can report the cursor late).
     private var conversionEnd: Int?
     private var conversionEnds: Set<Int> = []
+    /// While a list of spellings is open: whether it (and the preview with it) sits above the text (true) or below
+    /// (false), chosen when it opened; nil when no list is open.
+    private var listAbove: Bool?
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
@@ -769,7 +778,8 @@ final class PreviewWindow {
     /// from word to word).
     @discardableResult
     @MainActor func show(arabic words: [String], doubtful: Set<Int>, selected: Int? = nil, latin: String,
-                         hint: String? = nil, above line: NSRect, reserve: CGFloat = 0) -> NSRect {
+                         hint: String? = nil, above line: NSRect, reserve: CGFloat = 0,
+                         side: Bool? = nil) -> NSRect {
         let panel = ensurePanel()
         guard let label else { return panel.frame }
         let paragraph = NSMutableParagraphStyle()
@@ -800,7 +810,8 @@ final class PreviewWindow {
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1_600, height: 1_000)
         // Above the line, with room for `reserve` (the chips) over it; else below the line.
         var origin = NSPoint(x: anchor.minX,
-                             y: StackPlacement.y(for: anchor, height: size.height, reserve: reserve, top: visible.maxY))
+                             y: StackPlacement.y(for: anchor, height: size.height, reserve: reserve, top: visible.maxY,
+                                                 above: side))
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         label.needsDisplay = true

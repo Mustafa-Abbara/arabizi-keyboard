@@ -25,3 +25,12 @@ private let preview: CGFloat = 40, chips: CGFloat = 70
     #expect(chipsY + chips + StackPlacement.gap == box.minY)
     #expect(chipsY + chips < line.minY)  // never over the text
 }
+
+@Test func aSideChosenWhenTheListOpenedIsKeptWhateverTheNextBoxNeeds() {
+    let line = CGRect(x: 100, y: 500, width: 300, height: 20)
+    // A tall box would not fit above under a top at 600, a short one would: the chosen side wins for both.
+    #expect(StackPlacement.y(for: line, height: 200, top: 600, above: true) == line.maxY + StackPlacement.gap)
+    #expect(StackPlacement.y(for: line, height: 20, top: 600, above: false) == line.minY - 20 - StackPlacement.gap)
+    #expect(StackPlacement.isAbove(CGRect(x: 0, y: line.maxY + 6, width: 10, height: 10), line))
+    #expect(!StackPlacement.isAbove(CGRect(x: 0, y: line.minY - 30, width: 10, height: 10), line))
+}

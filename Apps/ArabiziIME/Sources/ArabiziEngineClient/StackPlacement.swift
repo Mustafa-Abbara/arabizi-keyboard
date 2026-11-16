@@ -11,10 +11,15 @@ public enum StackPlacement {
         line.maxY + gap + height + (reserve > 0 ? gap + reserve : 0) <= top
     }
 
-    /// The y of a box of `height` placed above `line` when it fits (with `reserve`), else below it.
-    public static func y(for line: CGRect, height: CGFloat, reserve: CGFloat = 0, top: CGFloat) -> CGFloat {
-        fitsAbove(line, height: height, reserve: reserve, top: top) ? line.maxY + gap : line.minY - height - gap
+    /// The y of a box of `height` placed above `line` when it fits (with `reserve`), else below it. `above`, when
+    /// given, is the side already chosen while a list is open: kept, so the boxes never jump from word to word.
+    public static func y(for line: CGRect, height: CGFloat, reserve: CGFloat = 0, top: CGFloat,
+                         above: Bool? = nil) -> CGFloat {
+        above ?? fitsAbove(line, height: height, reserve: reserve, top: top) ? line.maxY + gap : line.minY - height - gap
     }
+
+    /// Whether `box` was placed above `line`.
+    public static func isAbove(_ box: CGRect, _ line: CGRect) -> Bool { box.minY >= line.midY }
 
     /// The y of a box of `height` on the far side of `preview` from `line`: above a preview above the line,
     /// below a preview below it.

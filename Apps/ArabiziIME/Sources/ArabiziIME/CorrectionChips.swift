@@ -57,7 +57,7 @@ final class CorrectionChips {
     /// `typed`: the sentence as typed, with the UTF-16 range of the words the selected word came from.
     @MainActor func show(word: String?, doubtful: Bool, candidates: [String], spelling: Bool, choice: Int?,
                          typed: (text: String, selected: Range<Int>?)?, above line: NSRect,
-                         preview: ((CGFloat) -> NSRect)? = nil,
+                         preview: ((CGFloat) -> NSRect)? = nil, side: Bool? = nil,
                          pick: @escaping (String) -> Void, hover: @escaping (String) -> Void = { _ in },
                          spellIt: @escaping () -> Void) {
         hintToken += 1
@@ -85,8 +85,14 @@ final class CorrectionChips {
         let size = column?.fittingSize ?? row.fittingSize
         height = size.height
         // With the preview: it is placed knowing the chips' height, and the chips go on its far side from the text.
-        place(panel, size: size, above: line, beside: preview?(size.height))
+        let besides = preview?(size.height)
+        place(panel, size: size, above: line, beside: besides, side: side)
+        // What decides the side: the preview when the chips sit beside it, else the chips themselves.
+        placed = (besides ?? panel.frame, line == .zero ? NSRect(origin: NSEvent.mouseLocation, size: .zero) : line)
     }
+
+    /// Where the last chip row (or the preview it sits beside) went, and the line it was placed around.
+    @MainActor private(set) var placed: (box: NSRect, line: NSRect)?
 
     /// Lights `candidate`'s chip and dims the others, in place: the row keeps its size and place, so the chip under
     /// the mouse stays the same chip.
@@ -119,12 +125,14 @@ final class CorrectionChips {
         panel?.orderOut(nil)
     }
 
-    @MainActor private func place(_ panel: NSPanel, size: NSSize, above line: NSRect, beside preview: NSRect? = nil) {
+    @MainActor private func place(_ panel: NSPanel, size: NSSize, above line: NSRect, beside preview: NSRect? = nil,
+                                  side: Bool? = nil) {
         let anchor = line == .zero ? NSRect(origin: NSEvent.mouseLocation, size: .zero) : line
         let screen = NSScreen.screens.first { $0.frame.contains(anchor.origin) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1_600, height: 1_000)
         // Above the line, where the live preview sits (typing boxes are often at the bottom of the screen).
-        var origin = NSPoint(x: anchor.minX, y: StackPlacement.y(for: anchor, height: size.height, top: visible.maxY))
+        var origin = NSPoint(x: anchor.minX,
+                             y: StackPlacement.y(for: anchor, height: size.height, top: visible.maxY, above: side))
         if let preview { origin = NSPoint(x: preview.minX, y: StackPlacement.y(beside: preview, of: anchor, height: size.height)) }
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
         let frame = NSRect(origin: origin, size: size)
