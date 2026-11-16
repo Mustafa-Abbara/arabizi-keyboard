@@ -157,20 +157,33 @@ public struct Conversion: Equatable, Sendable {
 /// The Phase 1 typing behaviour (roadmap P1 step 2): type Latin, Enter converts, Enter again sends.
 public struct Composer {
     public private(set) var buffer = "" {
-        didSet { if !movingCaret { caretIndex = nil } }  // a new text: the cursor at its end
+        didSet { caret = nil }  // a new text puts the cursor at its end; typing and the arrows set it after
     }
-    /// The cursor inside the text being typed can move (Windows): ← and → move it instead of letting go of the
-    /// sentence, letters and Backspace act where it is, and the keyboard follows a click inside the text
-    /// (`moveCaret`). Off (the Mac, for now): the cursor stays at the end and ← → hand the Latin to the app.
-    public var editsInPlace = false
-    /// Where the cursor is in `buffer`, in UTF-16 units (the keyboard puts the app's cursor there).
-    public var caret: Int {
-        guard let caretIndex else { return buffer.utf16.count }
-        return buffer.prefix(caretIndex).utf16.count
+    /// Where the cursor is in `buffer`, in characters from the start; nil at the end. ← and → move it while typing,
+    /// so a typo can be fixed without leaving the sentence.
+    private var caret: Int?
+    /// Whether ← → and clicks move the cursor inside the sentence being typed (both keyboards turn it on). Off, they
+    /// end the sentence in Latin and go to the app.
+    public var cursorMoves = false
+    /// The cursor's place in `buffer`, in UTF-16 units, for the app's marked text.
+    public var cursor: Int {
+        guard let caret else { return buffer.utf16.count }
+        return buffer.prefix(caret).utf16.count
     }
-    /// Characters into `buffer`; nil: at the end.
-    private var caretIndex: Int?
-    private var movingCaret = false
+    private var caretIndex: String.Index { caret.map { buffer.index(buffer.startIndex, offsetBy: $0) } ?? buffer.endIndex }
+
+    /// Moves the cursor to `offset` (UTF-16 units into `buffer`, as an app reports a click in the marked text).
+    /// nil when nothing is being typed.
+    public mutating func moveCursor(to offset: Int) -> Effect? {
+        guard cursorMoves, !buffer.isEmpty, session == nil else { return nil }
+        let units = buffer.utf16
+        let clamped = min(max(offset, 0), units.count)
+        guard let index = units.index(units.startIndex, offsetBy: clamped, limitedBy: units.endIndex)?
+            .samePosition(in: buffer) else { return nil }
+        let place = buffer.distance(from: buffer.startIndex, to: index)
+        caret = place == buffer.count ? nil : place
+        return .update(marked: buffer)
+    }
     public private(set) var lastConversion: Conversion?
     /// True while suggestions are shown.
     public var isSuggesting: Bool { session != nil }
@@ -246,12 +259,9 @@ public struct Composer {
             if buffer.isEmpty && character == " " {
                 return .pass
             }
-            if editsInPlace, let at = caretIndex {  // typed in the middle: at the cursor, which moves past it
-                edit { $0.buffer.insert(contentsOf: character, at: $0.buffer.index($0.buffer.startIndex, offsetBy: at))
-                       $0.caretIndex = at + character.count }
-                return .update(marked: buffer)
-            }
-            buffer += character
+            let at = caret
+            buffer.insert(contentsOf: character, at: caretIndex)
+            if let at { caret = at + character.count }
             return .update(marked: buffer)
         case .enter:
             return buffer.isEmpty ? .pass : .commit(convertAndRemember(take()))
@@ -272,24 +282,16 @@ public struct Composer {
             return buffer.isEmpty ? .pass : .commit(take())
         case .backspace:
             guard !buffer.isEmpty else { return .pass }
-            if editsInPlace, let at = caretIndex {  // the letter before the cursor
-                guard at > 0 else { return .consume }
-                edit { $0.buffer.remove(at: $0.buffer.index($0.buffer.startIndex, offsetBy: at - 1))
-                       $0.caretIndex = at - 1 }
-                return .update(marked: buffer)
-            }
-            buffer.removeLast()
+            let at = caret
+            guard at != 0 else { return .consume }  // at the start of the sentence: nothing before it to delete
+            buffer.remove(at: buffer.index(before: caretIndex))
+            if let at { caret = at - 1 }
             return .update(marked: buffer)
-        case .arrowLeft where editsInPlace && !buffer.isEmpty:
-            // Inside the sentence being typed: the cursor moves; at its start it stays (nothing is let go).
-            let at = caretIndex ?? buffer.count
-            guard at > 0 else { return .consume }
-            edit { $0.caretIndex = at - 1 }
-            return .update(marked: buffer)
-        case .arrowRight where editsInPlace && caretIndex != nil:
-            // Back towards the end; at the end, → hands the Latin to the app as before.
-            let at = (caretIndex ?? buffer.count) + 1
-            edit { $0.caretIndex = at >= $0.buffer.count ? nil : at }
+        case .arrowLeft where cursorMoves && !buffer.isEmpty, .arrowRight where cursorMoves && !buffer.isEmpty:
+            // Inside the sentence being typed: the cursor moves, the sentence stays (and so does the preview).
+            let place = (caret ?? buffer.count) + (key == .arrowLeft ? -1 : 1)
+            let clamped = min(max(place, 0), buffer.count)
+            caret = clamped == buffer.count ? nil : clamped
             return .update(marked: buffer)
         case .arrowUp where !buffer.isEmpty:
             // Fix before sending: the Arabic of what is typed, with the last word selected, before it is committed.
@@ -598,30 +600,6 @@ public struct Composer {
         let converted = DirectionMarks.marked(ready(latin) ?? convert(latin))
         lastConversion = Conversion(latin: latin, converted: converted)
         return converted
-    }
-
-    /// Changes the text or the cursor without the change putting the cursor back at the end.
-    private mutating func edit(_ change: (inout Composer) -> Void) {
-        movingCaret = true
-        change(&self)
-        movingCaret = false
-    }
-
-    /// The user clicked inside the text being typed: the cursor goes there (`offset` in UTF-16 units from its
-    /// start), so the next letters go there and Enter still converts the whole text. False when there is no text,
-    /// the cursor cannot move inside it, or the offset is outside it.
-    public mutating func moveCaret(toUTF16 offset: Int) -> Bool {
-        guard editsInPlace, session == nil, !buffer.isEmpty, offset >= 0, offset <= buffer.utf16.count else {
-            return false
-        }
-        var count = 0, units = 0
-        for character in buffer {  // the character boundary at or before the offset
-            if units + character.utf16.count > offset { break }
-            units += character.utf16.count
-            count += 1
-        }
-        edit { $0.caretIndex = count >= $0.buffer.count ? nil : count }
-        return true
     }
 
     private mutating func take() -> String {

@@ -207,7 +207,7 @@ final class ComposerBox {
         self.core = core
         composer = Composer(convert: { [core] in core.convertForSending($0) }, suggester: core.suggester,
                             ready: { [core] in core.ready($0) })
-        composer.editsInPlace = true  // ← → and clicks move inside the text being typed (the reply's "caret")
+        composer.cursorMoves = true  // ← → and clicks move inside the text being typed (the reply's "caret")
     }
 }
 
@@ -330,7 +330,8 @@ public func harfi_composer_highlight(_ composer: UnsafeMutableRawPointer?,
 public func harfi_composer_caret(_ composer: UnsafeMutableRawPointer?, _ offset: Int32) -> Int32 {
     guard let composer else { return 0 }
     let box = Unmanaged<ComposerBox>.fromOpaque(composer).takeUnretainedValue()
-    return box.composer.moveCaret(toUTF16: Int(offset)) ? 1 : 0
+    guard offset >= 0, Int(offset) <= box.composer.buffer.utf16.count else { return 0 }
+    return box.composer.moveCursor(to: Int(offset)) == nil ? 0 : 1
 }
 
 @_cdecl("harfi_composer_pick")
@@ -346,7 +347,7 @@ private func reply(_ box: ComposerBox, _ effect: Effect) -> String {
     var reply = effectJSON(effect)
     // Where the cursor goes in the text being typed, in UTF-16 units from its start (its end unless ← → or a click
     // moved it).
-    if case .update = effect { reply["caret"] = box.composer.caret }
+    if case .update = effect { reply["caret"] = box.composer.cursor }
     reply["candidates"] = box.composer.currentCandidates
     if let choice = box.composer.currentChoice { reply["choice"] = choice }
     if let word = box.composer.selectedText {
