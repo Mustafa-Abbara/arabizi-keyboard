@@ -6,7 +6,26 @@ This project builds **Harfi, a local, private keyboard for macOS and Windows**: 
 
 > EECE 503N/798S — Agentic Systems, Fall 2026. Path A (application). Phase 1 scope approved by Dr. Mohanna (see [ADR 0010](docs/decisions/0010-phase1-pivot.md)).
 
-**Status:** Harfi 0.4.0 for Mac and Windows, with model v4: 0.864 word accuracy on the frozen test set and 0.848 on messages by other writers ([docs/MODEL_V4.md](docs/MODEL_V4.md), [docs/EVAL.md](docs/EVAL.md)). Install: [docs/INSTALL.md](docs/INSTALL.md). Plan and gates: [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** Harfi 0.4.0 for Mac and Windows, with model v4. Install: [docs/INSTALL.md](docs/INSTALL.md). Plan and gates: [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## Results
+
+Word accuracy of the shipped keyboard engine (words right ÷ words in the longer of reference and output), on held-out messages the models never trained on; 95% bootstrap intervals; each test set run once per model.
+
+| Test set | Rules only | Model v3 | **Model v4** | v4 − v3 (paired) |
+|---|---|---|---|---|
+| Frozen test (243 messages) | 0.594 | 0.836 | **0.864** | **+0.028** [+0.013, +0.044] |
+| Others test (299 messages by other writers) | 0.607 | 0.826 | **0.848** | **+0.022** [+0.009, +0.036] |
+| Real chats by new writers (1,642 messages, private; aggregates only) | 0.820 | 0.892 | **0.912** | **+0.020** [+0.014, +0.025] |
+| Held-out synthetic test (5,342 messages) | 0.721 | 0.802 | **0.918** | +0.115 [+0.111, +0.119] |
+
+| Messages with every word right | v3 | **v4** |
+|---|---|---|
+| Frozen test | 41% | **44%** |
+| Others test | 16% | **22%** |
+| Real chats by new writers | 59% | **65%** |
+
+v4 is v3's model trained again with 39,340 synthetic training pairs, written by four AI models in two steps aimed at v3's measured errors (word forms it had not seen, rarely seen words, short words read from context, ط ص ض ظ typed as t s d z, English and French kept in Latin), then cleaned, filtered and checked by hand. How each weakness was closed, the cleaning steps and every comparison: [docs/MODEL_V4.md](docs/MODEL_V4.md). Decision: [ADR 0038](docs/decisions/0038-model-v4.md). Earlier models and metrics: [docs/EVAL.md](docs/EVAL.md).
 
 ## Repository map
 
