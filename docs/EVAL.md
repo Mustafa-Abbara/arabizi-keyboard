@@ -276,17 +276,15 @@ stays. Counts and times only.
 | Machine | Model | Words | p50 / p90 / p95 / max ms | Over 400 ms | Over 600 ms (late: list kept) |
 |---|---|---|---|---|---|
 | Windows laptop, i7-10870H, processor only | v4 | 302 | 317 / 445 / 484 / 635 | 18.5% | 0.7% |
-| **8 GB M2 MacBook Air (Metal)** | v4 | | **not measured yet** | | |
+| **8 GB M2 MacBook Air (Metal)** | v4 | 300 | **212 / 300 / 310 / 370** | 0.0% | 0.0% |
 
 - **Windows:** slower than the 124-word run in docs/RANKER_V4.md (p50 255, p95 383 ms): more words, and this laptop's
   speed varies between runs (see "Speed on Windows" above). ADR 0036's 400 ms target is met at p50 but not at p95 here.
   A late answer only means the list is not re-ranked; the keyboard never waits for it. The guesses are **on** in the
   Windows keyboard.
-- **Mac:** the guesses are wired in but **off** (`Settings.modelGuesses`) until this row is filled. On the Air:
-  `swift build -c release --package-path Packages/ArabiziEngine --product arabizi-cli`, then
-  `uv run --project eval python scripts/word_guess_latency.py`. If p95 is under 400 ms (or the share over 600 ms is
-  small), flip the default in `SettingsWindow.swift`; `defaults write lb.aub.arabizi.inputmethod.ArabiziIME
-  modelGuesses -bool true` turns them on to try before that.
+- **Mac** (16 Nov 2026): faster than the Windows processor, with every answer inside the deadline; the guesses are
+  **on** in the Mac keyboard too, as on Windows (`Settings.modelGuesses`; `defaults write
+  lb.aub.arabizi.inputmethod.ArabiziIME modelGuesses -bool false` turns them off to compare).
 
 ### A guess request and the next conversion (16 Nov 2026)
 
