@@ -104,10 +104,7 @@ def test_committed_letter_odds_are_up_to_date():
 
 
 def test_committed_ranker_is_up_to_date():
-    rows = [r for r in pairs_cli._guess_rows(pairs_cli.GUESSES_PATH) if r["set"] in ("dev", "dev-others")]
-    cands = C.Candidates(ranker=None)
-    examples = [(f, s, r["ref"]) for r, f, s in pairs_cli._examples(cands, rows, pairs_cli.RANKER_GUESSES)]
-    fresh = C.train_ranker(examples)
+    fresh = C.train_ranker(pairs_cli.ranker_examples(C.Candidates(ranker=None)))
     committed = C.load_ranker()
     assert committed is not None
     for key in ("features", "mean", "scale", "weights", "bias"):

@@ -563,7 +563,7 @@ def wrong_words(row: dict, rules: b0.RuleConverter):
 # ----------------------------------------------------------------------------------------------- Swift parity
 
 FIXTURE = P.ROOT / "Packages" / "ArabiziCore" / "Tests" / "ArabiziCoreTests" / "Fixtures" / "candidates_parity.json"
-GUESSES = P.ROOT / "eval" / "results" / "candidates" / "guesses-v3.jsonl"
+GUESSES = P.ROOT / "eval" / "results" / "candidates" / "guesses-v4.jsonl"
 # Edge cases: a missing vowel, an unknown word with a model guess, a prefix typed joined, a run of typed words,
 # digits for letters, a doubled consonant, a word no option can write, and no typed word at all.
 FIXTURE_CASES = [

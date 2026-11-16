@@ -2,7 +2,7 @@
 ↑ list's ranker. Needs llama-cpp-python (not an eval dependency: `uv run --with llama-cpp-python`) and the model file.
 
   uv run --project eval --with llama-cpp-python python -m arabizi_eval.model_guesses \\
-      eval/results/<run>/predictions.jsonl --set dev --out eval/results/candidates/guesses-v3.jsonl
+      eval/results/<run>/predictions.jsonl --set dev --out eval/results/candidates/guesses-v4.jsonl
 
 For each wrong word (candidates.wrong_words), the model's answer is kept up to that word and a small beam over its next
 tokens finishes the word several ways (until a space or the end of the answer). Resumes: words already in OUT are
@@ -22,7 +22,8 @@ from arabizi_eval import b0
 from arabizi_eval import candidates as C
 from arabizi_eval import pairs as P
 
-MODEL_ID = "arabizi-llama3.2-1b-v3"
+# The model the engine ships (config/engine.json): the ↑ list's ranker learns from that model's guesses.
+MODEL_ID = json.loads((P.ROOT / "config" / "engine.json").read_text("utf-8"))["model"]
 
 
 class Guesser:
@@ -82,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("predictions", type=Path, help="a run's predictions.jsonl (arabizi, reference, prediction)")
     parser.add_argument("--set", required=True, help="a name for these rows (dev, dev-others…)")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--model", default=MODEL_ID, help=f"a model id from config/models.json (default: {MODEL_ID})")
     args = parser.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     rules = b0.RuleConverter()
@@ -89,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.out.exists():
         done = {(r["set"], r["id"], r["k"]) for r in map(json.loads, args.out.read_text("utf-8").splitlines())}
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    guesser, n = Guesser(), 0
+    guesser, n = Guesser(args.model), 0
     with args.out.open("a", encoding="utf-8") as out:
         for line in args.predictions.read_text("utf-8").splitlines():
             row = json.loads(line)

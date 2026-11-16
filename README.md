@@ -27,6 +27,8 @@ Word accuracy of the shipped keyboard engine (words right ÷ words in the longer
 
 v4 is v3's model trained again with 39,340 synthetic training pairs, written by four AI models in two steps aimed at v3's measured errors (word forms it had not seen, rarely seen words, short words read from context, ط ص ض ظ typed as t s d z, English and French kept in Latin), then cleaned, filtered and checked by hand. How each weakness was closed, the cleaning steps and every comparison: [docs/MODEL_V4.md](docs/MODEL_V4.md). Decision: [ADR 0038](docs/decisions/0038-model-v4.md). Earlier models and metrics: [docs/EVAL.md](docs/EVAL.md).
 
+When a word is wrong, the ↑ list offers the right one among its 6 for 78% of v4's wrong words on the real chats, and puts it first 55% of the time (50% with 0.4.0's ranker). With the model's guesses turned on, that becomes 85% and 62%. "Spell it" is needed for 2.9% of all words (2.5% with guesses). What was tried and what limits it: [docs/RANKER_V4.md](docs/RANKER_V4.md), [ADR 0039](docs/decisions/0039-ranker-v4.md).
+
 ## Repository map
 
 | Path | Purpose |

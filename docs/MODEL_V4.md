@@ -279,7 +279,7 @@ Same model size and quantisation as v3, so the cost per token is the same. On th
 
 - **`idek` removed from the chat abbreviations** (`data/rules/chat_abbreviations.json`). In Lebanese Arabizi `idek` is also إيديك, "your hands"; every generated row that used it meant the hands, and the list would have kept "ghassel idek" in Latin. The test that compares the list with the training data caught it.
 - **Rebuilt from the new training rows**, because their tests require it: the Python–Swift parity fixture (`b0_parity.json`), the spelling odds (`spelling_odds.json`) and the word-suggestion ranker with its fixture (`candidate_ranker.json`, `candidates_parity.json`).
-- **Not rebuilt (follow-up):** the rule dictionary (`arabizi_lexicon.json`), which also decides which words get the "unsure word" hint, still holds v3's training vocabulary; the ranker's model signal was fit on v3's guesses (`eval/src/arabizi_eval/model_guesses.py`). Both work with v4 and are worth refreshing.
+- **Not rebuilt (follow-up):** the rule dictionary (`arabizi_lexicon.json`), which also decides which words get the "unsure word" hint, still holds v3's training vocabulary. Rebuilding it did not help the ↑ list ([RANKER_V4.md](RANKER_V4.md)). The ranker has since been retrained on v4's guesses ([ADR 0039](decisions/0039-ranker-v4.md)).
 
 ## 8. Limitations
 
