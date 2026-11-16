@@ -183,7 +183,24 @@ Decision and training: [ADR 0030](decisions/0030-model-v3.md). Each system was r
 
 Paired word accuracy, v3 engine − v2: **+0.034 [+0.021, +0.047]** on others test (against v2 protected spans, same set); **+0.016 [−0.001, +0.033]** on frozen test against v2 protected spans and **+0.009 [−0.007, +0.026]** against v2 model only: no clear difference. Keep-Latin F1 on others test 0.84 against 0.68 (v2 protected spans), hallucination rate 1.7% against 13.4%; on frozen test 0.93 and 0% against 0.84 and 4.9%. Dev (v3 − v2, keyboard engine): +0.009 frozen dev, +0.017 others dev; v3 never fell back to the rules on others dev (v2: 7 of 200).
 
+### v4: synthetic rows aimed at v3's weak spots, test sets run once (16 Nov 2026)
+
+Decision: [ADR 0038](decisions/0038-model-v4.md); the full account (data steps, cleaning, every comparison): [MODEL_V4.md](MODEL_V4.md). Each test set was run once for v4; the v3 rows are the recorded 29 Oct runs. Keyboard engine (`engine-arabizi-llama3.2-1b-v4-kb`), on this Windows laptop's processor.
+
+| Set | v3 | **v4** | v4 − v3, paired [95% CI] |
+|---|---|---|---|
+| Frozen test (243) | 0.836 [0.815, 0.857] | **0.864** [0.845, 0.883] | **+0.028** [+0.013, +0.044] |
+| Others test (299) | 0.826 [0.811, 0.840] | **0.848** [0.833, 0.863] | **+0.022** [+0.009, +0.036] |
+| Frozen dev (104) | 0.824 | 0.854 | +0.029 [+0.003, +0.056] |
+| Others dev (200) | 0.826 | 0.841 | +0.015 [−0.001, +0.030] |
+| senzi + WhatsApp (1,642 private real messages, new writers; aggregates only) | 0.892 | 0.912 | +0.020 [+0.014, +0.025] |
+| Held-out synthetic test (5,342, `data/synthetic/synthetic_test.jsonl`) | 0.802 | 0.918 | +0.115 [+0.111, +0.119] |
+
+Sentences fully right: frozen test 41% → 44%, others test 16% → 22%. Character error rate 0.053 → 0.042 and 0.070 → 0.058; keep-Latin F1 0.931 → 0.936 and 0.841 → 0.867; numbers kept 100%; hallucination 0% and 1.7% → 2.0% (others test). The interim model after step 1 (`v4-interim`, not shipped) and the per-kind results are in MODEL_V4.md. The synthetic test is scored with `scripts/score_synthetic_test.py`.
+
 ## Final report (P7, 1 Nov 2026)
+
+**Superseded on 16 Nov 2026 by v4 (section above).** The report below is kept as it was written for v3.
 
 The shipped system is **v3 through the keyboard engine** (`engine-arabizi-llama3.2-1b-v3-kb`): **0.836** [0.815, 0.857] on the frozen test set and **0.826** [0.811, 0.840] on the others test set, each run once (29 Oct 2026, table above). Against the rules (B0: 0.594 / 0.607) that is about +0.24 and +0.22; against the best model without fine-tuning (5-shot Llama 3.2 1B, 0.147 on frozen test) +0.69.
 

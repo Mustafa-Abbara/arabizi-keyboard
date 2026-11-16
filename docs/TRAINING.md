@@ -100,6 +100,17 @@ The data makes the difference; rank 32 adds about one point, within noise. `v2` 
 
 `train/finetune_v3.ipynb`: one run, `v3`, with v2's settings (rank 32) on the export after `pairs split-prefixes` (every Arabic prefix apart from an English word; 0 glued tokens left in the export). Upload the new export as a new version of `arabizi-train`, then Save & Run All, as for v2. It is compared with v2 on frozen dev and others dev (`others-v1.1`).
 
+## v4: synthetic rows in two steps (ADR 0038)
+
+The data comes first: `scripts/build_synthetic_dataset.py` turns the generators' outputs into `data/pairs/train-ai_checked.jsonl` rows and the held-out `data/synthetic/synthetic_test.jsonl` ([DATA.md](DATA.md), [MODEL_V4.md](MODEL_V4.md)). Then the usual export (`pairs variants`, `pairs export-train`: 122,492 examples, 67% AI-derived; the command warns above 50%, which ADR 0038 accepts).
+
+| Run | Notebook | Data | Time | Validation loss per epoch | Result |
+|---|---|---|---|---|---|
+| `v4-interim` (trained as tag `v4`) | `train/finetune_v4_interim.ipynb` | v3 rows + step 1 (94,150 examples) | 280 min | 0.244, **0.216**, 0.223 | measurement only, not shipped |
+| **`v4`** (trained as tag `v5`) | `train/finetune_v4.ipynb` | v3 rows + steps 1 and 2 (122,492 examples) | 448 min | 0.215, **0.183**, 0.190 | shipped (0.4.0) |
+
+Both use v3's settings (rank 32, alpha 64, lr 2e-4, 3 epochs; best epoch 2 both times; final training loss about 0.01, so the adapter is not short of capacity). Two epochs would take about two thirds of the time: `"--epochs", "2"` in the notebook's run settings. Scoring the held-out synthetic test: `uv run --project eval python scripts/score_synthetic_test.py --test data/synthetic/synthetic_test.jsonl --out build/v4_eval run <model id>`, then `compare <a> <b>`.
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.

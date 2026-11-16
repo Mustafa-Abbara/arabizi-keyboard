@@ -173,6 +173,42 @@
       }
     },
     {
+      "id": "arabizi-llama3.2-1b-v4-interim",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261115-030439-llama3.2-1b-lora-v4.json",
+      "file": "arabizi-llama3.2-1b-v4-interim-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "17cea0ff29675cb5685f2202d10587c94eec75b9314e8433d145876b535c555a",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA fine-tune of Llama 3.2 1B Instruct on Kaggle with the v3 rows plus 25,169 synthetic rows checked by Moustafa (sol-6.1, fable-5.2, opus-5.5, sonnet-5.5); weights not in the repo (808 MB)",
+      "source": "interim run on the first 25,169 synthetic rows (trained as tag v4, 15 Nov 2026); superseded by v4, not shipped (ADR 0038)",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 15 Nov 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-llama3.2-1b-v4",
+      "base": "llama3.2-1b",
+      "run": "train/runs/20261115-160254-llama3.2-1b-lora-v5.json",
+      "file": "arabizi-llama3.2-1b-v4-Q4_K_M.gguf",
+      "size": 807694016,
+      "sha256": "26fcc7569be4339a70b30fd33df451896fb9967b314bed9c452ef316e048ab06",
+      "params": "1B",
+      "quant": "Q4_K_M",
+      "licence": "Llama 3.2 Community License",
+      "licence_acceptance": "llama",
+      "publisher": "this project: LoRA fine-tune of Llama 3.2 1B Instruct on Kaggle with the v3 rows plus 39,340 synthetic rows checked by Moustafa (ADR 0038); weights not in the repo (808 MB)",
+      "source": "v4: the shipped model (trained on Kaggle as tag v5, 15 Nov 2026; ADR 0038)",
+      "prompt": {
+            "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 15 Nov 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
+            "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+      }
+    },
+    {
       "id": "arabizi-llama3.2-1b-v2-r16",
       "base": "llama3.2-1b",
       "run": "train/runs/20261017-065546-llama3.2-1b-lora-v2-r16.json",

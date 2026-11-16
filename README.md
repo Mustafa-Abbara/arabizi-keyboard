@@ -1,12 +1,12 @@
-# Arabizi Keyboard (working title)
+# Harfi: an Arabizi keyboard
 
 Lebanese users chat in Arabizi (`b3at 100$ la mohammad`) but often need Arabic script: formal messages, older relatives, work.
 Today that means word-by-word web tools and copy-paste, which get context wrong (`لا محمد` instead of `لمحمد`) and send typed text to a server.
-This project builds a **local, private macOS input method**: type Arabizi, press Enter, and the whole message becomes Lebanese Arabic script. The conversion is done by a **small open model we fine-tune ourselves**, running only on the Mac, with a rule-based fallback. Agentic features (asking about ambiguous words, learning personal habits) are a possible Phase 2.
+This project builds **Harfi, a local, private keyboard for macOS and Windows**: type Arabizi, press Enter, and the whole message becomes Lebanese Arabic script. The conversion is done by a **small open model we fine-tune ourselves**, running only on your computer, with a rule-based fallback. Agentic features (asking about ambiguous words, learning personal habits) are a possible Phase 2.
 
 > EECE 503N/798S — Agentic Systems, Fall 2026. Path A (application). Phase 1 scope approved by Dr. Mohanna (see [ADR 0010](docs/decisions/0010-phase1-pivot.md)).
 
-**Status:** Phase 1, stage P0 (setup). See [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** Harfi 0.4.0 for Mac and Windows, with model v4: 0.864 word accuracy on the frozen test set and 0.848 on messages by other writers ([docs/MODEL_V4.md](docs/MODEL_V4.md), [docs/EVAL.md](docs/EVAL.md)). Install: [docs/INSTALL.md](docs/INSTALL.md). Plan and gates: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Repository map
 
