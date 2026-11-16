@@ -265,6 +265,21 @@ running.
   p50 379 → 170 ms); word accuracy 0.8206 → 0.8180; **9 of the 200** answers differ from the same text converted on its
   own (28 words where the lengths match), against 28 of 200 on the Windows processor.
 
+**Model v4** (16 Nov 2026, [ADR 0038](decisions/0038-model-v4.md)): the same setup with v4, one run each, nothing else
+running.
+
+| System | Frozen dev (104): word acc. | p50 / p95 ms | Others dev (200): word acc. | p50 / p95 ms | Rule fallbacks (deadline + check) |
+|---|---|---|---|---|---|
+| v3 (`engine-arabizi-llama3.2-1b-v3-kb`, 11 Nov) | 0.824 | 387 / 753 | 0.826 | 671 / 1,154 | 0 + 0 |
+| **v4** (`engine-arabizi-llama3.2-1b-v4-kb`) | **0.849** | 442 / 847 | **0.844** | 735 / 1,274 | 0 + 2 |
+
+- **Accuracy:** within 0.005 of v4 on the Windows processor (0.854 / 0.841); the two output checks that sent a message
+  to the rules are one new Latin word and one placeholder.
+- **Speed:** 55 to 120 ms slower than v3. Frozen dev is within the Mac budgets (p50 ≤ 600 ms, p95 ≤ 1.2 s); on others
+  dev p50 735 ms is above budget, as with v3, and p95 1,274 ms is now 74 ms over.
+- **Memory:** the engine service's physical footprint 380 MB while converting, 901 MB at its peak (`vmmap --summary`);
+  its resident size peaks at 1.7 GB, which also counts the 808 MB model file mapped into memory.
+
 ## Speed of the ↑ list's model guesses (16 Nov 2026)
 
 The model's 5 guesses for a wrong word (ADR 0036 #5, ADR 0039 #5), asked the way the keyboards ask: the Swift engine

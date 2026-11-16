@@ -29,4 +29,4 @@
 - Not rebuilt (follow-up): the rule dictionary, which also feeds the unsure-word hints, and the ranker's model signal, fit on v3's guesses.
 - The gains on real typing (2–3 points) are much smaller than on the synthetic test (11.5 points); the generated Arabizi is still more regular than real typing. More real writers remain the best next source.
 - The weights are not in the repo (808 MB); they may be published under the Llama 3.2 Community License (ADR 0028 #4).
-- Mac speed and memory with v4 are not measured yet.
+- On the 8 GB Air (docs/EVAL.md, "Speed on the Mac"): frozen dev 0.849 at p50 442 / p95 847 ms, others dev 0.844 at 735 / 1,274 ms (v3: 387 / 753 and 671 / 1,154); the engine's physical footprint peaks at 901 MB. Others dev is now 74 ms over the p95 budget.
