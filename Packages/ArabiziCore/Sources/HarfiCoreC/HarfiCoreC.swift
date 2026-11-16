@@ -342,10 +342,9 @@ private func reply(_ box: ComposerBox, _ effect: Effect) -> String {
         reply["learnedSpelling"] = habit.spelling
     }
     // The list shows without the model's guesses: ask for them; the text service asks again for the re-ranked list.
+    // Only while a list is open: asked right after a conversion, they held up the next message's conversion
+    // (the model does one thing at a time; +477 ms at the median on Windows, docs/EVAL.md).
     reply["guessesPending"] = guessesPending(box)
-    // Right after a conversion, a word that looks wrong (dashed) has its guesses asked for at once, so the list
-    // already has them when ↑ opens it (ADR 0036 #5).
-    if case .commit = effect, let query = box.composer.prefetchQuery { box.core.guesses?.request(query) }
     if let fix = box.composer.fixingBeforeSending {  // the preview stays on screen around the chips
         reply["fixingWords"] = fix.words
         reply["fixingIndex"] = fix.index

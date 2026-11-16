@@ -288,6 +288,17 @@ stays. Counts and times only.
   small), flip the default in `SettingsWindow.swift`; `defaults write lb.aub.arabizi.inputmethod.ArabiziIME
   modelGuesses -bool true` turns them on to try before that.
 
+### A guess request and the next conversion (16 Nov 2026)
+
+The engine runs one model request at a time, so a conversion that arrives while guesses are being made waits. Measured with the installed 0.4.1 engine on the Windows laptop, over its pipe as the keyboard talks to it: 28 dev-others messages never converted before, half of them sent 30 ms after a guess request about the previous message. Times only.
+
+| Conversion | p50 | p95 |
+|---|---|---|
+| on its own | 806 ms | 933 ms |
+| with a guess request running | 1,283 ms | 1,780 ms |
+
+That is +477 ms at the median. The first build asked for a doubtful word's guesses right after every conversion, even when ↑ was never pressed, so typing the next message quickly paid this cost. The keyboards now ask only while a list is open (ADR 0036, update).
+
 ## Reproducing a baseline from a fresh clone (11 Nov 2026)
 
 `git clone` of `main` at `0b8ca02`, then `uv run --project eval evalrun run --system b0 --split dev`, against the committed run of 29 Oct (`20261029-153707-b0-dev`): the same data (`data_sha256` 08b3a640…), and every accuracy metric identical (word accuracy 0.756, lenient 0.762). Latency p50 0.019 → 0.021 ms (+10%), p95 0.047 → 0.051 ms (+9%), within the 20% the P3 gate allows. Run: `eval/results/20261111-221425-b0-dev`.
