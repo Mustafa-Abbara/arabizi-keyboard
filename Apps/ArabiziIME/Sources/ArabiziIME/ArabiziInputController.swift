@@ -143,8 +143,12 @@ final class ArabiziInputController: IMKInputController {
     private static var livePreviewEnabled: Bool { Settings.livePreview }
     private let previewState = PreviewGeneration()
     private static let previewWork = PreviewWork()
-    private var composer = Composer(convert: ArabiziInputController.convert, suggester: ArabiziInputController.suggester,
-                                    ready: { ArabiziInputController.previews.arabic(for: $0) })
+    private var composer: Composer = {
+        var composer = Composer(convert: ArabiziInputController.convert, suggester: ArabiziInputController.suggester,
+                                ready: { ArabiziInputController.previews.arabic(for: $0) })
+        composer.cursorMoves = true  // ← → and clicks move inside the sentence being typed
+        return composer
+    }()
     private let chips = CorrectionChips()
     private let previewWindow = PreviewWindow()
 
@@ -249,9 +253,13 @@ final class ArabiziInputController: IMKInputController {
         nonisolated(unsafe) let chips = chips, controller = self
         MainActor.assumeIsolated {
             chips.show(word: current?.shown, doubtful: doubtful, candidates: candidates, spelling: spelling,
-                       choice: choice, typed: typed, above: line, preview: preview,
+                       choice: choice, typed: typed, above: line, preview: preview, side: listAbove,
                        pick: { controller.chipPicked($0) }, hover: { controller.chipHovered($0) },
                        spellIt: { controller.spellFromChip() })
+        }
+        // The side chosen when the list opened stays until it closes, so moving between words never flips it.
+        if listAbove == nil, let placed = MainActor.assumeIsolated({ chips.placed }) {
+            listAbove = StackPlacement.isAbove(placed.box, placed.line)
         }
     }
 
@@ -262,15 +270,17 @@ final class ArabiziInputController: IMKInputController {
         guard let fix = composer.fixingBeforeSending else { return nil }
         let doubtful = Self.doubtfulWords(fix.words, latin: fix.latin)
         nonisolated(unsafe) let window = previewWindow
+        let side = listAbove
         return { height in
             MainActor.assumeIsolated {
                 window.show(arabic: fix.words, doubtful: doubtful, selected: fix.index, latin: "", above: line,
-                            reserve: height)
+                            reserve: height, side: side)
             }
         }
     }
 
     private func hideCandidates() {
+        listAbove = nil
         nonisolated(unsafe) let chips = chips
         MainActor.assumeIsolated { chips.hide() }
     }
@@ -349,6 +359,26 @@ final class ArabiziInputController: IMKInputController {
     /// reported it, and where the converted text ends (an app such as Notes can report the cursor late).
     private var conversionEnd: Int?
     private var conversionEnds: Set<Int> = []
+    /// While a list of spellings is open: whether it (and the preview with it) sits above the text (true) or below
+    /// (false), chosen when it opened; nil when no list is open.
+    private var listAbove: Bool?
+
+    /// Keys, and clicks so a click inside the sentence being typed moves the cursor there (mouseDown below).
+    override func recognizedEvents(_ sender: Any!) -> Int {
+        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged, .leftMouseDown]).rawValue)
+    }
+
+    /// A click inside the sentence being typed: the cursor moves there and the sentence stays, as with ← →. A click
+    /// anywhere else is the app's (and ends the sentence in Latin, as before).
+    override func mouseDown(onCharacterIndex index: Int, coordinate point: NSPoint, withModifier flags: Int,
+                            continueTracking keepTracking: UnsafeMutablePointer<ObjCBool>!, client sender: Any!) -> Bool {
+        guard let client = sender as? IMKTextInput, !composer.buffer.isEmpty, !composer.isSuggesting else { return false }
+        let marked = client.markedRange()
+        guard marked.location != NSNotFound, index >= marked.location, index <= marked.location + marked.length,
+              let effect = composer.moveCursor(to: index - marked.location) else { return false }
+        _ = apply(effect, to: client)
+        return true
+    }
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
@@ -510,14 +540,24 @@ final class ArabiziInputController: IMKInputController {
         }
     }
 
-    /// The first time the keyboard is used on this Mac, the welcome page opens (once).
+    /// The first time the keyboard is used on this Mac, the welcome page opens (once). Back in an app with a
+    /// sentence still being typed, its preview shows again.
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
+        if !composer.buffer.isEmpty, !composer.isSuggesting { showPreview() }
         guard !UserDefaults.standard.bool(forKey: "welcomeShown") else { return }
         UserDefaults.standard.set(true, forKey: "welcomeShown")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             MainActor.assumeIsolated { SettingsWindow.shared.show(.welcome) }
         }
+    }
+
+    /// Another app (or another window) is now in front: the preview and the chips belong to this one, so they go,
+    /// and the sentence being typed stays underlined in it.
+    override func deactivateServer(_ sender: Any!) {
+        hidePreview()
+        hideCandidates()
+        super.deactivateServer(sender)
     }
 
     /// The keyboard's items in the input menu (the ع icon in the menu bar): quick toggles, and the Harfi window.
@@ -617,8 +657,15 @@ final class ArabiziInputController: IMKInputController {
     }
 
     private func setMarked(_ text: String, in client: IMKTextInput, replacing range: NSRange = notFound) {
-        let caret = NSRange(location: (text as NSString).length, length: 0)
-        client.setMarkedText(text, selectionRange: caret, replacementRange: range)
+        // The cursor where the composer has it (← → and clicks move it inside the sentence), else at the end.
+        let caret = NSRange(location: text == composer.buffer ? composer.cursor : (text as NSString).length, length: 0)
+        // Underlined as raw text, not selected text: given a plain string, macOS styles all of it as selected, and
+        // apps then draw no cursor line inside it (TextEdit and Notes reported the whole of it selected).
+        let raw = mark(forStyle: kTSMHiliteRawText, at: NSRange(location: 0, length: (text as NSString).length))
+            as? [NSAttributedString.Key: Any] ?? [.underlineStyle: NSUnderlineStyle.single.rawValue]
+        client.setMarkedText(NSAttributedString(string: text, attributes: raw), selectionRange: caret,
+                             replacementRange: range)
+        log.debug("marked text: cursor \(caret.location, privacy: .public) of \((text as NSString).length, privacy: .public)")
     }
 
     private func insert(_ text: String, into client: IMKTextInput, replacing range: NSRange = notFound) {
@@ -769,7 +816,8 @@ final class PreviewWindow {
     /// from word to word).
     @discardableResult
     @MainActor func show(arabic words: [String], doubtful: Set<Int>, selected: Int? = nil, latin: String,
-                         hint: String? = nil, above line: NSRect, reserve: CGFloat = 0) -> NSRect {
+                         hint: String? = nil, above line: NSRect, reserve: CGFloat = 0,
+                         side: Bool? = nil) -> NSRect {
         let panel = ensurePanel()
         guard let label else { return panel.frame }
         let paragraph = NSMutableParagraphStyle()
@@ -800,7 +848,8 @@ final class PreviewWindow {
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1_600, height: 1_000)
         // Above the line, with room for `reserve` (the chips) over it; else below the line.
         var origin = NSPoint(x: anchor.minX,
-                             y: StackPlacement.y(for: anchor, height: size.height, reserve: reserve, top: visible.maxY))
+                             y: StackPlacement.y(for: anchor, height: size.height, reserve: reserve, top: visible.maxY,
+                                                 above: side))
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         label.needsDisplay = true

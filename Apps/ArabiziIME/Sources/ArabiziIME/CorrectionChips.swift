@@ -12,6 +12,10 @@ final class CorrectionChips {
     private var row: NSStackView?
     private var typedLine: TypedLine?
     private var hintToken = 0
+    /// While a list is open: the largest size it has had, so the box only grows and never jumps back and forth,
+    /// and the row's width, which the chips stretch to fill so no gap is left beside them.
+    private var listSize: NSSize?
+    private var rowWidth: NSLayoutConstraint?
 
     @MainActor private func ensurePanel() -> (NSPanel, NSStackView) {
         if let panel, let row { return (panel, row) }
@@ -57,7 +61,7 @@ final class CorrectionChips {
     /// `typed`: the sentence as typed, with the UTF-16 range of the words the selected word came from.
     @MainActor func show(word: String?, doubtful: Bool, candidates: [String], spelling: Bool, choice: Int?,
                          typed: (text: String, selected: Range<Int>?)?, above line: NSRect,
-                         preview: ((CGFloat) -> NSRect)? = nil,
+                         preview: ((CGFloat) -> NSRect)? = nil, side: Bool? = nil,
                          pick: @escaping (String) -> Void, hover: @escaping (String) -> Void = { _ in },
                          spellIt: @escaping () -> Void) {
         hintToken += 1
@@ -82,11 +86,28 @@ final class CorrectionChips {
         } else {
             row.addArrangedSubview(ChipView(quiet: "Spell it", onClick: spellIt))
         }
-        let size = column?.fittingSize ?? row.fittingSize
+        rowWidth?.isActive = false
+        row.distribution = .fill
+        let natural = column?.fittingSize ?? row.fittingSize
+        let size = NSSize(width: max(natural.width, listSize?.width ?? 0), height: max(natural.height, listSize?.height ?? 0))
+        listSize = size
+        // The chips fill the box's width (the typed line or an earlier word may have made it wider).
+        let inner = size.width - 12  // the column's insets
+        if row.fittingSize.width < inner - 0.5 {
+            row.distribution = .fillProportionally
+            rowWidth = row.widthAnchor.constraint(equalToConstant: inner)
+            rowWidth?.isActive = true
+        }
         height = size.height
         // With the preview: it is placed knowing the chips' height, and the chips go on its far side from the text.
-        place(panel, size: size, above: line, beside: preview?(size.height))
+        let besides = preview?(size.height)
+        place(panel, size: size, above: line, beside: besides, side: side)
+        // What decides the side: the preview when the chips sit beside it, else the chips themselves.
+        placed = (besides ?? panel.frame, line == .zero ? NSRect(origin: NSEvent.mouseLocation, size: .zero) : line)
     }
+
+    /// Where the last chip row (or the preview it sits beside) went, and the line it was placed around.
+    @MainActor private(set) var placed: (box: NSRect, line: NSRect)?
 
     /// Lights `candidate`'s chip and dims the others, in place: the row keeps its size and place, so the chip under
     /// the mouse stays the same chip.
@@ -102,6 +123,9 @@ final class CorrectionChips {
 
     @MainActor func showHint(_ text: String, above line: NSRect, seconds: Double = 3) {
         hintToken += 1
+        listSize = nil
+        rowWidth?.isActive = false
+        row?.distribution = .fill
         let token = hintToken
         let (panel, row) = ensurePanel()
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -116,15 +140,18 @@ final class CorrectionChips {
 
     @MainActor func hide() {
         hintToken += 1
+        listSize = nil
         panel?.orderOut(nil)
     }
 
-    @MainActor private func place(_ panel: NSPanel, size: NSSize, above line: NSRect, beside preview: NSRect? = nil) {
+    @MainActor private func place(_ panel: NSPanel, size: NSSize, above line: NSRect, beside preview: NSRect? = nil,
+                                  side: Bool? = nil) {
         let anchor = line == .zero ? NSRect(origin: NSEvent.mouseLocation, size: .zero) : line
         let screen = NSScreen.screens.first { $0.frame.contains(anchor.origin) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1_600, height: 1_000)
         // Above the line, where the live preview sits (typing boxes are often at the bottom of the screen).
-        var origin = NSPoint(x: anchor.minX, y: StackPlacement.y(for: anchor, height: size.height, top: visible.maxY))
+        var origin = NSPoint(x: anchor.minX,
+                             y: StackPlacement.y(for: anchor, height: size.height, top: visible.maxY, above: side))
         if let preview { origin = NSPoint(x: preview.minX, y: StackPlacement.y(beside: preview, of: anchor, height: size.height)) }
         origin.x = min(max(origin.x, visible.minX + 4), visible.maxX - size.width - 4)
         let frame = NSRect(origin: origin, size: size)
