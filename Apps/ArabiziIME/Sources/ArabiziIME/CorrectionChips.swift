@@ -3,8 +3,9 @@ import ArabiziEngineClient
 
 /// The row of spellings above the text (⌥Tab), where the live preview sits, in the palette: the first spelling on the right, as Arabic
 /// reads, each with its number key, then "Spell it". While spelling, the letters for the last key. The keys work
-/// as before (the composer handles them); a click picks a chip without taking the focus from the app. Above the
-/// chips, the sentence as typed, with the words the selected one came from highlighted.
+/// as before (the composer handles them); a click picks a chip without taking the focus from the app, and the mouse
+/// over a spelling shows it in the text, as ↓/↑ do. Above the chips, the sentence as typed, with the words the
+/// selected one came from highlighted.
 final class CorrectionChips {
     private var panel: NSPanel?
     private var column: NSStackView?
@@ -57,7 +58,8 @@ final class CorrectionChips {
     @MainActor func show(word: String?, doubtful: Bool, candidates: [String], spelling: Bool, choice: Int?,
                          typed: (text: String, selected: Range<Int>?)?, above line: NSRect,
                          preview: ((CGFloat) -> NSRect)? = nil,
-                         pick: @escaping (String) -> Void, spellIt: @escaping () -> Void) {
+                         pick: @escaping (String) -> Void, hover: @escaping (String) -> Void = { _ in },
+                         spellIt: @escaping () -> Void) {
         hintToken += 1
         let (panel, row) = ensurePanel()
         row.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -73,7 +75,7 @@ final class CorrectionChips {
         for (i, candidate) in candidates.enumerated() {
             let number = spelling || i >= 9 ? nil : "\(i + 1)"
             row.addArrangedSubview(ChipView(text: candidate, number: number, selected: i == choice,
-                                            onClick: { pick(candidate) }))
+                                            onClick: { pick(candidate) }, onHover: { hover(candidate) }))
         }
         if spelling {
             row.addArrangedSubview(ChipView(hint: candidates.isEmpty ? "Type the word" : "Tab changes it · Enter takes it"))
@@ -84,6 +86,14 @@ final class CorrectionChips {
         height = size.height
         // With the preview: it is placed knowing the chips' height, and the chips go on its far side from the text.
         place(panel, size: size, above: line, beside: preview?(size.height))
+    }
+
+    /// Lights `candidate`'s chip and dims the others, in place: the row keeps its size and place, so the chip under
+    /// the mouse stays the same chip.
+    @MainActor func select(_ candidate: String) {
+        for case let chip as ChipView in row?.arrangedSubviews ?? [] where chip.spelling != nil {
+            chip.selected = chip.spelling == candidate
+        }
     }
 
     /// A short line above the text after a conversion, hidden after `seconds` or by the next chips.
@@ -142,10 +152,23 @@ final class CorrectionChips {
 final class ChipView: NSView {
     private enum Style { case spelling, quiet, hint, current }
     private let style: Style
-    private let selected: Bool
     private let onClick: (() -> Void)?
+    private var onHover: (() -> Void)?
+    private var label: NSTextField!
+    /// The spelling this chip offers, and its number key (nil for the other kinds of chip).
+    private(set) var spelling: String?
+    private var number: String?
+    var selected: Bool {
+        didSet {
+            guard selected != oldValue else { return }
+            if let spelling {
+                label.attributedStringValue = Self.spellingLabel(spelling, number: number, selected: selected)
+            }
+            needsDisplay = true
+        }
+    }
 
-    convenience init(text: String, number: String?, selected: Bool, onClick: @escaping () -> Void) {
+    private static func spellingLabel(_ text: String, number: String?, selected: Bool) -> NSAttributedString {
         let label = NSMutableAttributedString()
         if let number {
             label.append(NSAttributedString(string: number + "  ", attributes: [
@@ -153,7 +176,16 @@ final class ChipView: NSView {
         }
         label.append(NSAttributedString(string: text, attributes: [
             .font: Theme.arabic(20 * Theme.scale), .foregroundColor: selected ? Theme.accent : Theme.text]))
-        self.init(label, style: .spelling, selected: selected, onClick: onClick)
+        return label
+    }
+
+    convenience init(text: String, number: String?, selected: Bool, onClick: @escaping () -> Void,
+                     onHover: (() -> Void)? = nil) {
+        self.init(Self.spellingLabel(text, number: number, selected: selected), style: .spelling, selected: selected,
+                  onClick: onClick)
+        spelling = text
+        self.number = number
+        self.onHover = onHover
         setAccessibilityLabel(number.map { "\(text), key \($0)" } ?? text)
     }
 
@@ -190,6 +222,7 @@ final class ChipView: NSView {
         layer?.cornerRadius = 8
         layer?.borderWidth = style == .hint || style == .current ? 0 : 1
         let label = NSTextField(labelWithAttributedString: text)
+        self.label = label
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
         NSLayoutConstraint.activate([
@@ -222,6 +255,19 @@ final class ChipView: NSView {
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    // The panel never becomes key, so the area works whichever app is active.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        guard onHover != nil else { return }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways,
+                                                              .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { onHover?() }
+
+    override func mouseMoved(with event: NSEvent) { onHover?() }  // the row was rebuilt under a still mouse
 
     override func mouseDown(with event: NSEvent) {
         onClick?()
