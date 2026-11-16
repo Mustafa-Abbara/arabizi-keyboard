@@ -143,8 +143,12 @@ final class ArabiziInputController: IMKInputController {
     private static var livePreviewEnabled: Bool { Settings.livePreview }
     private let previewState = PreviewGeneration()
     private static let previewWork = PreviewWork()
-    private var composer = Composer(convert: ArabiziInputController.convert, suggester: ArabiziInputController.suggester,
-                                    ready: { ArabiziInputController.previews.arabic(for: $0) })
+    private var composer: Composer = {
+        var composer = Composer(convert: ArabiziInputController.convert, suggester: ArabiziInputController.suggester,
+                                ready: { ArabiziInputController.previews.arabic(for: $0) })
+        composer.cursorMoves = true  // ← → and clicks move inside the sentence being typed
+        return composer
+    }()
     private let chips = CorrectionChips()
     private let previewWindow = PreviewWindow()
 
@@ -358,6 +362,23 @@ final class ArabiziInputController: IMKInputController {
     /// While a list of spellings is open: whether it (and the preview with it) sits above the text (true) or below
     /// (false), chosen when it opened; nil when no list is open.
     private var listAbove: Bool?
+
+    /// Keys, and clicks so a click inside the sentence being typed moves the cursor there (mouseDown below).
+    override func recognizedEvents(_ sender: Any!) -> Int {
+        Int(NSEvent.EventTypeMask([.keyDown, .flagsChanged, .leftMouseDown]).rawValue)
+    }
+
+    /// A click inside the sentence being typed: the cursor moves there and the sentence stays, as with ← →. A click
+    /// anywhere else is the app's (and ends the sentence in Latin, as before).
+    override func mouseDown(onCharacterIndex index: Int, coordinate point: NSPoint, withModifier flags: Int,
+                            continueTracking keepTracking: UnsafeMutablePointer<ObjCBool>!, client sender: Any!) -> Bool {
+        guard let client = sender as? IMKTextInput, !composer.buffer.isEmpty, !composer.isSuggesting else { return false }
+        let marked = client.markedRange()
+        guard marked.location != NSNotFound, index >= marked.location, index <= marked.location + marked.length,
+              let effect = composer.moveCursor(to: index - marked.location) else { return false }
+        _ = apply(effect, to: client)
+        return true
+    }
 
     override func handle(_ event: NSEvent!, client sender: Any!) -> Bool {
         guard let event, event.type == .keyDown, let client = sender as? IMKTextInput else { return false }
@@ -626,7 +647,8 @@ final class ArabiziInputController: IMKInputController {
     }
 
     private func setMarked(_ text: String, in client: IMKTextInput, replacing range: NSRange = notFound) {
-        let caret = NSRange(location: (text as NSString).length, length: 0)
+        // The cursor where the composer has it (← → and clicks move it inside the sentence), else at the end.
+        let caret = NSRange(location: text == composer.buffer ? composer.cursor : (text as NSString).length, length: 0)
         client.setMarkedText(text, selectionRange: caret, replacementRange: range)
     }
 

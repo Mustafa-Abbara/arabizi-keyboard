@@ -156,7 +156,34 @@ public struct Conversion: Equatable, Sendable {
 
 /// The Phase 1 typing behaviour (roadmap P1 step 2): type Latin, Enter converts, Enter again sends.
 public struct Composer {
-    public private(set) var buffer = ""
+    public private(set) var buffer = "" {
+        didSet { caret = nil }  // a new text puts the cursor at its end; typing and the arrows set it after
+    }
+    /// Where the cursor is in `buffer`, in characters from the start; nil at the end. ← and → move it while typing,
+    /// so a typo can be fixed without leaving the sentence.
+    private var caret: Int?
+    /// Whether ← → and clicks move the cursor inside the sentence being typed (the Mac keyboard). Off, they end the
+    /// sentence in Latin and go to the app (the Windows keyboard, which does not place a cursor inside it).
+    public var cursorMoves = false
+    /// The cursor's place in `buffer`, in UTF-16 units, for the app's marked text.
+    public var cursor: Int {
+        guard let caret else { return buffer.utf16.count }
+        return buffer.prefix(caret).utf16.count
+    }
+    private var caretIndex: String.Index { caret.map { buffer.index(buffer.startIndex, offsetBy: $0) } ?? buffer.endIndex }
+
+    /// Moves the cursor to `offset` (UTF-16 units into `buffer`, as an app reports a click in the marked text).
+    /// nil when nothing is being typed.
+    public mutating func moveCursor(to offset: Int) -> Effect? {
+        guard cursorMoves, !buffer.isEmpty, session == nil else { return nil }
+        let units = buffer.utf16
+        let clamped = min(max(offset, 0), units.count)
+        guard let index = units.index(units.startIndex, offsetBy: clamped, limitedBy: units.endIndex)?
+            .samePosition(in: buffer) else { return nil }
+        let place = buffer.distance(from: buffer.startIndex, to: index)
+        caret = place == buffer.count ? nil : place
+        return .update(marked: buffer)
+    }
     public private(set) var lastConversion: Conversion?
     /// True while suggestions are shown.
     public var isSuggesting: Bool { session != nil }
@@ -232,7 +259,9 @@ public struct Composer {
             if buffer.isEmpty && character == " " {
                 return .pass
             }
-            buffer += character
+            let at = caret
+            buffer.insert(contentsOf: character, at: caretIndex)
+            if let at { caret = at + character.count }
             return .update(marked: buffer)
         case .enter:
             return buffer.isEmpty ? .pass : .commit(convertAndRemember(take()))
@@ -253,7 +282,16 @@ public struct Composer {
             return buffer.isEmpty ? .pass : .commit(take())
         case .backspace:
             guard !buffer.isEmpty else { return .pass }
-            buffer.removeLast()
+            let at = caret
+            guard at != 0 else { return .consume }  // at the start of the sentence: nothing before it to delete
+            buffer.remove(at: buffer.index(before: caretIndex))
+            if let at { caret = at - 1 }
+            return .update(marked: buffer)
+        case .arrowLeft where cursorMoves && !buffer.isEmpty, .arrowRight where cursorMoves && !buffer.isEmpty:
+            // Inside the sentence being typed: the cursor moves, the sentence stays (and so does the preview).
+            let place = (caret ?? buffer.count) + (key == .arrowLeft ? -1 : 1)
+            let clamped = min(max(place, 0), buffer.count)
+            caret = clamped == buffer.count ? nil : clamped
             return .update(marked: buffer)
         case .arrowUp where !buffer.isEmpty:
             // Fix before sending: the Arabic of what is typed, with the last word selected, before it is committed.

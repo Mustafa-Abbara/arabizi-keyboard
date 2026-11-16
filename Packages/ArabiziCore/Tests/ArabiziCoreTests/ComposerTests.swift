@@ -242,3 +242,62 @@ final class Counter: @unchecked Sendable {
     func add() { lock.withLock { count += 1 } }
     var value: Int { lock.withLock { count } }
 }
+
+private func movingComposer() -> Composer {
+    var c = composer()
+    c.cursorMoves = true
+    return c
+}
+
+@Test func leftAndRightMoveInsideTheSentenceAndTypingGoesThere() {
+    var c = movingComposer()
+    type("kifk", into: &c)
+    #expect(c.handle(.arrowLeft) == .update(marked: "kifk"))  // the sentence stays: nothing committed
+    #expect(c.cursor == 3)
+    #expect(c.handle(.text("a")) == .update(marked: "kifak"))
+    #expect(c.cursor == 4)
+    #expect(c.handle(.arrowRight) == .update(marked: "kifak"))
+    #expect(c.cursor == 5)
+    #expect(c.handle(.arrowRight) == .update(marked: "kifak"))  // already at the end: it stays there
+    #expect(c.handle(.enter) == .commit("<kifak>"))  // Enter converts the whole sentence
+    #expect(c.cursor == 0)
+}
+
+@Test func deleteRemovesTheLetterBeforeTheCursorAndStopsAtTheStart() {
+    var c = movingComposer()
+    type("kifxak", into: &c)
+    _ = c.handle(.arrowLeft)
+    _ = c.handle(.arrowLeft)
+    #expect(c.handle(.backspace) == .update(marked: "kifak"))
+    #expect(c.cursor == 3)
+    for _ in 0..<5 { _ = c.handle(.arrowLeft) }
+    #expect(c.cursor == 0)
+    #expect(c.handle(.backspace) == .consume)  // nothing before the cursor
+    #expect(c.buffer == "kifak")
+}
+
+@Test func aClickInTheSentenceMovesTheCursorThere() {
+    var c = movingComposer()
+    type("shu 3am", into: &c)
+    #expect(c.moveCursor(to: 3) == .update(marked: "shu 3am"))
+    #expect(c.cursor == 3)
+    #expect(c.handle(.text("e")) == .update(marked: "shue 3am"))
+    #expect(c.moveCursor(to: 99) == .update(marked: "shue 3am"))  // past the end: at the end
+    #expect(c.cursor == 8)
+    var empty = movingComposer()
+    #expect(empty.moveCursor(to: 0) == nil)  // nothing typed: the click is the app's
+}
+
+@Test func withNothingTypedTheArrowsAreTheApps() {
+    var c = movingComposer()
+    #expect(c.handle(.arrowLeft) == .pass)
+    #expect(c.handle(.arrowRight) == .pass)
+}
+
+@Test func withoutTheSwitchAnArrowEndsTheSentenceAsBefore() {  // the Windows keyboard
+    var c = composer()
+    type("kifak", into: &c)
+    #expect(c.handle(.arrowLeft) == .commitAndPass("kifak"))
+    type("shu", into: &c)
+    #expect(c.moveCursor(to: 1) == nil)
+}
