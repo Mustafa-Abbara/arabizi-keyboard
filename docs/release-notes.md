@@ -1,5 +1,9 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.4.3** (Mac)
+
+- **The Mac catches up with Windows:** in the ↑ list, pointing at a spelling shows it in your text and the preview, and the model's own guesses join the list a moment after it opens, without moving the spelling you have highlighted. On the 8 GB MacBook Air the guesses take about 0.2 s.
+
 **New in 0.4.2** (Windows)
 
 - **Pointing at a spelling shows it:** in the ↑ list, the word in your text and in the preview now changes to the spelling under the mouse, as it already did with the arrow keys.
