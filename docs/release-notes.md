@@ -1,5 +1,12 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.4.1**
+
+- **Better fixes in the ↑ list:** when a word comes out wrong, the right one is more often first in the list (55% of the time, up from 50%), because the list's ranking has been retrained on the v4 model's mistakes.
+- **On Windows, the model's own guesses join the list:** the list still opens at once; a moment later the model's best guesses for that word re-rank it, without moving the spelling you have highlighted. The right word is then in the list 85% of the time instead of 78%, and you need "Spell it" less often. On the Mac this is built in but stays off until its speed is measured.
+
+The model is unchanged (v4): if you have it, it is not downloaded again. The details: [docs/RANKER_V4.md](https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/RANKER_V4.md).
+
 **New in 0.4.0**
 
 - **A more accurate model (v4):** on the project's test messages it gets more words right (86.4% against 83.6%, and 84.8% against 82.6% on messages by other people) and more whole messages right with nothing to fix. It is better at word forms it has rarely seen, at short words whose meaning depends on the sentence, at ط ص ض ظ typed as t s d z, and at leaving English and French words as you typed them.

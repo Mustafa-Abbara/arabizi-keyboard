@@ -1,7 +1,7 @@
 #include "ChipWindow.h"
 
 namespace {
-const UINT_PTR HintTimer = 1;
+const UINT_PTR HintTimer = 1, DueTimer = 2;
 const wchar_t SpellValue[] = L"\x01spell";
 const int Gap = 6, PadX = 10, PadY = 4, Inset = 6, MinHeight = 32, NumberGap = 6;
 
@@ -98,13 +98,28 @@ void ChipWindow::ShowHint(const std::wstring &hint, const RECT &text, UINT milli
 }
 
 void ChipWindow::Hide() {
-    if (window_) KillTimer(window_, HintTimer);
+    if (window_) {
+        KillTimer(window_, HintTimer);
+        KillTimer(window_, DueTimer);
+    }
+    due_ = nullptr;
     hovered_ = -1;
     Popup::Hide();
 }
 
+void ChipWindow::After(UINT milliseconds, std::function<void()> due) {
+    if (!Ensure()) return;
+    due_ = std::move(due);
+    SetTimer(window_, DueTimer, milliseconds, nullptr);
+}
+
 void ChipWindow::OnTimer(UINT_PTR id) {
     if (id == HintTimer) Hide();
+    if (id != DueTimer) return;
+    KillTimer(window_, DueTimer);
+    auto due = std::move(due_);
+    due_ = nullptr;
+    if (due) due();
 }
 
 // Lays the chips out right to left (the first on the right) and shows the row above the text.

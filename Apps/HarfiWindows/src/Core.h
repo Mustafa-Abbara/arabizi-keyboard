@@ -26,6 +26,7 @@ struct Effect {
     // A pick just made this typed word a habit (ADR 0033), in UTF-8: the keyboard says so once, Esc refuses it.
     std::string learnedLatin, learnedSpelling;
     std::wstring unsureWord;  // sent with a word the model was unsure of (ADR 0034): pointed out once
+    bool guessesPending = false;  // the model's guesses for the word shown are coming: ask Guesses() shortly
 };
 
 // What the live preview box shows (harfi_preview); `arabic` is empty when nothing shows yet.
@@ -52,6 +53,8 @@ public:
     Effect Key(const std::string &keyJson);
     // The composer's answer to a spelling (or letter) clicked in the chip row.
     Effect Pick(const std::wstring &candidate);
+    // The ↑ list re-ranked once the model's guesses are here (effect "suggest"), else effect "none" (ADR 0036 #5).
+    Effect Guesses();
     // A new, empty composer: the app ended the composition or the typing moved to another field.
     void Reset();
     // The Latin being typed.

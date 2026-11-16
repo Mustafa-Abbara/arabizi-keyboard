@@ -33,7 +33,7 @@ The ↑ list (ADR 0036) shows 6 candidates for a wrong word, in an order set by 
 - The right word comes first more often today (+5 points). The top 6 only improves once the guesses are on.
 - **Spell it is still needed for 2.5–2.9% of words, not 1%.** The limit is which words are candidates at all (87% of the scored wrong words without guesses, 92% with them), and the ranker cannot change that. More ranker data barely helps: 10× the words adds 2 points.
 - **Follow-ups, by size:**
-  - wire the 5 guesses into both keyboards, after measuring them on the 8 GB Air;
+  - wire the 5 guesses into both keyboards, after measuring them on the 8 GB Air. **Done on 16 Nov 2026** (ADR 0036, update): both keyboards ask for 5 guesses, with a 600 ms deadline; on in Windows, off on the Mac until the Air is measured (docs/EVAL.md);
   - add candidates for merged and split words and a wider guess beam;
   - fix fewer wrong words in the model itself;
   - try trees again if the candidates grow.

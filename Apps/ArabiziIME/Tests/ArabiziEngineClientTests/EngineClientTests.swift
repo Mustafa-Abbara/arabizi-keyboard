@@ -37,7 +37,21 @@ private final class FakeService: NSObject, ArabiziEngineServiceProtocol, @unchec
 
     func status(reply: @escaping @Sendable (Data) -> Void) { reply(Data("{}".utf8)) }
 
-    func wordGuesses(_ request: Data, reply: @escaping @Sendable (Data) -> Void) { reply(Data()) }
+    func wordGuesses(_ request: Data, reply: @escaping @Sendable (Data) -> Void) {
+        switch behaviour {
+        case .answer:
+            guard let asked = try? JSONDecoder().decode(WordGuessRequest.self, from: request) else { return reply(Data()) }
+            let guesses = [WordGuessResponse.Guess(word: "كيفك", logProbability: -0.1),
+                           WordGuessResponse.Guess(word: "كيفيك", logProbability: -1.2)]
+            let response = WordGuessResponse(id: asked.id, guesses: Array(guesses.prefix(asked.count)), outcome: .model,
+                                             latencyMs: 250)
+            reply((try? Contract.encoder().encode(response)) ?? Data())
+        case .silent:
+            break
+        case .crash:
+            DispatchQueue.global().async { self.lost() }
+        }
+    }
 }
 
 /// Hands out a link per connection attempt, each with the next behaviour, and counts the attempts.
@@ -88,4 +102,20 @@ private func timed<T>(_ body: () -> T) -> (T, Int) {
     #expect(client.convert("kifak") == nil)  // the link ended: rules in the keyboard
     #expect(client.convert("kifak") == "كيفك")  // a new link, a working service
     #expect(server.connections == 2)
+}
+
+// The ↑ list's model guesses (ADR 0036 #5): asked with 5 guesses and the guesses' own deadline; a silent service is
+// given up on soon after it, and the list stays as it is.
+
+@Test func theServicesGuessesComeBestFirst() {
+    let guesses = FakeServer([.answer]).client().wordGuesses("kifak", before: "")
+    #expect(guesses?.map(\.word) == ["كيفك", "كيفيك"])
+}
+
+@Test func lateGuessesAreGivenUpAfterTheirDeadline() {
+    let server = FakeServer([.silent])
+    let limit = WordGuesses.deadlineMs + EngineClient.guessMarginMs
+    let (guesses, ms) = timed { server.client().wordGuesses("kifak", before: "") }
+    #expect(guesses?.count == nil)  // the list stays as it is
+    #expect(ms >= limit - 50 && ms < limit + 1_000, "gave up after \(ms) ms, limit \(limit) ms")
 }

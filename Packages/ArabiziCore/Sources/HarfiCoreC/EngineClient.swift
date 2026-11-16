@@ -63,6 +63,26 @@ final class EngineClient: @unchecked Sendable {  // `lastStart` is behind `lock`
         return try? JSONDecoder().decode(ConvertResponse.self, from: line)
     }
 
+    /// The model's guesses for the word after `before` in its answer to `text` (ADR 0036 #5), best first; nil when
+    /// there are none in time (no engine, no model yet, the deadline passed): the ↑ list then stays as it is.
+    func wordGuesses(_ text: String, before: String) -> WordGuesses.Guesses? {
+        let deadlineMs = WordGuesses.deadlineMs
+        guard var request = try? Contract.encoder().encode(
+            WordGuessRequest(text: text, before: before, count: WordGuesses.count, deadlineMs: deadlineMs)),
+              let pipe = open() else { return nil }  // no engine: a conversion starts one, not a guess
+        defer { CloseHandle(pipe) }
+        request.append(10)
+        let started = Date()
+        guard write(request, to: pipe),
+              let line = readLine(from: pipe, within: deadlineMs + Self.guessMarginMs, since: started),
+              let response = try? JSONDecoder().decode(WordGuessResponse.self, from: line),
+              response.outcome == .model else { return nil }
+        return response.guesses.map { (word: $0.word, logProbability: $0.logProbability) }
+    }
+
+    /// How long past the guesses' deadline the keyboard waits for them (the engine may be finishing a conversion).
+    static let guessMarginMs = 300
+
     // MARK: - the pipe
 
     private static var invalid: HANDLE? { HANDLE(bitPattern: -1) }  // INVALID_HANDLE_VALUE

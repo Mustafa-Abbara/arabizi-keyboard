@@ -15,14 +15,21 @@ final class ArabiziInputController: IMKInputController {
     /// in time. The rule files and config come from Resources (scripts/build_ime.sh); without them the P1 toy
     /// converter keeps the keyboard usable.
     private static let convert: @Sendable (String) -> String = { answer($0).text }
+    /// The link to the engine service, nil without its config (the keyboard then keeps to its own rules).
+    private static let engine: EngineClient? = {
+        EngineClient(resources: Bundle.main.resourceURL ?? Bundle.main.bundleURL, fasterPreview: { Settings.fasterPreview })
+    }()
+    /// The model's guesses for the ↑ list (ADR 0036 #5), asked of the engine service in the background; nil when
+    /// they are off (`Settings.modelGuesses`) or there is no service.
+    private static let guesses: WordGuesses? = {
+        guard Settings.modelGuesses, let engine = ArabiziInputController.engine else { return nil }
+        return WordGuesses(ask: { engine.wordGuesses($0.text, before: $0.before) })
+    }()
     /// The conversion with whether the model made it: the live preview keeps only the model's answers for Enter, so a
     /// rule fallback (the model still loading, a timeout) is shown but asked again at Enter.
     private static let answer: @Sendable (String) -> (text: String, fromModel: Bool) = {
-        let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
         let rules = quickConvert
-        guard let engine = EngineClient(resources: resources, fasterPreview: { Settings.fasterPreview }) else {
-            return { (yours($0, rules($0)), false) }
-        }
+        guard let engine = ArabiziInputController.engine else { return { (yours($0, rules($0)), false) } }
         engine.warmUp()
         let confidences = ArabiziInputController.confidences
         return { text in
@@ -117,7 +124,16 @@ final class ArabiziInputController: IMKInputController {
             record: { correction in personal?.record(correction) },  // may complete a habit, announced after the key
             spelling: spelling,
             doubtful: { shown, latin in spelling.map { suggestions.isDoubtful(shown, latin: latin, spelling: $0) } ?? false },
-            confidence: { confidences.of($0) })
+            confidence: { confidences.of($0) },
+            guesses: ArabiziInputController.guesses,
+            // The model's 5 guesses as the list's first source, once they are here (ADR 0039 #5). Without the v2
+            // list (still loading) there is nothing to put them in: the first list stays.
+            candidatesWithGuesses: { shown, latin, guesses in
+                let past = personal?.store.all() ?? []
+                return candidates.list?.personalized(for: shown, latin: latin, past: past,
+                                                     guesses: guesses.map { ($0.word, $0.logProbability) })
+                    ?? suggestions.personalized(for: shown, latin: latin, past: past)
+            })
     }()
     /// Conversions made ahead while the user types (live preview), by the exact Latin text. Enter takes a ready one.
     private static let previews = PreviewCache(isClitic: { ruleConverter?.isClitic($0) ?? false })
@@ -387,6 +403,7 @@ final class ArabiziInputController: IMKInputController {
             UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "previewFixUses") + 1, forKey: "previewFixUses")
         }
         let handled = apply(effect, to: client, selection: selection)
+        askForGuesses(after: effect)
         if key == .enter, case .commit(let sent) = effect, composer.lastConversion != nil {
             pointOut(sent, in: client)
             Settings.complete(.converted)
@@ -404,6 +421,26 @@ final class ArabiziInputController: IMKInputController {
             if !composer.buffer.isEmpty { showPreview() }
         }
         return handled
+    }
+
+    /// The model's guesses (ADR 0036 #5): for the word whose list shows without them, asked in the background and
+    /// put in the list when they arrive (never when they are late: the list stays); right after a conversion, for
+    /// the word ↑ would open on when it looks wrong, so the list already has them.
+    private func askForGuesses(after effect: Effect) {
+        guard let guesses = Self.guesses else { return }
+        if case .commit = effect, let ahead = composer.prefetchQuery { guesses.request(ahead) }
+        guard let query = composer.guessQuery else { return }
+        nonisolated(unsafe) let controller = self
+        let coming = guesses.request(query) { _ in
+            DispatchQueue.main.async { controller.guessesArrived() }  // InputMethodKit calls the controller there
+        }
+        if !coming { guessesArrived() }  // already here (asked ahead) or missed
+    }
+
+    /// The guesses for the word shown are here: its chips re-ranked, the text unchanged.
+    private func guessesArrived() {
+        guard let effect = composer.guessesArrived(), let client = client() else { return }
+        _ = apply(effect, to: client)
     }
 
     /// Carries out what the composer decided, in the app.
@@ -516,6 +553,7 @@ final class ArabiziInputController: IMKInputController {
         let effect = composer.pick(picked)
         guard effect != .consume else { return }
         _ = apply(effect, to: client)  // a commit remembers where the text ends
+        askForGuesses(after: effect)
         announceHabit(in: client)
     }
 

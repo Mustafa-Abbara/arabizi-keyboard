@@ -135,6 +135,7 @@ struct Core::Library {
     decltype(&harfi_composer_buffer) buffer = nullptr;
     decltype(&harfi_preview) preview = nullptr;  // optional: without it there is no preview box
     decltype(&harfi_habit_refuse) refuse = nullptr;  // optional: without it a habit cannot be refused here
+    decltype(&harfi_composer_guesses) guesses = nullptr;  // optional: without it the list never has the model's guesses
     decltype(&harfi_free) free = nullptr;
 };
 
@@ -154,6 +155,7 @@ Core::Core(const std::wstring &folder) {
         library->buffer = Load<decltype(library->buffer)>(module, "harfi_composer_buffer");
         library->preview = Load<decltype(library->preview)>(module, "harfi_preview");
         library->refuse = Load<decltype(library->refuse)>(module, "harfi_habit_refuse");
+        library->guesses = Load<decltype(library->guesses)>(module, "harfi_composer_guesses");
         library->free = Load<decltype(library->free)>(module, "harfi_free");
         if (!open || !library->newComposer || !library->freeComposer || !library->key || !library->pick ||
             !library->buffer || !library->free) return nullptr;
@@ -174,6 +176,15 @@ Effect Core::Key(const std::string &keyJson) {
 
 Effect Core::Pick(const std::wstring &candidate) {
     return composer_ ? Read(library_->pick(composer_, Narrow(candidate).c_str())) : Effect{};
+}
+
+Effect Core::Guesses() {
+    Effect none;
+    none.effect = "none";
+    if (!composer_ || !library_->guesses) return none;
+    Effect effect = Read(library_->guesses(composer_));
+    if (effect.effect != "suggest") effect.effect = "none";  // keeps guessesPending
+    return effect;
 }
 
 void Core::Reset() {
@@ -231,5 +242,6 @@ Effect Core::Read(char *reply) {
     effect.learnedLatin = JsonString(json, "learnedLatin");
     effect.learnedSpelling = JsonString(json, "learnedSpelling");
     effect.unsureWord = Widen(JsonString(json, "unsureWord"));
+    effect.guessesPending = JsonBool(json, "guessesPending");
     return effect;
 }

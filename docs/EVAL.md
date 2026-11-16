@@ -265,6 +265,29 @@ running.
   p50 379 → 170 ms); word accuracy 0.8206 → 0.8180; **9 of the 200** answers differ from the same text converted on its
   own (28 words where the lengths match), against 28 of 200 on the Windows processor.
 
+## Speed of the ↑ list's model guesses (16 Nov 2026)
+
+The model's 5 guesses for a wrong word (ADR 0036 #5, ADR 0039 #5), asked the way the keyboards ask: the Swift engine
+through `arabizi-cli`, each **dev-others** message converted with the keyboard's deadline, then each word the model
+wrote wrong asked about right after it (`scripts/word_guess_latency.py`; a long deadline, so the true time is
+measured). The keyboards give the guesses **600 ms**; past that the engine answers with none and the instant list
+stays. Counts and times only.
+
+| Machine | Model | Words | p50 / p90 / p95 / max ms | Over 400 ms | Over 600 ms (late: list kept) |
+|---|---|---|---|---|---|
+| Windows laptop, i7-10870H, processor only | v4 | 302 | 317 / 445 / 484 / 635 | 18.5% | 0.7% |
+| **8 GB M2 MacBook Air (Metal)** | v4 | | **not measured yet** | | |
+
+- **Windows:** slower than the 124-word run in docs/RANKER_V4.md (p50 255, p95 383 ms): more words, and this laptop's
+  speed varies between runs (see "Speed on Windows" above). ADR 0036's 400 ms target is met at p50 but not at p95 here.
+  A late answer only means the list is not re-ranked; the keyboard never waits for it. The guesses are **on** in the
+  Windows keyboard.
+- **Mac:** the guesses are wired in but **off** (`Settings.modelGuesses`) until this row is filled. On the Air:
+  `swift build -c release --package-path Packages/ArabiziEngine --product arabizi-cli`, then
+  `uv run --project eval python scripts/word_guess_latency.py`. If p95 is under 400 ms (or the share over 600 ms is
+  small), flip the default in `SettingsWindow.swift`; `defaults write lb.aub.arabizi.inputmethod.ArabiziIME
+  modelGuesses -bool true` turns them on to try before that.
+
 ## Reproducing a baseline from a fresh clone (11 Nov 2026)
 
 `git clone` of `main` at `0b8ca02`, then `uv run --project eval evalrun run --system b0 --split dev`, against the committed run of 29 Oct (`20261029-153707-b0-dev`): the same data (`data_sha256` 08b3a640…), and every accuracy metric identical (word accuracy 0.756, lenient 0.762). Latency p50 0.019 → 0.021 ms (+10%), p95 0.047 → 0.051 ms (+9%), within the 20% the P3 gate allows. Run: `eval/results/20261111-221425-b0-dev`.

@@ -81,6 +81,12 @@ public struct Suggester: Sendable {
     /// How sure the model was of each word of a converted text (the engine's `wordConfidence`), or nil when unknown.
     /// When known, suggestions start on the least sure word.
     public let confidence: @Sendable (_ converted: String) -> [Double]?
+    /// The model's guesses for a word (ADR 0036 #5), asked in the background by the keyboard; nil: never asked.
+    public let guesses: WordGuesses?
+    /// The spellings for a word with the model's guesses among them (the ↑ list's first source); used once the
+    /// guesses have arrived. nil: the guesses are never used.
+    public let candidatesWithGuesses: (@Sendable (_ shown: String, _ latin: String?, _ guesses: WordGuesses.Guesses)
+        -> [String])?
 
     public init(candidates: @escaping @Sendable (String, String?) -> [String],
                 align: @escaping @Sendable ([String], [String]) -> [Range<Int>?],
@@ -88,7 +94,9 @@ public struct Suggester: Sendable {
                 now: @escaping @Sendable () -> Date = { Date() },
                 spelling: SpellingOptions? = nil,
                 doubtful: @escaping @Sendable (String, String?) -> Bool = { _, _ in false },
-                confidence: @escaping @Sendable (String) -> [Double]? = { _ in nil }) {
+                confidence: @escaping @Sendable (String) -> [Double]? = { _ in nil },
+                guesses: WordGuesses? = nil,
+                candidatesWithGuesses: (@Sendable (String, String?, WordGuesses.Guesses) -> [String])? = nil) {
         self.candidates = candidates
         self.align = align
         self.record = record
@@ -96,7 +104,12 @@ public struct Suggester: Sendable {
         self.spelling = spelling
         self.doubtful = doubtful
         self.confidence = confidence
+        self.guesses = guesses
+        self.candidatesWithGuesses = candidatesWithGuesses
     }
+
+    /// Whether the model's guesses are asked for at all.
+    var usesGuesses: Bool { guesses != nil && candidatesWithGuesses != nil }
 }
 
 /// Suggestions being shown for one conversion.
@@ -115,6 +128,8 @@ struct SuggestionSession: Equatable {
     /// Opened with ↑ while typing, before anything was converted into the app: Esc, Backspace or a letter go back
     /// to the Latin text instead of committing the Arabic.
     var beforeSending = false
+    /// The model's guesses are already in `candidates` (or there were none for this word).
+    var guessed = false
 
     var text: String { words.joined(separator: " ") }
 
@@ -126,6 +141,11 @@ struct SuggestionSession: Equatable {
 
     /// The typed words shown word `i` came from (one, or a run like `el shr` for الشر).
     func latinWord(_ i: Int) -> String? { alignment[i].map { latinWords[$0].joined(separator: " ") } }
+
+    /// What the model is asked about word `i` (ADR 0036 #5): the message as typed and the words shown before it.
+    func query(_ i: Int) -> GuessQuery {
+        GuessQuery(text: latin, before: words[..<i].joined(separator: " "), shown: words[i], latin: latinWord(i))
+    }
 }
 
 /// The last conversion, kept for exactly one key press so ⌘Z can bring the Latin back.
@@ -176,6 +196,22 @@ public struct Composer {
     public var currentCandidates: [String] { session?.speller?.labels ?? session?.candidates ?? [] }
     /// Which of `currentCandidates` is highlighted now (the letter chosen while spelling, or the one moved to with ↓/↑).
     public var currentChoice: Int? { session?.speller != nil ? session?.speller?.choice : session?.highlighted }
+    /// The word the model's guesses are wanted for now (ADR 0036 #5): the selected word while its list shows
+    /// without them. The keyboard asks for them (`Suggester.guesses`) and calls `guessesArrived()` when they come.
+    public var guessQuery: GuessQuery? {
+        guard let current = session, current.speller == nil, !current.guessed, suggester?.usesGuesses == true
+        else { return nil }
+        return current.query(current.index)
+    }
+    /// Right after a conversion, the word ↑ would open on, when it looks wrong (dashed): its guesses may be asked for
+    /// at once, so the list already has them when ↑ opens it (ADR 0036 #5).
+    public var prefetchQuery: GuessQuery? {
+        guard session == nil, let conversion = lastConversion, let suggester, suggester.usesGuesses,
+              let opened = opening(conversion) else { return nil }
+        let i = opened.index
+        guard suggester.doubtful(opened.words[i], opened.latinWord(i)) else { return nil }
+        return opened.query(i)
+    }
     private var session: SuggestionSession?
     private let convert: @Sendable (String) -> String
     /// A conversion already made for exactly this text (the live preview), used instead of converting again.
@@ -292,6 +328,13 @@ public struct Composer {
     }
 
     private func startSuggesting(_ conversion: Conversion) -> SuggestionSession? {
+        guard let suggester, var session = opening(conversion) else { return nil }
+        list(&session, suggester)
+        return session
+    }
+
+    /// The suggestions for `conversion` without their list: on the word they open on.
+    private func opening(_ conversion: Conversion) -> SuggestionSession? {
         guard let suggester else { return nil }
         // The words without direction marks; they are put back when the fixed text is committed.
         let words = DirectionMarks.removed(conversion.converted).components(separatedBy: " ")
@@ -312,8 +355,48 @@ public struct Composer {
             start = lettered.first { suggester.doubtful(words[$0], session.latinWord($0)) } ?? last
         }
         session.index = start
-        session.candidates = suggester.candidates(words[start], session.latinWord(start))
         return session
+    }
+
+    /// The list for the selected word: with the model's guesses when they are already here (asked ahead), else the
+    /// instant list, re-ranked when they arrive (`guessesArrived`).
+    private func list(_ session: inout SuggestionSession, _ suggester: Suggester) {
+        let i = session.index
+        session.highlighted = nil
+        if let guesses = suggester.guesses?.guesses(for: session.query(i)),
+           let withGuesses = suggester.candidatesWithGuesses {
+            session.candidates = guesses.isEmpty ? suggester.candidates(session.words[i], session.latinWord(i))
+                                                 : withGuesses(session.words[i], session.latinWord(i), guesses)
+            session.guessed = true
+        } else {
+            session.candidates = suggester.candidates(session.words[i], session.latinWord(i))
+            session.guessed = false
+        }
+    }
+
+    /// The model's guesses for the selected word have arrived (`guessQuery`): its list re-ranked with them, the
+    /// highlighted spelling and those above it kept in place, so the word shown and a number already read stay
+    /// right. nil when nothing changes: the guesses are not here (late, or none in time: the instant list stays),
+    /// the user moved to another word, closed the list or is spelling.
+    public mutating func guessesArrived() -> Effect? {
+        guard let query = guessQuery, var current = session, let suggester,
+              let guesses = suggester.guesses?.guesses(for: query), let withGuesses = suggester.candidatesWithGuesses
+        else { return nil }
+        current.guessed = true
+        let before = current.candidates
+        if !guesses.isEmpty {
+            let reranked = withGuesses(current.words[current.index], current.latinWord(current.index), guesses)
+            current.candidates = WordGuesses.merged(instant: before, reranked: reranked,
+                                                    keeping: current.highlighted.map { $0 + 1 } ?? 0)
+        }
+        session = current
+        guard current.candidates != before else { return nil }
+        var shown = current
+        if let highlighted = current.highlighted {
+            shown.words[shown.index] = WordParts(shown.words[shown.index]).with(current.candidates[highlighted])
+        }
+        return .suggest(marked: shown.text, selected: shown.selected, candidates: current.candidates,
+                        replacingLength: nil)
     }
 
     private mutating func handleSuggestion(_ key: Key) -> Effect {
@@ -371,8 +454,7 @@ public struct Composer {
             while current.words.indices.contains(i) {
                 if current.words[i].contains(where: \.isLetter) {
                     current.index = i
-                    current.highlighted = nil
-                    current.candidates = suggester.candidates(current.words[i], current.latinWord(i))
+                    list(&current, suggester)
                     session = current
                     return .suggest(marked: current.text, selected: current.selected, candidates: current.candidates,
                                     replacingLength: nil)

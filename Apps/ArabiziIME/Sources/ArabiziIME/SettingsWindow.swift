@@ -17,6 +17,13 @@ enum Settings {
         set { UserDefaults.standard.set(newValue, forKey: "fasterPreview") }
     }
 
+    /// The model's guesses in the ↑ list (ADR 0036 #5). Off on the Mac until their latency is measured on the 8 GB
+    /// Air (docs/EVAL.md); `defaults write lb.aub.arabizi.inputmethod.ArabiziIME modelGuesses -bool true` turns them
+    /// on to measure. Read once, when the keyboard starts.
+    static var modelGuesses: Bool {
+        UserDefaults.standard.object(forKey: "modelGuesses") as? Bool ?? false
+    }
+
     /// Larger Arabic in the preview and the chips.
     static var largerText: Bool {
         get { UserDefaults.standard.bool(forKey: "largerText") }

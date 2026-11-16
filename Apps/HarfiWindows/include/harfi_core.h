@@ -30,10 +30,15 @@ void harfi_composer_free(harfi_composer composer);
    "replacingLength", "candidates", "choice", "word" (the word being fixed), "spelling", and while fixing before
    sending "fixingWords", "fixingIndex", "fixingDoubtful" (the preview around the chips), and once, when a pick has
    just made a typed word a habit, "learnedLatin" and "learnedSpelling" (ADR 0033), and after a conversion is sent
-   with a word the model was unsure of, "unsureWord" (ADR 0034)}. */
+   with a word the model was unsure of, "unsureWord" (ADR 0034), and "guessesPending" while the model's guesses for
+   the word shown are coming (ADR 0036 #5: call harfi_composer_guesses shortly)}. */
 char *harfi_composer_key(harfi_composer composer, const char *key_json);
 /* A spelling (or, while spelling, a letter) clicked in the chip row: the same reply as harfi_composer_key. */
 char *harfi_composer_pick(harfi_composer composer, const char *candidate);
+/* Once the model's guesses for the word shown have arrived: the same reply as harfi_composer_key with effect "suggest"
+   and the list re-ranked (the highlighted spelling and those above it stay in place); otherwise {"effect": "none",
+   "guessesPending": still coming}. Late guesses never come: the list stays as it is. */
+char *harfi_composer_guesses(harfi_composer composer);
 char *harfi_composer_buffer(harfi_composer composer);
 void harfi_free(char *text);
 
