@@ -39,6 +39,9 @@ char *harfi_composer_pick(harfi_composer composer, const char *candidate);
    and the list re-ranked (the highlighted spelling and those above it stay in place); otherwise {"effect": "none",
    "guessesPending": still coming}. Late guesses never come: the list stays as it is. */
 char *harfi_composer_guesses(harfi_composer composer);
+/* A spelling (or letter) the mouse is on in the chip row: highlighted and shown in place of the word, as Down/Up
+   do. The same reply as harfi_composer_key with effect "suggest", or {"effect": "none"} when nothing changes. */
+char *harfi_composer_highlight(harfi_composer composer, const char *candidate);
 char *harfi_composer_buffer(harfi_composer composer);
 void harfi_free(char *text);
 

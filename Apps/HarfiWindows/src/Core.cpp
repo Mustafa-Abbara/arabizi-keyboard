@@ -136,6 +136,7 @@ struct Core::Library {
     decltype(&harfi_preview) preview = nullptr;  // optional: without it there is no preview box
     decltype(&harfi_habit_refuse) refuse = nullptr;  // optional: without it a habit cannot be refused here
     decltype(&harfi_composer_guesses) guesses = nullptr;  // optional: without it the list never has the model's guesses
+    decltype(&harfi_composer_highlight) highlight = nullptr;  // optional: without it hovering only lights the chip
     decltype(&harfi_free) free = nullptr;
 };
 
@@ -156,6 +157,7 @@ Core::Core(const std::wstring &folder) {
         library->preview = Load<decltype(library->preview)>(module, "harfi_preview");
         library->refuse = Load<decltype(library->refuse)>(module, "harfi_habit_refuse");
         library->guesses = Load<decltype(library->guesses)>(module, "harfi_composer_guesses");
+        library->highlight = Load<decltype(library->highlight)>(module, "harfi_composer_highlight");
         library->free = Load<decltype(library->free)>(module, "harfi_free");
         if (!open || !library->newComposer || !library->freeComposer || !library->key || !library->pick ||
             !library->buffer || !library->free) return nullptr;
@@ -176,6 +178,13 @@ Effect Core::Key(const std::string &keyJson) {
 
 Effect Core::Pick(const std::wstring &candidate) {
     return composer_ ? Read(library_->pick(composer_, Narrow(candidate).c_str())) : Effect{};
+}
+
+Effect Core::Highlight(const std::wstring &candidate) {
+    Effect none;
+    none.effect = "none";
+    if (!composer_ || !library_->highlight) return none;
+    return Read(library_->highlight(composer_, Narrow(candidate).c_str()));
 }
 
 Effect Core::Guesses() {

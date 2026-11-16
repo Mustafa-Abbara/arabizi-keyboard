@@ -11,6 +11,7 @@
 //   harfi_composer_key(composer, json)  -> what to do in the app after a key, as JSON (see `effectJSON`)
 //   harfi_composer_pick(composer, text) -> the same for a spelling (or letter) clicked in the chip row
 //   harfi_composer_guesses(composer)    -> the ↑ list re-ranked once the model's guesses are here (ADR 0036 #5)
+//   harfi_composer_highlight(composer, text) -> a spelling pointed at in the chip row: shown in the text, as ↓/↑ do
 //   harfi_composer_buffer(composer)     -> the Latin text being typed
 //   harfi_free(string), harfi_composer_free(composer), harfi_core_close(core)
 import ArabiziCore
@@ -306,6 +307,18 @@ public func harfi_composer_guesses(_ composer: UnsafeMutableRawPointer?) -> Unsa
 private func guessesPending(_ box: ComposerBox) -> Bool {
     guard let query = box.composer.guessQuery, let guesses = box.core.guesses else { return false }
     return guesses.request(query) || guesses.guesses(for: query) != nil
+}
+
+/// A spelling (or, while spelling, a letter) the mouse is on in the chip row: highlighted and shown in place of the word,
+/// exactly as ↓/↑ would, so the text and the preview always show the spelling the user is looking at. The same reply
+/// as harfi_composer_key with effect "suggest", or {"effect": "none"} when nothing changes.
+@_cdecl("harfi_composer_highlight")
+public func harfi_composer_highlight(_ composer: UnsafeMutableRawPointer?,
+                                     _ candidate: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
+    guard let composer else { return owned(#"{"effect":"none"}"#) }
+    let box = Unmanaged<ComposerBox>.fromOpaque(composer).takeUnretainedValue()
+    guard let effect = box.composer.highlight(string(candidate)) else { return owned(#"{"effect":"none"}"#) }
+    return owned(reply(box, effect))
 }
 
 @_cdecl("harfi_composer_pick")

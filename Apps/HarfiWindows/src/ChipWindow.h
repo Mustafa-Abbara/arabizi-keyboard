@@ -13,10 +13,12 @@ class ChipWindow : public Popup {
 public:
     using Pick = std::function<void(const std::wstring &candidate)>;
     using SpellIt = std::function<void()>;
+    using Point = std::function<void(const std::wstring &candidate)>;  // the mouse moved onto a spelling
 
     ChipWindow();
     // Shows the chips for `effect` just above `text` (screen coordinates).
-    void Show(const Effect &effect, const RECT &text, Pick pick, SpellIt spellIt);
+    // When only the highlight changed (the same chips), the row stays where it is, so the chip under the mouse stays.
+    void Show(const Effect &effect, const RECT &text, Pick pick, SpellIt spellIt, Point point = nullptr);
     // A one-line tip in the same place, gone after `milliseconds` (or when chips replace it).
     void ShowHint(const std::wstring &hint, const RECT &text, UINT milliseconds = 3000);
     void Hide();
@@ -56,5 +58,7 @@ private:
     int hovered_ = -1;
     Pick pick_;
     SpellIt spellIt_;
+    Point point_;
+    bool keepPlace_ = false;
     std::function<void()> due_;
 };

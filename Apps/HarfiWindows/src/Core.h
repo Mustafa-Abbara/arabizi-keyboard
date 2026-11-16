@@ -53,6 +53,8 @@ public:
     Effect Key(const std::string &keyJson);
     // The composer's answer to a spelling (or letter) clicked in the chip row.
     Effect Pick(const std::wstring &candidate);
+    // A spelling the mouse is on in the chip row: shown in the text as Down/Up would (effect "suggest"), else "none".
+    Effect Highlight(const std::wstring &candidate);
     // The ↑ list re-ranked once the model's guesses are here (effect "suggest"), else effect "none" (ADR 0036 #5).
     Effect Guesses();
     // A new, empty composer: the app ended the composition or the typing moved to another field.
