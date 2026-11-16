@@ -203,15 +203,6 @@ public struct Composer {
         else { return nil }
         return current.query(current.index)
     }
-    /// Right after a conversion, the word ↑ would open on, when it looks wrong (dashed): its guesses may be asked for
-    /// at once, so the list already has them when ↑ opens it (ADR 0036 #5).
-    public var prefetchQuery: GuessQuery? {
-        guard session == nil, let conversion = lastConversion, let suggester, suggester.usesGuesses,
-              let opened = opening(conversion) else { return nil }
-        let i = opened.index
-        guard suggester.doubtful(opened.words[i], opened.latinWord(i)) else { return nil }
-        return opened.query(i)
-    }
     private var session: SuggestionSession?
     private let convert: @Sendable (String) -> String
     /// A conversion already made for exactly this text (the live preview), used instead of converting again.
@@ -358,7 +349,7 @@ public struct Composer {
         return session
     }
 
-    /// The list for the selected word: with the model's guesses when they are already here (asked ahead), else the
+    /// The list for the selected word: with the model's guesses when they are already here (the user came back to it), else the
     /// instant list, re-ranked when they arrive (`guessesArrived`).
     private func list(_ session: inout SuggestionSession, _ suggester: Suggester) {
         let i = session.index

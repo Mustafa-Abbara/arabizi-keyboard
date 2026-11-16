@@ -160,30 +160,17 @@ private func typeAndOpen(_ composer: inout Composer) -> Effect {
     #expect(c.isSpelling)
 }
 
-@Test func aDoubtfulWordIsAskedAheadAndTheListOpensWithItsGuesses() throws {
+@Test func sendingAMessageAsksTheModelNothing() {
+    // Guesses are asked for only while a list is open: asked right after a conversion, they held up the next
+    // message's conversion (docs/EVAL.md).
     let engine = FakeEngine(["سبية": [("صبية", -0.2)]])
     let later = Later()
-    var (c, guesses) = guessingComposer(engine, later)
+    var (c, _) = guessingComposer(engine, later)
     for character in "kifak ya sabiye" { _ = c.handle(.text(String(character))) }
-    #expect(c.prefetchQuery == nil)                 // nothing converted yet
     _ = c.handle(.enter)
-    let ahead = try #require(c.prefetchQuery)       // سبية looks wrong: ↑ opens on it
-    #expect(ahead == GuessQuery(text: "kifak ya sabiye", before: "كيفك يا", shown: "سبية", latin: "sabiye"))
-    guesses.request(ahead)
     later.runAll()
-    #expect(c.handle(.arrowUp, context: Context(cursorAtLastConversion: true))
-            == .suggest(marked: "كيفك يا سبية", selected: 8..<12, candidates: ["صبية", "صبيه", "سابية", "sabiye"],
-                        replacingLength: "كيفك يا سبية".utf16.count))
     #expect(c.guessQuery == nil)
-    #expect(engine.asked.count == 1)
-}
-
-@Test func aWordThatLooksRightIsNotAskedAhead() {
-    let later = Later()
-    var (c, _) = guessingComposer(FakeEngine([:]), later)
-    for character in "kifak ya" { _ = c.handle(.text(String(character))) }
-    _ = c.handle(.enter)
-    #expect(c.prefetchQuery == nil)
+    #expect(engine.asked.isEmpty)
 }
 
 @Test func withoutGuessesNothingIsAsked() {
@@ -192,7 +179,6 @@ private func typeAndOpen(_ composer: inout Composer) -> Effect {
     var c = Composer(convert: { $0.uppercased() }, suggester: suggester)
     for character in "shu" { _ = c.handle(.text(String(character))) }
     _ = c.handle(.enter)
-    #expect(c.prefetchQuery == nil)
     _ = c.handle(.arrowUp, context: Context(cursorAtLastConversion: true))
     #expect(c.guessQuery == nil)
 }

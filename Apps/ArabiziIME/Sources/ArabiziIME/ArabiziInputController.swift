@@ -424,17 +424,16 @@ final class ArabiziInputController: IMKInputController {
     }
 
     /// The model's guesses (ADR 0036 #5): for the word whose list shows without them, asked in the background and
-    /// put in the list when they arrive (never when they are late: the list stays); right after a conversion, for
-    /// the word ↑ would open on when it looks wrong, so the list already has them.
+    /// put in the list when they arrive (never when they are late: the list stays). Only while a list is open, never
+    /// right after a conversion: the model does one thing at a time, and the next message's conversion would wait.
     private func askForGuesses(after effect: Effect) {
         guard let guesses = Self.guesses else { return }
-        if case .commit = effect, let ahead = composer.prefetchQuery { guesses.request(ahead) }
         guard let query = composer.guessQuery else { return }
         nonisolated(unsafe) let controller = self
         let coming = guesses.request(query) { _ in
             DispatchQueue.main.async { controller.guessesArrived() }  // InputMethodKit calls the controller there
         }
-        if !coming { guessesArrived() }  // already here (asked ahead) or missed
+        if !coming { guessesArrived() }  // already here (the user came back to the word) or missed
     }
 
     /// The guesses for the word shown are here: its chips re-ranked, the text unchanged.
