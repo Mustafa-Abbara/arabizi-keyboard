@@ -236,20 +236,8 @@ final class ArabiziInputController: IMKInputController {
         let marked = client.markedRange()
         let start = marked.location == NSNotFound ? client.selectedRange().location : marked.location
         var line = lineRect(client, at: [start])
-        var preview: ((CGFloat) -> NSRect)?
-        if let fix = composer.fixingBeforeSending {
-            // Fixing before sending: the preview stays where it was, the selected word highlighted in it, and the
-            // chips sit on its far side from the text (above it, or below it when there is no room above), so the
-            // eye never loses its place.
-            let doubtful = Self.doubtfulWords(fix.words, latin: fix.latin)
-            nonisolated(unsafe) let window = previewWindow
-            preview = { height in
-                MainActor.assumeIsolated {
-                    window.show(arabic: fix.words, doubtful: doubtful, selected: fix.index, latin: "", above: line,
-                                reserve: height)
-                }
-            }
-        } else {
+        let preview = fixingPreview(above: line)
+        if preview == nil {
             hidePreview()
             if line != .zero, let word = plausibleLine(client, at: start + wordStart), abs(word.midY - line.midY) < 2 {
                 line.origin.x = word.minX
@@ -262,7 +250,23 @@ final class ArabiziInputController: IMKInputController {
         MainActor.assumeIsolated {
             chips.show(word: current?.shown, doubtful: doubtful, candidates: candidates, spelling: spelling,
                        choice: choice, typed: typed, above: line, preview: preview,
-                       pick: { controller.chipPicked($0) }, spellIt: { controller.spellFromChip() })
+                       pick: { controller.chipPicked($0) }, hover: { controller.chipHovered($0) },
+                       spellIt: { controller.spellFromChip() })
+        }
+    }
+
+    /// Fixing before sending: the preview stays where it was, the selected word highlighted in it, and the chips sit
+    /// on its far side from the text (above it, or below it when there is no room above), so the eye never loses its
+    /// place. Given the chips' height, it shows the preview and returns its frame; nil when not fixing before sending.
+    private func fixingPreview(above line: NSRect) -> ((CGFloat) -> NSRect)? {
+        guard let fix = composer.fixingBeforeSending else { return nil }
+        let doubtful = Self.doubtfulWords(fix.words, latin: fix.latin)
+        nonisolated(unsafe) let window = previewWindow
+        return { height in
+            MainActor.assumeIsolated {
+                window.show(arabic: fix.words, doubtful: doubtful, selected: fix.index, latin: "", above: line,
+                            reserve: height)
+            }
         }
     }
 
@@ -554,6 +558,23 @@ final class ArabiziInputController: IMKInputController {
         _ = apply(effect, to: client)  // a commit remembers where the text ends
         askForGuesses(after: effect)
         announceHabit(in: client)
+    }
+
+    /// The mouse over a spelling: shown in the text (and the preview) as ↓/↑ would, without picking it. The chips are
+    /// lit in place rather than laid out again, so the row does not move under the mouse.
+    fileprivate func chipHovered(_ candidate: String) {
+        guard let client = client(), let effect = composer.highlight(candidate) else { return }
+        guard case .suggest(let marked, let selected, _, nil) = effect, !composer.isSpelling else {
+            _ = apply(effect, to: client)
+            return
+        }
+        client.setMarkedText(marked, selectionRange: NSRange(location: selected.lowerBound, length: selected.count),
+                             replacementRange: Self.notFound)
+        let start = client.markedRange().location
+        nonisolated(unsafe) let chips = chips
+        let reserve = MainActor.assumeIsolated { chips.height } ?? Self.chipsHeight
+        _ = fixingPreview(above: lineRect(client, at: [start]))?(reserve)
+        MainActor.assumeIsolated { chips.select(candidate) }
     }
 
     /// "Spell it" clicked: the same as ⌥Tab a second time.
