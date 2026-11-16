@@ -540,14 +540,24 @@ final class ArabiziInputController: IMKInputController {
         }
     }
 
-    /// The first time the keyboard is used on this Mac, the welcome page opens (once).
+    /// The first time the keyboard is used on this Mac, the welcome page opens (once). Back in an app with a
+    /// sentence still being typed, its preview shows again.
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
+        if !composer.buffer.isEmpty, !composer.isSuggesting { showPreview() }
         guard !UserDefaults.standard.bool(forKey: "welcomeShown") else { return }
         UserDefaults.standard.set(true, forKey: "welcomeShown")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             MainActor.assumeIsolated { SettingsWindow.shared.show(.welcome) }
         }
+    }
+
+    /// Another app (or another window) is now in front: the preview and the chips belong to this one, so they go,
+    /// and the sentence being typed stays underlined in it.
+    override func deactivateServer(_ sender: Any!) {
+        hidePreview()
+        hideCandidates()
+        super.deactivateServer(sender)
     }
 
     /// The keyboard's items in the input menu (the ع icon in the menu bar): quick toggles, and the Harfi window.
@@ -649,7 +659,13 @@ final class ArabiziInputController: IMKInputController {
     private func setMarked(_ text: String, in client: IMKTextInput, replacing range: NSRange = notFound) {
         // The cursor where the composer has it (← → and clicks move it inside the sentence), else at the end.
         let caret = NSRange(location: text == composer.buffer ? composer.cursor : (text as NSString).length, length: 0)
-        client.setMarkedText(text, selectionRange: caret, replacementRange: range)
+        // Underlined as raw text, not selected text: given a plain string, macOS styles all of it as selected, and
+        // apps then draw no cursor line inside it (TextEdit and Notes reported the whole of it selected).
+        let raw = mark(forStyle: kTSMHiliteRawText, at: NSRange(location: 0, length: (text as NSString).length))
+            as? [NSAttributedString.Key: Any] ?? [.underlineStyle: NSUnderlineStyle.single.rawValue]
+        client.setMarkedText(NSAttributedString(string: text, attributes: raw), selectionRange: caret,
+                             replacementRange: range)
+        log.debug("marked text: cursor \(caret.location, privacy: .public) of \((text as NSString).length, privacy: .public)")
     }
 
     private func insert(_ text: String, into client: IMKTextInput, replacing range: NSRange = notFound) {
