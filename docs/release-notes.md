@@ -1,5 +1,9 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.4.5** (Mac)
+
+- **No more doubled sentences in browsers:** in Brave, Chrome, Claude and other apps built on Chromium, switching to another app in the middle of a sentence left it there once in Latin, but typing on afterwards wrote it a second time. Harfi now ends the sentence itself as you leave, once. To convert it after coming back, select it and press ⌥Enter. In TextEdit, Notes and other Mac apps the sentence stays underlined across a switch, as before.
+
 **New in 0.4.4** (Windows)
 
 - **Fix a typo while typing:** ← → and a click move inside the sentence you are typing instead of leaving it in Latin; fix a letter and Enter still converts the whole sentence.
