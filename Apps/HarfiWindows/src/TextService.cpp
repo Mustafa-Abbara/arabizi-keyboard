@@ -138,6 +138,15 @@ bool IsSecret(ITfContext *context, TfEditCookie cookie, ITfRange *range) {
             InputScope *scopes = nullptr;
             UINT count = 0;
             if (SUCCEEDED(scope->GetInputScopes(&scopes, &count)) && scopes) {
+                // For finding fields Harfi misreads: the input scope numbers the app reports (never any text),
+                // logged once per change and only when HKCU\Software\Harfi\DebugLog is 1.
+                static std::string lastLogged;
+                std::string seen = "input scopes:";
+                for (UINT i = 0; i < count; ++i) seen += " " + std::to_string(static_cast<int>(scopes[i]));
+                if (seen != lastLogged) {
+                    lastLogged = seen;
+                    DebugLog(seen.c_str());
+                }
                 for (UINT i = 0; i < count; ++i) {
                     switch (scopes[i]) {
                         case IS_PASSWORD: case IS_NUMERIC_PASSWORD: case IS_NUMERIC_PIN: case IS_ALPHANUMERIC_PIN:
@@ -156,6 +165,37 @@ bool IsSecret(ITfContext *context, TfEditCookie cookie, ITfRange *range) {
     VariantClear(&value);
     property->Release();
     return secret;
+}
+
+// GUID_COMPARTMENT_KEYBOARD_DISABLED and GUID_COMPARTMENT_EMPTYCONTEXT (msctf.h): an app sets them on a field where
+// no keyboard may compose, which browsers do for password boxes that don't report an input scope we can read.
+const GUID KeyboardDisabled = {0x71a5b253, 0x1951, 0x466b, {0x9f, 0xbc, 0x9c, 0x88, 0x08, 0xfa, 0x84, 0xf2}};
+const GUID EmptyContext = {0xd7487dbf, 0x804e, 0x41c5, {0x89, 0x4d, 0xad, 0x96, 0xfd, 0x4e, 0xea, 0x13}};
+
+bool CompartmentSet(ITfContext *context, REFGUID which) {
+    ITfCompartmentMgr *compartments = nullptr;
+    if (FAILED(context->QueryInterface(IID_ITfCompartmentMgr, reinterpret_cast<void **>(&compartments)))) return false;
+    bool set = false;
+    ITfCompartment *compartment = nullptr;
+    if (SUCCEEDED(compartments->GetCompartment(which, &compartment)) && compartment) {
+        VARIANT value;
+        VariantInit(&value);
+        set = SUCCEEDED(compartment->GetValue(&value)) && value.vt == VT_I4 && value.lVal != 0;
+        VariantClear(&value);
+        compartment->Release();
+    }
+    compartments->Release();
+    return set;
+}
+
+// The field takes no composing at all: a password box by its input scope, or one the app closed to keyboards.
+bool NoComposing(ITfContext *context, TfEditCookie cookie, ITfRange *range) {
+    if (IsSecret(context, cookie, range)) return true;
+    if (CompartmentSet(context, KeyboardDisabled) || CompartmentSet(context, EmptyContext)) {
+        DebugLog("field closed to keyboards (compartment): passed through");
+        return true;
+    }
+    return false;
 }
 
 // How often a tip was shown or a feature used, for this user (HKCU\Software\Harfi), as on the Mac (UserDefaults).
@@ -355,14 +395,72 @@ STDMETHODIMP TextService::OnEndEdit(ITfContext *context, TfEditCookie cookie, IT
     // follows, so the next letters go there and Enter still converts the whole text. Harfi's own edits put the
     // cursor where the composer already has it, so they change nothing.
     if (!composition_ || !core_ || context != context_ || !record) return S_OK;
-    BOOL moved = FALSE;
-    if (FAILED(record->GetSelectionStatus(&moved)) || !moved) return S_OK;
     ITfRange *range = nullptr;
     if (FAILED(composition_->GetRange(&range))) return S_OK;
-    int offset = OffsetIn(context, cookie, range);
+    // Something other than Harfi put text in the sentence (an emoji from the emoji panel): it joins the sentence,
+    // so Harfi's next update keeps it instead of writing over it.
+    std::wstring before = core_->Buffer();
+    Reconcile(cookie, range, false);
+    bool grew = core_->Buffer() != before;
+    BOOL moved = FALSE;
+    if (SUCCEEDED(record->GetSelectionStatus(&moved)) && moved) {
+        int offset = OffsetIn(context, cookie, range);
+        if (offset >= 0) core_->Caret(offset);
+    }
     range->Release();
-    if (offset >= 0) core_->Caret(offset);
+    if (grew) RefreshPreviewAfter(1, true);
     return S_OK;
+}
+
+namespace {
+std::wstring RangeText(TfEditCookie cookie, ITfRange *range) {
+    wchar_t text[2048];
+    ULONG length = 0;
+    if (FAILED(range->GetText(cookie, 0, text, 2048, &length))) return L"\x1";  // never equal to a sentence
+    return std::wstring(text, length);
+}
+
+bool HasLatinOrDigit(const std::wstring &text) {
+    for (wchar_t c : text) {
+        if ((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')) return true;
+    }
+    return false;
+}
+}  // namespace
+
+bool TextService::Reconcile(TfEditCookie cookie, ITfRange *range, bool canExtend) {
+    std::wstring inApp = RangeText(cookie, range), typed = core_->Buffer();
+    if (inApp == typed) return true;
+    // Only while Latin is being typed: with the ↑ list open the sentence shows the Arabic and the typed text is
+    // empty, and that must never be mistaken for something the app put in.
+    if (typed.empty()) return false;
+    // Shortened from the end (Chrome keeps only the text up to a click): stretch it back over the rest, if the rest
+    // is still there right after it.
+    if (canExtend && inApp.size() < typed.size() && typed.compare(0, inApp.size(), inApp) == 0) {
+        LONG moved = 0;
+        LONG missing = static_cast<LONG>(typed.size() - inApp.size());
+        if (SUCCEEDED(range->ShiftEnd(cookie, missing, &moved, nullptr)) && RangeText(cookie, range) == typed) {
+            DebugLog("kept sentence: shortened by the app, stretched back");
+            return true;
+        }
+        range->ShiftEnd(cookie, -moved, &moved, nullptr);
+        return false;
+    }
+    // Something inserted without anything removed: an emoji or a symbol joins the sentence where it was put.
+    size_t start = 0;
+    while (start < inApp.size() && start < typed.size() && inApp[start] == typed[start]) ++start;
+    size_t end = 0;
+    while (end < inApp.size() - start && end < typed.size() - start &&
+           inApp[inApp.size() - 1 - end] == typed[typed.size() - 1 - end]) ++end;
+    std::wstring inserted = inApp.substr(start, inApp.size() - start - end);
+    bool nothingRemoved = typed.size() - start - end == 0;
+    if (nothingRemoved && !inserted.empty() && !HasLatinOrDigit(inserted)) {
+        core_->Caret(static_cast<int>(start));
+        core_->Key(R"({"key":"text","text":)" + JsonQuote(Narrow(inserted)) + "}");
+        DebugLog("an emoji or symbol put in the sentence: kept in it");
+        return core_->Buffer() == inApp;
+    }
+    return false;
 }
 
 void TextService::Forget(bool sync) {
@@ -512,9 +610,14 @@ TextService::Field TextService::ReadField(ITfContext *context, bool wantSelectio
                 field.selected.assign(text, length);
             }
         }
-        field.secure = IsSecret(context, cookie, selection.range);
+        field.secure = NoComposing(context, cookie, selection.range);
         selection.range->Release();
-        if (parked_) field.parkedOffset = OffsetIn(context, cookie, parked_);
+        if (parked_) {
+            // The kept sentence must still be exactly what was typed (Chrome shortens it to where the click was; an
+            // emoji may have been put in it): matched up first, or let go so it is never written over twice.
+            if (Reconcile(cookie, parked_, true)) field.parkedOffset = OffsetIn(context, cookie, parked_);
+            else field.parkedBroken = true;
+        }
     });
     HRESULT result = S_OK;
     context->RequestEditSession(clientId_, session, TF_ES_SYNC | TF_ES_READ, &result);
@@ -541,8 +644,14 @@ bool TextService::Decide(ITfContext *context, WPARAM wParam, LPARAM lParam) {
     decidedJson_ = key;
     Field field = ReadField(context, key == R"({"key":"convertSelection"})");
     if (parked_) {  // a sentence kept while away: typing goes on in it if the cursor is still there, else it is let go
-        if (field.parkedOffset >= 0) core_->Caret(field.parkedOffset);
-        else DropParked();
+        if (field.parkedBroken) {
+            DebugLog("kept sentence: changed in the app, let go as typed");
+            DropParked();
+        } else if (field.parkedOffset >= 0) {
+            core_->Caret(field.parkedOffset);
+        } else {
+            DropParked();
+        }
     }
     // ↑ right after a conversion, with the cursor still just after it, fixes a word in it (as Alt+Tab does; Windows
     // keeps Alt+Tab for switching windows, so it rarely reaches a keyboard). Anywhere else ↑ is the app's.
