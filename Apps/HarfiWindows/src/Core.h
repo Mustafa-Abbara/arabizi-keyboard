@@ -26,6 +26,7 @@ struct Effect {
     // A pick just made this typed word a habit (ADR 0033), in UTF-8: the keyboard says so once, Esc refuses it.
     std::string learnedLatin, learnedSpelling;
     std::wstring unsureWord;  // sent with a word the model was unsure of (ADR 0034): pointed out once
+    int caret = -1;  // "update": where the cursor goes in the text being typed (UTF-16 from its start)
     bool guessesPending = false;  // the model's guesses for the word shown are coming: ask Guesses() shortly
 };
 
@@ -55,6 +56,8 @@ public:
     Effect Pick(const std::wstring &candidate);
     // A spelling the mouse is on in the chip row: shown in the text as Down/Up would (effect "suggest"), else "none".
     Effect Highlight(const std::wstring &candidate);
+    // A click inside the text being typed, `offset` UTF-16 units from its start: true when the cursor moved there.
+    bool Caret(int offset);
     // The ↑ list re-ranked once the model's guesses are here (effect "suggest"), else effect "none" (ADR 0036 #5).
     Effect Guesses();
     // A new, empty composer: the app ended the composition or the typing moved to another field.

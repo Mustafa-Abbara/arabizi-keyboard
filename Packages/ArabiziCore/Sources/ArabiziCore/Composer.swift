@@ -162,8 +162,8 @@ public struct Composer {
     /// Where the cursor is in `buffer`, in characters from the start; nil at the end. ← and → move it while typing,
     /// so a typo can be fixed without leaving the sentence.
     private var caret: Int?
-    /// Whether ← → and clicks move the cursor inside the sentence being typed (the Mac keyboard). Off, they end the
-    /// sentence in Latin and go to the app (the Windows keyboard, which does not place a cursor inside it).
+    /// Whether ← → and clicks move the cursor inside the sentence being typed (both keyboards turn it on). Off, they
+    /// end the sentence in Latin and go to the app.
     public var cursorMoves = false
     /// The cursor's place in `buffer`, in UTF-16 units, for the app's marked text.
     public var cursor: Int {
