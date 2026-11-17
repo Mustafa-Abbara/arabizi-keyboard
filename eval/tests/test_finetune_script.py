@@ -122,3 +122,18 @@ def test_tag_names_a_sweep_run():
                                 "--tag", "rank32", "--rank", "32"])
     assert args.tag == "rank32" and args.rank == 32
     assert finetune.parse_args(["--base", "llama3.2-1b", "--data", "d", "--out", "o"]).tag is None
+
+
+def test_smaller_bases_for_the_size_study():
+    # How small Harfi's model can be: Gemma 3 270M and Qwen3-0.6B, both pinned and in the manifest.
+    assert {"gemma3-270m", "qwen3-0.6b"} <= set(finetune.BASES)
+    args = finetune.parse_args(["--base", "gemma3-270m", "--data", "d", "--out", "o", "--rank", "32", "--alpha", "64"])
+    assert args.base == "gemma3-270m"
+
+
+def test_gemma_trains_in_fp32_where_bf16_is_missing():
+    # Gemma 3 overflows fp16 (NaN losses); a T4 has no bf16, so Gemma gets fp32 there, the others fp16.
+    assert finetune.precision("gemma3-270m", (7, 5)) == "fp32"
+    assert finetune.precision("qwen3-0.6b", (7, 5)) == "fp16"
+    assert finetune.precision("llama3.2-1b", (7, 5)) == "fp16"
+    assert finetune.precision("gemma3-270m", (8, 0)) == "bf16"
