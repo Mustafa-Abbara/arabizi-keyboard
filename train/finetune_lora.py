@@ -33,6 +33,8 @@ BASES = {
     "qwen3-1.7b": ("Qwen/Qwen3-1.7B", "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e"),
     "qwen3-0.6b": ("Qwen/Qwen3-0.6B", "c1899de289a04d12100db370d81485cdf75e47ca"),
     "qwen2.5-1.5b": ("Qwen/Qwen2.5-1.5B-Instruct", "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"),
+    # Smaller bases, to see how small Harfi's model can be (Unsloth's ungated copy; the Gemma Terms of Use apply).
+    "gemma3-270m": ("unsloth/gemma-3-270m-it", "23cf460f6bb16954176b3ddcc8d4f250501458a9"),
 }
 
 
@@ -97,6 +99,14 @@ def use_bf16(compute_capability: tuple[int, int]) -> bool:
     return compute_capability >= (8, 0)
 
 
+def precision(base: str, compute_capability: tuple[int, int]) -> str:
+    """bf16 where the GPU does it natively; else fp16, except for Gemma 3, whose activations overflow fp16 (losses
+    turn to NaN): it trains in fp32 on a T4, which a 270M model can afford."""
+    if use_bf16(compute_capability):
+        return "bf16"
+    return "fp32" if base.startswith("gemma") else "fp16"
+
+
 def warmup_steps(examples: int, batch: int, grad_accum: int, epochs: float, ratio: float) -> int:
     """Warm-up as a whole number of optimizer steps. transformers 5 dropped `warmup_ratio` (a float `warmup_steps`
     means a ratio there, but not in 4.x), so the step count is computed here and works with both."""
@@ -153,9 +163,11 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{args.base} ({hf_id}): {len(train_ds)} training and {len(val_ds)} validation examples; "
           f"{too_long} longer than {args.max_length} tokens (truncated)")
 
-    bf16 = use_bf16(torch.cuda.get_device_capability(0))
-    model = AutoModelForCausalLM.from_pretrained(hf_id, revision=revision, torch_dtype=torch.bfloat16 if bf16 else torch.float16,
-                                                 device_map={"": 0})
+    mode = precision(args.base, torch.cuda.get_device_capability(0))
+    dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[mode]
+    extra = {"attn_implementation": "eager"} if args.base.startswith("gemma") else {}  # Gemma 3's advice for training
+    model = AutoModelForCausalLM.from_pretrained(hf_id, revision=revision, torch_dtype=dtype, device_map={"": 0},
+                                                 **extra)
     config = SFTConfig(
         output_dir=str(out / "checkpoints"), num_train_epochs=args.epochs, learning_rate=args.lr,
         per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
@@ -163,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         warmup_steps=warmup_steps(len(train_ds), args.batch, args.grad_accum, args.epochs, args.warmup),
         logging_steps=20, eval_strategy="epoch", save_strategy="epoch", load_best_model_at_end=True,
         metric_for_best_model="eval_loss", greater_is_better=False, save_total_limit=1,
-        bf16=bf16, fp16=not bf16, max_length=args.max_length, completion_only_loss=True,
+        bf16=mode == "bf16", fp16=mode == "fp16", max_length=args.max_length, completion_only_loss=True,
         report_to="none", seed=args.seed,
     )
     lora = LoraConfig(r=args.rank, lora_alpha=args.alpha, lora_dropout=args.dropout,
@@ -208,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         "best_eval_loss": trainer.state.best_metric, "best_checkpoint": trainer.state.best_model_checkpoint,
         "history": history, "public_samples": samples,
         "prompt": prompt,  # copied into config/models.json with the model; the engine uses it verbatim
-        "gpu": torch.cuda.get_device_name(0), "precision": "bf16" if bf16 else "fp16",
+        "gpu": torch.cuda.get_device_name(0), "precision": mode,
         "minutes": round((time.time() - started) / 60, 1), "python": platform.python_version(),
         "versions": {"torch": torch.__version__, "transformers": transformers.__version__,
                      "peft": peft.__version__, "trl": trl.__version__},

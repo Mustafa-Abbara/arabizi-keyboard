@@ -41,9 +41,9 @@ def test_plan_needs_explicit_licence_acceptance():
     chosen, skipped = fetch_models.plan(entries, [], set())
     assert {e["id"] for e in chosen} == {"qwen2.5-0.5b", "qwen2.5-1.5b", "qwen3-0.6b", "qwen3-1.7b"}
     fine_tuned = sum("repo" not in e for e in entries)
-    assert len(skipped) == 2 + fine_tuned
+    assert len(skipped) == 3 + fine_tuned  # Gemma 3 1B, Gemma 3 270M and Llama 3.2 1B wait for their licence
     chosen, skipped = fetch_models.plan(entries, [], {"gemma", "llama"})
-    assert len(chosen) == 6 and len(skipped) == fine_tuned and all("fine-tuned" in s for s in skipped)
+    assert len(chosen) == 7 and len(skipped) == fine_tuned and all("fine-tuned" in s for s in skipped)
     chosen, _ = fetch_models.plan(entries, ["qwen3-0.6b"], set())
     assert [e["id"] for e in chosen] == ["qwen3-0.6b"]
     with pytest.raises(SystemExit):

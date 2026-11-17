@@ -111,6 +111,31 @@ The data comes first: `scripts/build_synthetic_dataset.py` turns the generators'
 
 Both use v3's settings (rank 32, alpha 64, lr 2e-4, 3 epochs; best epoch 2 both times; final training loss about 0.01, so the adapter is not short of capacity). Two epochs would take about two thirds of the time: `"--epochs", "2"` in the notebook's run settings. Scoring the held-out synthetic test: `uv run --project eval python scripts/score_synthetic_test.py --test data/synthetic/synthetic_test.jsonl --out build/v4_eval run <model id>`, then `compare <a> <b>`.
 
+## Size study: how small can the model be? (Gemma 3 270M, Qwen3-0.6B)
+
+Two notebooks train smaller bases with **exactly v4's recipe and data** (the `harfi-v5` export, LoRA rank 32, alpha 64,
+lr 2e-4, 3 epochs, best epoch kept), so the base model is the only difference from v4 (Llama 3.2 1B, 808 MB):
+
+| Notebook | Base | Parameters | Base GGUF (Q4_K_M) | Kaggle time on a T4 |
+|---|---|---|---|---|
+| `train/finetune_small_gemma3_270m.ipynb` | Gemma 3 270M (Unsloth's ungated copy; Gemma Terms of Use) | 270M | 253 MB | about 3-4 h (fp32) |
+| `train/finetune_small_qwen3_0.6b.ipynb` | Qwen3-0.6B (Apache-2.0) | 600M | 397 MB | about 4-5 h |
+
+- **Gemma 3 trains in fp32 on a T4.** It overflows fp16 (NaN losses) and the T4 has no bf16; `finetune_lora.py`
+  picks the precision (`precision()`), and Gemma uses eager attention for training.
+- **Both export Q4_K_M and Q8_0** (`export_gguf.sh` takes a list of quantizations): a small model may be worth the
+  extra bytes of Q8_0.
+- **Prompts checked before any run:** with the real tokenizers on the v4 export, prefix + Arabizi + suffix is exactly
+  the training prompt for both. Gemma puts the system instruction in the user turn and ends answers with
+  `<end_of_turn>`; Qwen3 has thinking off (an empty `<think>` block) and ends with `<|im_end|>`. Gemma needs 13% fewer
+  tokens per example than Qwen (75 against 86 on average), so it writes each answer in fewer steps.
+- **Run:** import the notebook, add the `harfi-v5` dataset, GPU T4 and Internet on, then Save & Run All (Commit). Until
+  this change is merged, set `REF = "feat/small-models-kaggle"` in the notebook's clone cell.
+- **Scoring:** against v4 on both dev sets, the 300-message comparison set (`build/comparison/score.py`) and the real
+  chats, with file size, memory and speed per message. The decision rule, fixed before the runs: keep the smallest model
+  within about 2 points of v4's word accuracy on real messages (v4: 0.912 on the real chats, 0.901 on the comparison
+  set).
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.
