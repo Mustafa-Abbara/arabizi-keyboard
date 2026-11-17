@@ -8,6 +8,7 @@
 #    dropped download, and checks its SHA-256. The settings window shows how far it has got.
 # 3. Puts it inside the engine service (the sandboxed service may read only its own bundle, ADR 0020), signs the app
 #    again so macOS accepts the bundle with the model in it, and restarts the keyboard, which then uses the model.
+#    Earlier models in the cache are removed once the new one is in place.
 # A model already downloaded (or HARFI_MODEL_FROM) goes in at step 1.
 #
 # Without a published model (an HTTP 404), it installs on the rules alone and says how to add the model later.
@@ -44,14 +45,26 @@ install_app() {
   "$APP/Contents/MacOS/harfi-register" "$APP"
 }
 
+# Once the new model is in place and the app signed with it: earlier models (808 MB each) and the parts of their
+# downloads are removed from the cache. Only files named like a Harfi model are touched.
+forget_old_models() {
+  for old in "$CACHE"/*.gguf "$CACHE"/*.gguf.part*; do
+    [ -e "$old" ] || continue
+    case "$old" in "$MODEL"|"$MODEL".part*) continue ;; esac
+    rm -f "$old" && echo "Removed an earlier model: $(basename "$old")"
+  done
+}
+
 if [ -f "$MODEL" ] && [ "$(checksum "$MODEL")" = "$MODEL_SHA256" ]; then
   echo "Model already downloaded."
   install_app "$MODEL"
+  forget_old_models
   exit 0
 elif [ -n "${HARFI_MODEL_FROM:-}" ]; then
   cp -c "$HARFI_MODEL_FROM/$MODEL_ASSET" "$MODEL" 2>/dev/null || cp "$HARFI_MODEL_FROM/$MODEL_ASSET" "$MODEL"
   [ "$(checksum "$MODEL")" = "$MODEL_SHA256" ] || { rm -f "$MODEL"; echo "The model in $HARFI_MODEL_FROM does not match its SHA-256."; exit 1; }
   install_app "$MODEL"
+  forget_old_models
   exit 0
 fi
 
@@ -91,3 +104,4 @@ if [ "$(checksum "$MODEL")" != "$MODEL_SHA256" ]; then
 fi
 echo "Model downloaded. Harfi restarts to use it: if you were typing, press a key again."
 install_app "$MODEL" > /dev/null 2>&1
+forget_old_models
