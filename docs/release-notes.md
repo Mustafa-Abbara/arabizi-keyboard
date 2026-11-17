@@ -1,16 +1,22 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
-**New in 0.4.3**
+**New in 0.4.4** (Windows)
+
+- **Fix a typo while typing:** ← → and a click move inside the sentence you are typing instead of leaving it in Latin; fix a letter and Enter still converts the whole sentence.
+- **Switching apps keeps your sentence:** the sentence you were typing stays, and its preview comes back when you return to the app.
+- **Long sentences wrap in the preview:** the box above your text grows onto more lines instead of stretching off the screen.
+- **No extra icon in the taskbar:** the Harfi icon that 0.4.2 put beside the language letter (ع) is gone; it added nothing there.
+
+**New in 0.4.3** (Mac)
 
 - **The Mac catches up with Windows:** in the ↑ list, pointing at a spelling shows it in your text and the preview, and the model's own guesses join the list a moment after it opens, without moving the spelling you have highlighted. On the 8 GB MacBook Air the guesses take about 0.2 s.
-- **Fixing a typo while typing (Mac and Windows):** ← → and a click move inside the sentence you are typing instead of leaving it in Latin; Enter still converts the whole sentence.
-- **Switching apps keeps your sentence (Windows):** the sentence you were typing stays, and its preview comes back when you return to the app.
-- **Long sentences wrap in the preview (Windows):** the box above your text grows onto more lines instead of stretching off the screen.
+- **Fixing a typo while typing (Mac):** ← → and a click move inside the sentence you are typing, with the cursor line showing, instead of leaving it in Latin; Enter still converts the whole sentence.
 - **Steadier boxes (Mac):** the ↑ list stays on one side of the text and keeps its size while you move between words, and the preview and the list go away when you switch to another app.
 
 **New in 0.4.2** (Windows)
 
 - **Pointing at a spelling shows it:** in the ↑ list, the word in your text and in the preview now changes to the spelling under the mouse, as it already did with the arrow keys.
+- **Harfi's icon in the taskbar:** while Harfi is your keyboard, its icon shows next to the language at the bottom right. Click it to open the Harfi window. The keyboard list shows the icon too.
 - **"Show me how to use it" opens in front:** the Harfi window no longer opens behind the installer, as a flashing button in the taskbar.
 
 **New in 0.4.1**
