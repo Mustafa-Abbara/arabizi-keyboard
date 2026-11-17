@@ -638,8 +638,10 @@ STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie cookie, ITfCompos
             composition_->Release();
             composition_ = nullptr;
             if (inFront) {
-                DebugLog("composition ended by the app with the cursor inside: picking it up again");
-                PickUp();
+                // A click inside it: picked up again by the next key (where Windows lets a composition start and
+                // nothing else is writing), with the cursor where it then is. Restarting it on a timer raced with
+                // the typing and could write the sentence twice.
+                DebugLog("composition ended by the app with the cursor inside: kept for the next key");
             } else {
                 DebugLog("composition ended by the app for another app: kept for coming back");
                 chips_.Hide();
@@ -886,12 +888,14 @@ void TextService::SetComposition(ITfContext *context, TfEditCookie cookie, const
             compositions->Release();
         }
         if (!composition_ && kept) {
-            // The app would not start it again yet (Notepad, still handling the click): the sentence stays kept,
-            // with the typed text in it, so Enter replaces it instead of inserting a second copy.
+            // The app would not start it again yet: the sentence stays kept, with the typed text in it, so Enter
+            // replaces it instead of inserting a second copy.
             range->SetText(cookie, 0, text.c_str(), static_cast<LONG>(text.size()));
             parked_ = range;
+            DebugLog("kept sentence: written in place, composition refused");
             return;
         }
+        if (kept) DebugLog("kept sentence: composition started over it again");
         if (range) range->Release();
         if (!composition_) return;
     }
@@ -934,6 +938,7 @@ void TextService::Commit(ITfContext *context, TfEditCookie cookie, const std::ws
         composition_->Release();
         composition_ = nullptr;
     } else if (parked_) {  // a sentence kept while away (still in the app as typed): the text replaces it
+        DebugLog("kept sentence: replaced by the committed text");
         ITfRange *range = parked_;
         parked_ = nullptr;
         range->SetText(cookie, 0, text.c_str(), static_cast<LONG>(text.size()));
