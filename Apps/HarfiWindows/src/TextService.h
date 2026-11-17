@@ -57,6 +57,7 @@ private:
         bool atLastConversion = false;  // the cursor is right after the text Harfi last inserted
         std::wstring selected;          // the selected text, read only for Alt+Enter
         int parkedOffset = -1;          // the cursor inside a sentence kept while away (parked_), or -1
+        bool parkedBroken = false;      // the kept sentence no longer matches what was typed: let it go
     };
 
     // The composer's effect for this key, computed once in OnTestKeyDown and carried out in OnKeyDown.
@@ -92,6 +93,10 @@ private:
     // Underlines a kept sentence again where the cursor still is in it (else lets it go), and shows its preview;
     // in an edit session after the current one.
     void PickUp();
+    // Makes `range` (the sentence in the app) and the composer's text agree: a sentence the app shortened is
+    // stretched back (`canExtend`), an emoji or symbol the app put in joins the composer's text. False when
+    // they can't be matched up, so the sentence is never written over with the wrong text.
+    bool Reconcile(TfEditCookie cookie, ITfRange *range, bool canExtend);
     void Commit(ITfContext *context, TfEditCookie cookie, const std::wstring &text);
     // Marks `range` as text being typed (underlined), or clears the mark.
     void Underline(ITfContext *context, TfEditCookie cookie, ITfRange *range, bool on);
