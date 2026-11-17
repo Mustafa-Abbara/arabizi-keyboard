@@ -544,7 +544,9 @@ final class ArabiziInputController: IMKInputController {
     /// sentence still being typed, its preview shows again.
     override func activateServer(_ sender: Any!) {
         super.activateServer(sender)
-        if !composer.buffer.isEmpty, !composer.isSuggesting { showPreview() }
+        if !composer.buffer.isEmpty, !composer.isSuggesting {
+            showPreview()
+        }
         guard !UserDefaults.standard.bool(forKey: "welcomeShown") else { return }
         UserDefaults.standard.set(true, forKey: "welcomeShown")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -555,10 +557,39 @@ final class ArabiziInputController: IMKInputController {
     /// Another app (or another window) is now in front: the preview and the chips belong to this one, so they go,
     /// and the sentence being typed stays underlined in it.
     override func deactivateServer(_ sender: Any!) {
+        // Chromium-based apps (Brave, Chrome, Claude and other Electron apps) keep the sentence as plain Latin when
+        // another app comes to the front, without telling the keyboard, and report it as still underlined; typing on
+        // later wrote it a second time. There the keyboard ends it itself, in Latin, once, as the user leaves.
+        if !composer.buffer.isEmpty, !composer.isSuggesting, let client = sender as? IMKTextInput,
+           Self.isChromium(client.bundleIdentifier()), let text = composer.flush() {
+            insert(text, into: client)
+            log.notice("left a Chromium app: the sentence ended in Latin")
+        }
         hidePreview()
         hideCandidates()
         super.deactivateServer(sender)
     }
+
+    /// Whether the app is built on Chromium (browsers such as Brave and Chrome, and Electron apps): they bundle a
+    /// "Helper (Renderer)" app, in Contents/Frameworks (Electron) or in their framework's Helpers (browsers).
+    private static func isChromium(_ bundleID: String?) -> Bool {
+        guard let bundleID else { return false }
+        if let known = chromiumApps[bundleID] { return known }
+        var found = false
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let files = FileManager.default, frameworks = app.appending(path: "Contents/Frameworks")
+            var places = [frameworks]
+            for name in (try? files.contentsOfDirectory(atPath: frameworks.path)) ?? [] where name.hasSuffix(".framework") {
+                places.append(frameworks.appending(path: name).appending(path: "Versions/Current/Helpers"))
+            }
+            found = places.contains { place in
+                ((try? files.contentsOfDirectory(atPath: place.path)) ?? []).contains { $0.contains("Renderer).app") }
+            }
+        }
+        chromiumApps[bundleID] = found
+        return found
+    }
+    nonisolated(unsafe) private static var chromiumApps: [String: Bool] = [:]  // on the main thread only
 
     /// The keyboard's items in the input menu (the ع icon in the menu bar): quick toggles, and the Harfi window.
     override func menu() -> NSMenu! {
