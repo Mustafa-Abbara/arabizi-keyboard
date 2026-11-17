@@ -49,3 +49,10 @@ Apps: Messages, Mail, a web browser, VS Code, Terminal, an Electron chat app, Te
 - ❌ then ✅ ⌘Z right after a conversion in Notes deleted the sentence without bringing the Latin back: Notes deletes the range but never shows marked text set over a range. Fixed by deleting the converted text first and composing the Latin at the cursor (PR #72); the same path serves ↑ right after Enter. WhatsApp's case 9 was not re-checked.
 - ✅ ↑ before Enter opens the spellings on the least sure word; ← → and the numbers pick; the chips now stay on the far side of the preview.
 - Not yet run in this round: TextEdit, Safari, Chrome, Slack, Outlook; cases 4–8 and 10–12.
+
+### Fourth round: 16–17 Nov 2026 (v0.4.3 typing fixes, Mac)
+
+- ✅ ← → move the cursor inside the sentence being typed, with the cursor line showing, in TextEdit, Notes and Chromium-based apps (Claude, Brave); Enter converts the whole sentence (PR #95).
+- ✅ A click inside the sentence moves the cursor there in TextEdit and Notes (`mouseDown(onCharacterIndex:…)`).
+- ⚠️ In Chromium-based apps (Claude, Brave, Chrome), a click inside the sentence or a switch to another app still ends it in Latin. Chromium ends the composition itself and never hands the click to the keyboard. While ending it, it reports the cursor and the marked range as unknown and the document as empty, and it ignores the replacement range of a new marked text. An attempt to pick the sentence up again at the click wrote it twice, so it was dropped: one copy in Latin is better than two. The Windows keyboard can do it because TSF reports exact ranges (PR #96).
+- ✅ The preview and the ↑ list hide when another app comes to the front, and the preview comes back with the app (TextEdit, Notes).
