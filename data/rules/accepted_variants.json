@@ -1,13 +1,10 @@
 {
-  "_comment": "Global accepted spellings from docs/SPELLING.md Section 8 (v1.0): primary -> also accepted. Applied to every row at scoring time (P3). Keep in sync with the guide.",
+  "_comment": "Global accepted spellings from docs/SPELLING.md Section 8 (v2.0): primary -> also accepted. Applied to every row at scoring time (P3). Keep in sync with the guide. v2.0: أ and إ are written ا, so the أ spellings of هلق, قال and قلت (هلأ، أل، ألت) would read as other words (هلا، ال، الت) and are no longer accepted.",
   "variants": {
-    "هلق": ["هلأ"],
-    "إمتى": ["إيمتى"],
-    "قديش": ["أديش"],
+    "امتى": ["ايمتى"],
+    "قديش": ["اديش"],
     "عنجد": ["عن جد"],
-    "قهوة": ["أهوة"],
-    "قال": ["أل"],
-    "قلت": ["ألت"],
-    "إذا": ["إزا"]
+    "قهوة": ["اهوة"],
+    "اذا": ["ازا"]
   }
 }

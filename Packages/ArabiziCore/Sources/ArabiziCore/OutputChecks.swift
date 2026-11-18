@@ -14,6 +14,9 @@ public struct OutputChecks: Equatable, Sendable {
         case wordCount(output: Int, input: Int)
         /// An emoji was lost, added or changed (emoji are not placeholders, ADR 0025).
         case emoji
+        /// Letters of another script (Chinese, Cyrillic, Hebrew…) that were not in the input: a multilingual model
+        /// slipping into another language mid-word (`الم模型`, size study 18 Nov 2026).
+        case otherScript
     }
 
     /// The output may have between `minWordRatio × n − wordSlack` and `maxWordRatio × n + wordSlack` words for
@@ -38,6 +41,10 @@ public struct OutputChecks: Equatable, Sendable {
         guard !answer.isEmpty else { return .failure(.empty) }
         guard let restored = ProtectedSpans.restore(answer, spans: input.spans) else { return .failure(.placeholders) }
         guard Self.emoji(in: answer) == Self.emoji(in: input.masked) else { return .failure(.emoji) }
+        let typed = Set(input.masked.unicodeScalars.filter(Self.isOtherScript))
+        guard answer.unicodeScalars.allSatisfy({ !Self.isOtherScript($0) || typed.contains($0) }) else {
+            return .failure(.otherScript)
+        }
         // Both sides still masked: links and emails are placeholders here, so they never count as Latin words.
         let allowed = Set(Self.words(input.masked).map { Token($0).core.lowercased() })
         let invented = Self.words(answer).map { Token($0).core }.filter { core in
@@ -67,6 +74,16 @@ public struct OutputChecks: Equatable, Sendable {
         if inputWords.contains(word) { return true }
         guard word.count >= 4 || keptLatin.contains(word) else { return false }
         return gluedPrefixes.contains { inputWords.contains($0 + word) }
+    }
+
+    /// A letter that is neither Arabic nor Latin: what a Lebanese conversion never writes unless it was typed.
+    static func isOtherScript(_ scalar: Unicode.Scalar) -> Bool {
+        guard scalar.properties.isAlphabetic else { return false }
+        switch scalar.value {
+        case 0x0000...0x024F, 0x1E00...0x1EFF: return false  // Latin, with accents
+        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF: return false  // Arabic
+        default: return true
+        }
     }
 
     /// The emoji of a text in order, as typed (skin tones and flags kept whole).

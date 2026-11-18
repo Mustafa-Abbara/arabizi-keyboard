@@ -1,5 +1,5 @@
 {
-  "_comment": "Hand-written rules for B0 (roadmap P3 step 2) and, from P5, the Swift fallback: both read this file and must behave the same. Words are looked up in arabizi_lexicon.json (generated from training data) first; these letter rules are only for unknown words. Spellings follow docs/SPELLING.md.",
+  "_comment": "Hand-written rules for B0 (roadmap P3 step 2) and, from P5, the Swift fallback: both read this file and must behave the same. Words are looked up in arabizi_lexicon.json (generated from training data) first; these letter rules are only for unknown words. Spellings follow docs/SPELLING.md (v2.0: a word-initial vowel is written ا, never أ or إ).",
   "version": 1,
   "clitics": {
     "_comment": "Small words written as their own Arabizi word but attached to the next word in Arabic (SPELLING.md 3).",
@@ -31,7 +31,7 @@
       "2": "ق", "3": "ع", "5": "خ", "6": "ط", "7": "ح", "8": "غ", "9": "ص"
     },
     "vowels": {
-      "initial": {"a": "أ", "e": "إ", "i": "إ", "o": "أ", "u": "أ"},
+      "initial": {"a": "ا", "e": "ا", "i": "ا", "o": "ا", "u": "ا"},
       "medial": {"a": "", "e": "", "i": "ي", "o": "و", "u": "و"},
       "final": {"a": "ا", "e": "ة", "i": "ي", "o": "و", "u": "و"},
       "final_e_short_word": "ي",

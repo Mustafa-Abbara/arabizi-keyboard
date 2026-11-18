@@ -1,18 +1,18 @@
 {
   "_comment": "Frozen \"others\" held-out set (ADR 0021): real messages by other people, scored with `evalrun ... --others`. `pairs validate` and CI fail if a listed file changes. Re-freeze with `pairs freeze --others --version ... --reason ...`.",
-  "version": "others-v1.1",
-  "frozen_on": "2026-10-17",
-  "reason": "SPELLING.md 4 applied to the references: Arabic prefixes written apart from Latin words (65 rows: 24 dev, 41 test), ADR 0024; same rows and splits",
-  "previous_version": "others-v1.0",
+  "version": "others-v1.2",
+  "frozen_on": "2026-11-18",
+  "reason": "SPELLING.md v2.0 applied to the references (eval/src/arabizi_eval/spelling_v2.py): أ and إ written ا, verb plural وا written و, leh as ليه and hay as هي; same rows and splits",
+  "previous_version": "others-v1.1",
   "unchecked_rows": 0,
   "files": {
     "others/test.jsonl": {
-      "sha256": "32287600ef00092a2961007da73253c3244a79c744f6a2cf5388019234f605ca",
+      "sha256": "24dbee4deb402b1ad62b96c491ec96f6e981c1e5b80dd9d3253bf01b0ed14ff5",
       "rows": 299,
       "private": false
     },
     "others/dev.jsonl": {
-      "sha256": "8d4dbdbf40a37b7d911ea9b66482d7b79a61913e972055234d322453a2ef5349",
+      "sha256": "62c3520278c2f833c404774aa44352db7e74a7de174e793efed87bc408f6048b",
       "rows": 200,
       "private": false
     }
