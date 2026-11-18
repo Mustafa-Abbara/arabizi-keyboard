@@ -13,6 +13,11 @@ def test_plural_ending_is_waw_except_where_it_belongs_to_the_word():
     assert [plural_wa(w) for w in ("سوا", "الدوا", "والهوا", "جوا", "وا")] == ["سوا", "الدوا", "والهوا", "جوا", "وا"]
 
 
+def test_words_that_end_in_wa_but_are_not_plurals_keep_it():
+    assert conv.text("ايوا عفوا وعفوا") == "ايوا عفوا وعفوا"
+    assert conv.text("أيوا") == "ايوا"
+
+
 def test_leh_lesh_and_hay_follow_what_was_typed():
     assert conv.pair("leh ma ejit", "ليش ما إجيت") == "ليه ما اجيت"
     assert conv.pair("lesh ma ejit", "ليه ما إجيت") == "ليش ما اجيت"
