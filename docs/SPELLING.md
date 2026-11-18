@@ -2,7 +2,7 @@
 
 This guide fixes **how the Arabic side of every data pair is written**, so the test set, the training data and the model all agree. Read it before writing any pair, and re-read it during the delayed self-check (roadmap P2, [ADR 0011](decisions/0011-solo-build.md)).
 
-> **Status: v1.3, 17 Oct 2026.** v1.3: Section 4's split rule for an English word with an Arabic prefix (`ال video`, never `الvideo`) re-confirmed and applied to the real rows and the others set, which had glued them (ADR 0024). v1.2: the "her" ending (ـا / ـها) and `3a` before a word (ع جونيه / عجونيه) are correct both ways, and the scorer accepts both (EVAL.md). v1.1: `eza`/`iza` is written **إذا** (a special word), إزا accepted. v1.0 (12 Oct 2026): drafted from the roadmap (P2 step 1) and common Lebanese chat spelling; all nine choices marked **[confirm]** were confirmed (Section 9). Changing a rule means fixing every existing pair, so bump the version and say why in the PR.
+> **Status: v2.0, 18 Nov 2026.** v2.0 (decided by Moustafa): **أ and إ are written ا** (انا، اذا، سال), while ء, ؤ, ئ and آ stay as they are; a verb's **plural ending is always و**, never وا (يعملو، قالو); a feminine ending is **ة** (سيارة), and ه only where it belongs to the word (سفيه، الله); `leh` is **ليه** and `lesh` is **ليش**; `hay` is **هي**. Every pair, reference and rule file was converted by `eval/src/arabizi_eval/spelling_v2.py` (test sets re-frozen as testset-v1.2 and others-v1.2). v1.3: v1.3: Section 4's split rule for an English word with an Arabic prefix (`ال video`, never `الvideo`) re-confirmed and applied to the real rows and the others set, which had glued them (ADR 0024). v1.2: the "her" ending (ـا / ـها) and `3a` before a word (ع جونيه / عجونيه) are correct both ways, and the scorer accepts both (EVAL.md). v1.1: `eza`/`iza` is written **إذا** (a special word), إزا accepted. v1.0 (12 Oct 2026): drafted from the roadmap (P2 step 1) and common Lebanese chat spelling; all nine choices marked **[confirm]** were confirmed (Section 9). Changing a rule means fixing every existing pair, so bump the version and say why in the PR.
 
 ---
 
@@ -13,9 +13,9 @@ This guide fixes **how the Arabic side of every data pair is written**, so the t
 | ✅ Lebanese | ❌ Not this (MSA) |
 |---|---|
 | شو بدك؟ | ماذا تريد؟ |
-| هلق أنا بالبيت | الآن أنا في البيت |
+| هلق انا بالبيت | الآن انا في البيت |
 | كتير منيح | جيد جداً |
-| ما بعرف | لا أعرف |
+| ما بعرف | لا اعرف |
 
 The Arabic side is the **intended** sentence. If the Arabizi has a typo (`kifkak`), the Arabic is still the intended word (`كيفك`).
 
@@ -29,7 +29,7 @@ A digit **inside or attached to a word** is a letter. A digit standing alone (or
 
 | Arabizi | Arabic | Example |
 |---|---|---|
-| `2` | ء / أ / إ, or ق (see 2.2) | `la2` → لأ, `2alb` → قلب |
+| `2` | ء, ا, or ق (see 2.2) | `la2` → لا, `2alb` → قلب |
 | `3` | ع | `3am` → عم |
 | `3'`, `gh` | غ | `ghayr` → غير |
 | `5`, `kh` | خ | `5alas` → خلص |
@@ -59,7 +59,7 @@ Write them the way Lebanese people **say and type** them, not the MSA letter:
 |---|---|---|
 | ث pronounced t | ت | `tleteh` → تلاتة, `ktir` → كتير |
 | ذ pronounced d | د | `hayda` → هيدا, `dahab` → دهب |
-| ذ pronounced z | ز | `zaki` → ذكي keeps ذ; but `iza`/`eza` → **إذا** (a special word; إزا accepted) |
+| ذ pronounced z | ز | `zaki` → ذكي keeps ذ; but `iza`/`eza` → **اذا** (a special word; ازا accepted) |
 | ظ pronounced d | ض | `dahar` → ضهر |
 
 Rule of thumb: everyday Lebanese words follow the pronunciation (تلاتة، هيدا، كتير); learned or MSA-origin words keep their letter even when said with s or z (ثورة، مثلاً، ذكي).
@@ -68,17 +68,18 @@ Rule of thumb: everyday Lebanese words follow the pronunciation (تلاتة، ه
 
 Lebanese pronounce most ق as a glottal stop, typed `2`. The rule:
 
-- **Etymological ق is written ق**: `2alb` → قلب, `2elt` → قلت, `2ahwe` → قهوة. Accepted variant: the أ spelling (أهوة) only for the words listed in Section 8.
-- **A real hamza is written with hamza**: `la2` → لأ, `2ana` → أنا, `so2al` → سؤال.
+- **Etymological ق is written ق**: `2alb` → قلب, `2elt` → قلت, `2ahwe` → قهوة. Accepted variant: the ا spelling (اهوة) only for the words listed in Section 8.
+- **A hamza on alif is written as a plain ا** (v2.0): `la2` → لا, `2ana` → انا, `sa2al` → سال. **ء, ؤ and ئ are written as they are** and are never replaced by ا: `shi2` → شيء, `so2al` → سؤال, `masa2il` → مسائل.
 
 ### 2.3 Vowels
 
 - **Short vowels are not written** and no diacritics (no ـَ ـُ ـِ ـّ): `ktir` → كتير, `3ndi` → عندي.
 - **Long vowels are written** with ا و ي: `bayt` → بيت, `rou7` → روح, `kteb` → كتاب.
-- **Initial vowel**: أ for `a`/`o` (`ana` → أنا), إ for `e`/`i` (`enta` → إنت, `eza` → إذا).
-- **Final `-e`/`-a` on a feminine noun or adjective**: ة: `7elwe` → حلوة, `sa3a` → ساعة, `kbire` → كبيرة. **[confirm]** (ه is common too; scoring treats ة/ه as equal in the lenient metric, Section 10.)
+- **Initial vowel**: always ا, never أ or إ (v2.0): `ana` → انا, `enta` → انت, `eza` → اذا, `ente` → انتي.
+- **Final `-e`/`-a` on a feminine noun or adjective**: ة: `7elwe` → حلوة, `sa3a` → ساعة, `kbire` → كبيرة, `syyara` → سيارة (never سياره). Write ه only when it is part of the word: `safeh` → سفيه, `allah` → الله. **[confirmed v2.0]** (ه is common too; scoring treats ة/ه as equal in the lenient metric, Section 10.)
 - **Final `-e` meaning "my"**: ي: `bade` → بدي, `beite` → بيتي.
-- **Final `-a`/`-e` in other words**: ا or ي as Lebanese write them: `hayda` → هيدا, `hayde` → هيدي, `bukra` → بكرا, `emta` → إمتى.
+- **Final `-a`/`-e` in other words**: ا or ي as Lebanese write them: `hayda` → هيدا, `hayde` → هيدي, `bukra` → بكرا, `emta` → امتى.
+- **A verb's plural ending is و, never وا** (v2.0): `3emlo` → عملو, `2alo` → قالو, `ya3mlo` → يعملو, `ta3o` → تعو. Words where وا is part of the word keep it: `sawa` → سوا, `dawa` → دوا, `hawa` → هوا, `jouwa` → جوا.
 - **Elongation for emphasis**: repeat the letter as often as typed: `ktiiiir` → كتيييير, `yaaa` → يااا.
 
 ---
@@ -89,12 +90,12 @@ These decide most of the hard cases (the "la mohammad" problem).
 
 | Arabizi | Arabic | Rule |
 |---|---|---|
-| `w` (and) | و **attached** to the next word | `w enta?` → وإنت؟ |
+| `w` (and) | و **attached** to the next word | `w enta?` → وانت؟ |
 | `b` / `bi` / `be` (in, with) | بـ **attached** | `bel beit` → بالبيت, `b Beirut` → ببيروت |
 | `b` (verb prefix) | بـ **attached** | `b7ebak` → بحبك, `ba3ref` → بعرف |
-| `la` (to, for) + noun/name | لـ **attached** | `la mohammad` → لمحمد, `la ekhte` → لأختي |
-| `la` (no) | لا **separate** | `la la` → لا لا (rare in Lebanese; the usual "no" is `la2` → لأ) |
-| `la2ennu` / `la2anno` (because) | لأنو | |
+| `la` (to, for) + noun/name | لـ **attached** | `la mohammad` → لمحمد, `la ekhte` → لاختي |
+| `la` (no) | لا **separate** | `la la` → لا لا (rare in Lebanese; the usual "no" is `la2` → لا) |
+| `la2ennu` / `la2anno` (because) | لانو | |
 | `3al` (on/to the) | عالـ **attached** | `3al beit` → عالبيت |
 | `3a` (on/to) + word without "the" | ع separate **or** attached, both correct (v1.2) | `3a Jounieh` → ع جونيه / عجونيه |
 | `ma` (not) | ما **separate** | `ma ba3ref` → ما بعرف |
@@ -139,7 +140,7 @@ These decide most of the hard cases (the "la mohammad" problem).
 | `yalla` | يلا |
 | `ya3ne` / `ya3ni` | يعني |
 | `wallah` / `walla` | والله |
-| `inshallah` | إن شاء الله |
+| `inshallah` | ان شاء الله |
 | `mashallah` | ما شاء الله |
 | emoji, `:)`, `<3` | unchanged |
 
@@ -178,31 +179,33 @@ The most frequent words. Add a word here the first time you are unsure about it,
 | hayda / hayde / hawde | هيدا / هيدي / هودي | |
 | hek, heik | هيك | |
 | hon / honik | هون / هونيك | |
-| halla2, halla | هلق | هلأ |
+| halla2, halla | هلق | |
 | bade, baddak, baddik | بدي، بدك | |
 | ktir, kteer | كتير | |
 | mni7, mnee7 | منيح | |
-| la2 | لأ | |
-| eh, ee | إيه | |
-| lesh, leh | ليش | |
+| la2 | لا | |
+| eh, ee | ايه | |
+| leh | ليه | |
+| lesh, leysh | ليش | |
+| hay | هي | |
 | wen, ween | وين | |
 | min | مين | |
-| emta, aymta | إمتى | إيمتى |
-| addesh, 2addesh | قديش | أديش |
+| emta, aymta | امتى | ايمتى |
+| addesh, 2addesh | قديش | اديش |
 | bukra, bokra | بكرا | |
 | mbere7 | مبارح | |
 | ba3den, ba3dein | بعدين | |
 | 3anjad, 3an jad | عنجد | عن جد |
 | shi | شي | |
 | kamen | كمان | |
-| 2ahwe | قهوة | أهوة |
-| 2al(lo), 2elt | قال، قلت | أل، ألت |
+| 2ahwe | قهوة | اهوة |
+| 2al(lo), 2elt | قال، قلت | |
 | tayyeb, 6ayyeb | طيب | |
 | sa7, s7 | صح | |
 | khalas, 5alas | خلص | |
-| iza, eza | إذا | إزا |
-| la2ennu, la2anno | لأنو | |
-| ennu, enno | إنو | |
+| iza, eza | اذا | ازا |
+| la2ennu, la2anno | لانو | |
+| ennu, enno | انو | |
 
 ---
 
@@ -211,8 +214,10 @@ The most frequent words. Add a word here the first time you are unsure about it,
 | # | Rule | Decision (confirmed) | Alternative (not chosen) |
 |---|---|---|---|
 | 1 | ث/ذ/ظ in everyday words (2.1) | Pronunciation (تلاتة، هيدا، ضهر) | Always the MSA letter (ثلاثة، هذا) |
-| 2 | Glottal-stop ق (2.2) | ق (قلب، قهوة), أ accepted for listed words | أ (ألب، أهوة) |
-| 3 | Feminine ending (2.3) | ة (حلوة) | ه (حلوه) |
+| 2 | Glottal-stop ق (2.2) | ق (قلب، قهوة), ا accepted for listed words | ا (الب، اهوة) |
+| 3 | Feminine ending (2.3) | ة (حلوة، سيارة); ه only when part of the word (سفيه) | ه (حلوه) |
+| 10 | Hamza on alif (2.2, v2.0) | ا (انا، اذا، سال); ء ؤ ئ آ unchanged | أ / إ (أنا، إذا) |
+| 11 | Verb plural ending (2.3, v2.0) | و (عملو، يعملو) | وا (عملوا) |
 | 4 | "her" ending (3) | **v1.2: both ـا and ـها are correct** (both are used) | — |
 | 5 | `ta` + verb (3) | attached (تشوفك) | separate (تا شوفك) |
 | 6 | English word with Arabic prefix (4) | prefix in Arabic + space (عم ب check) | whole token Latin (bcheck) |

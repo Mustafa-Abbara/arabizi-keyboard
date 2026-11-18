@@ -51,8 +51,8 @@ func spell(_ keys: String) -> Speller {
 }
 
 @Test func firstVowelsAndDoubledConsonantsFollowTheRules() {
-    #expect(spell("a").arabic == "أ")
-    #expect(spell("ou").arabic == "أو")
+    #expect(spell("a").arabic == "ا")  // SPELLING.md v2.0: a first vowel is a plain ا
+    #expect(spell("ou").arabic == "او")
     #expect(spell("bb").arabic == "ب")
     var doubled = spell("bb")
     doubled.choose("ب")

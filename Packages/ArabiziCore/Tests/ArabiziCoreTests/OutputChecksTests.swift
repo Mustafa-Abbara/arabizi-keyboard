@@ -34,6 +34,12 @@ func placeholderMistakesFail(output: String) {
     #expect(check("shu 3am ta3mel", "شو 3am تaعمل") == .failure(.newLatin(["تaعمل"])))  // half converted
 }
 
+@Test func otherScriptsFail() {
+    #expect(check("baddi hayda lmodel", "بدي هيدا الم模型") == .failure(.otherScript))  // Chinese mid-word
+    #expect(check("w kaasaye shay", "وكасاية شاي") == .failure(.otherScript))  // Cyrillic letters
+    #expect(check("ana w 张伟 ra7na", "انا و 张伟 رحنا") == .success("انا و 张伟 رحنا"))  // typed: kept
+}
+
 @Test func wrongLengthFails() {
     let long = "ana ktir ta3ban lyom w bade nem bakkir la2an bokra 3ande sh8l"  // 12 words
     #expect(check(long, "تعبان") == .failure(.wordCount(output: 1, input: 12)))

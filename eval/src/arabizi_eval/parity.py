@@ -77,7 +77,7 @@ def render(fixture: dict) -> str:
 
 def write() -> None:
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
-    FIXTURE.write_text(render(build()), encoding="utf-8")
+    FIXTURE.write_text(render(build()), encoding="utf-8", newline="\n")
 
 
 def is_current() -> bool:

@@ -343,6 +343,7 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         case .newLatin(let words): "check: new Latin words (\(words.count))"
         case .wordCount(let output, let input): "check: word count \(output) for \(input) input words"
         case .emoji: "check: emoji changed"
+        case .otherScript: "check: letters of another script"
         }
     }
 

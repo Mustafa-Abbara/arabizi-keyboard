@@ -24,7 +24,7 @@ let testConverter = try! RuleConverter(rules: rulesData, lexicon: Data("""
 
 @Test(arguments: [
     ("ktir", "كتير"), ("mni7", "منيح"), ("ta3mel", "تعمل"), ("7abibi", "حبيبي"),
-    ("ana", "أنا"), ("hayda", "هيدا"), ("bade", "بدي"), ("kbire", "كبيرة"),
+    ("ana", "انا"), ("hayda", "هيدا"), ("bade", "بدي"), ("kbire", "كبيرة"),
     ("shhr", "شهر"),  // the h of "sh" is not a doubled h
     ("sakkar", "سكر"),  // doubled k collapses
     ("sheyfne", "شيفني"), ("kllfne", "كلفني"),  // -ne ending is "me"

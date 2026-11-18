@@ -40,8 +40,8 @@ def test_punctuation_match_needs_the_arabic_marks_in_order():
 
 
 def test_global_and_row_variants_are_accepted():
-    s = M.score_sentence(row("هلق أنا بالبيت", "halla2 ana bel beit"), "هلأ أنا بالبيت")
-    assert s.words_correct == 3  # هلق=هلأ is in data/rules/accepted_variants.json
+    s = M.score_sentence(row("قديش انا بالبيت", "2addesh ana bel beit"), "اديش انا بالبيت")
+    assert s.words_correct == 3  # قديش=اديش is in data/rules/accepted_variants.json
     s = M.score_sentence(row("بيتا كبير", "beta kbir", {"بيتا": ["بيتها"]}), "بيتها كبير")
     assert s.words_correct == 2
 

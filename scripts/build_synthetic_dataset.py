@@ -6,7 +6,8 @@ the agent packs (M = machine A/B/C, R = round: "" for 1, "2", "3"...); the .xlsx
 What it does, in order:
   1. reads every row and labels its group (machine + round, or breaker) and kind;
   2. cleans: Latin letters with marks in the Arabizi become the plain letter (é -> e), Arabic diacritics and
-     tatweel removed, Arabic-Indic digits become Western, Arabic prefixes glued to Latin words split (SPELLING.md 4);
+     tatweel removed, Arabic-Indic digits become Western, Arabic prefixes glued to Latin words split (SPELLING.md 4),
+     and the v2.0 spelling applied (أ / إ written ا, a verb plural وا written و);
   3. drops rows that fail the repo's own row checks (pairs.row_errors), rows whose Arabic has a Latin word not typed in
      the Arabizi, rows with a word count outside 0.5x-2x, breaker rows marked "convention only" or ok = no, and rows
      whose context round used the two test-set example words;
@@ -40,6 +41,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "eval" / "src"))
 from arabizi_eval import metrics as M
 from arabizi_eval import pairs as P
+from arabizi_eval.spelling_v2 import Converter
 
 HOLDOUT = 0.10
 DATE = "2026-11-14"
@@ -160,11 +162,14 @@ def plain_latin(text: str) -> str:
     return unicodedata.normalize("NFC", "".join(out))
 
 
+SPELLING_V2 = Converter()  # SPELLING.md v2.0: no أ / إ, plural و (generators may still slip)
+
+
 def clean_arabic(text: str) -> str:
     text = P.normalize_arabic(text)
     text = re.sub("[٠-٩]", lambda m: str(ord(m[0]) - 0x660), text)
     text = re.sub("[۰-۹]", lambda m: str(ord(m[0]) - 0x6F0), text)
-    return " ".join(P.split_glued_prefixes(text).split())
+    return SPELLING_V2.text(" ".join(P.split_glued_prefixes(text).split()))
 
 
 def key_text(s: str) -> str:
