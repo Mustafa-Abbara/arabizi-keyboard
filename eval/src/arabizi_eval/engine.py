@@ -62,10 +62,25 @@ class EngineSystem(System):
         args += [] if self.pin else ["--no-pin"]
         self.process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         text=True, encoding="utf-8", bufsize=1)
-        status = json.loads(self.process.stderr.readline())
+        status = self._status()
         self.describe["status"] = status
         if self.model_id and status.get("state") != "ready":
             raise SystemExit(f"engine model not ready: {status.get('reason', status)}")
+
+    def _status(self, max_lines: int = 200) -> dict:
+        """The engine's status line (JSON) on stderr. A model loaded from a cold disk can make llama.cpp log a line
+        first, which is not JSON: those lines are skipped instead of failing the run."""
+        for _ in range(max_lines):
+            line = self.process.stderr.readline()
+            if not line:
+                break
+            try:
+                status = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(status, dict):
+                return status
+        raise SystemExit("the engine wrote no status line")
 
     def convert(self, row: dict) -> str:
         if self.process is None:

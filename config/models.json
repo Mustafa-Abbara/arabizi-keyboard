@@ -269,6 +269,42 @@
                 "prefix": "<bos><start_of_turn>user\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.\n\n",
                 "suffix": "<end_of_turn>\n<start_of_turn>model\n"
           }
+    },
+    {
+          "id": "arabizi-qwen3-0.6b-v1",
+          "base": "qwen3-0.6b",
+          "run": "train/runs/20261117-194843-qwen3-0.6b-lora-v1.json",
+          "file": "arabizi-qwen3-0.6b-v1-Q4_K_M.gguf",
+          "size": 396704512,
+          "sha256": "1d7550c77439deefd2bb99aaf15918a3b3b5a5b998d27211530ce42e30679fdd",
+          "params": "0.6B",
+          "quant": "Q4_K_M",
+          "licence": "Apache-2.0",
+          "licence_acceptance": null,
+          "publisher": "this project: LoRA fine-tune of Qwen3-0.6B on Kaggle with v4's data and recipe (size study); weights not in the repo",
+          "source": "size study (18 Nov 2026): how small Harfi's model can be (docs/TRAINING.md)",
+          "prompt": {
+                "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+                "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+          }
+    },
+    {
+          "id": "arabizi-qwen3-0.6b-v1-q8",
+          "base": "qwen3-0.6b",
+          "run": "train/runs/20261117-194843-qwen3-0.6b-lora-v1.json",
+          "file": "arabizi-qwen3-0.6b-v1-Q8_0.gguf",
+          "size": 639446784,
+          "sha256": "64f7ba415796fe7600820eaa931abfd514ddb2b54116d17575e9f386f3a2653d",
+          "params": "0.6B",
+          "quant": "Q8_0",
+          "licence": "Apache-2.0",
+          "licence_acceptance": null,
+          "publisher": "this project: LoRA fine-tune of Qwen3-0.6B on Kaggle with v4's data and recipe (size study); weights not in the repo",
+          "source": "size study (18 Nov 2026): how small Harfi's model can be (docs/TRAINING.md)",
+          "prompt": {
+                "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+                "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+          }
     }
   ]
 }
