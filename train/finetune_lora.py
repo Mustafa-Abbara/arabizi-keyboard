@@ -107,6 +107,26 @@ def precision(base: str, compute_capability: tuple[int, int]) -> str:
     return "fp32" if base.startswith("gemma") else "fp16"
 
 
+def copy_sentencepiece(hf_id: str, revision: str, merged_dir: Path) -> bool:
+    """Copy the base model's tokenizer.model next to the merged weights, when the base has one. Newer transformers
+    save only tokenizer.json, and llama.cpp's converter needs tokenizer.model for SentencePiece vocabularies such as
+    Gemma's: without it the GGUF export failed on Kaggle (18 Nov 2026). Bases without one (Qwen, Llama) are left as
+    they are."""
+    if (merged_dir / "tokenizer.model").exists():
+        return True
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.utils import EntryNotFoundError
+
+    try:
+        path = hf_hub_download(hf_id, "tokenizer.model", revision=revision)
+    except EntryNotFoundError:
+        return False
+    import shutil
+
+    shutil.copyfile(path, merged_dir / "tokenizer.model")
+    return True
+
+
 def warmup_steps(examples: int, batch: int, grad_accum: int, epochs: float, ratio: float) -> int:
     """Warm-up as a whole number of optimizer steps. transformers 5 dropped `warmup_ratio` (a float `warmup_steps`
     means a ratio there, but not in 4.x), so the step count is computed here and works with both."""
@@ -188,6 +208,8 @@ def main(argv: list[str] | None = None) -> int:
     merged = trainer.model.merge_and_unload()
     merged.save_pretrained(merged_dir, safe_serialization=True)
     tokenizer.save_pretrained(merged_dir)
+    if copy_sentencepiece(hf_id, revision, merged_dir):
+        print("tokenizer.model copied from the base model (the GGUF converter needs it)")
 
     # A few public validation sentences, greedy, as a quick look (never private rows).
     samples = []

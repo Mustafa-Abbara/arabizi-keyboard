@@ -233,6 +233,42 @@
             "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 17 Oct 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
             "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
       }
+    },
+    {
+          "id": "arabizi-gemma3-270m-v1",
+          "base": "gemma3-270m",
+          "run": "train/runs/20261117-194734-gemma3-270m-lora-v1.json",
+          "file": "arabizi-gemma3-270m-v1-Q4_K_M.gguf",
+          "size": 253115648,
+          "sha256": "b3cc5d54a3f13f4725caf6e4494f57ae520535c50d60b0adc79a9dde40aba45d",
+          "params": "270M",
+          "quant": "Q4_K_M",
+          "licence": "Gemma Terms of Use",
+          "licence_acceptance": "gemma",
+          "publisher": "this project: LoRA fine-tune of Gemma 3 270M IT on Kaggle with v4's data and recipe (size study); converted to GGUF on the Windows laptop with the pinned llama.cpp (d812350); weights not in the repo",
+          "source": "size study (18 Nov 2026): how small Harfi's model can be (docs/TRAINING.md)",
+          "prompt": {
+                "prefix": "<bos><start_of_turn>user\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.\n\n",
+                "suffix": "<end_of_turn>\n<start_of_turn>model\n"
+          }
+    },
+    {
+          "id": "arabizi-gemma3-270m-v1-q8",
+          "base": "gemma3-270m",
+          "run": "train/runs/20261117-194734-gemma3-270m-lora-v1.json",
+          "file": "arabizi-gemma3-270m-v1-Q8_0.gguf",
+          "size": 291546368,
+          "sha256": "d03d8575affdf1cebcb68886aee65a7451cbfe09cc2474dfba7b6989b73f03c2",
+          "params": "270M",
+          "quant": "Q8_0",
+          "licence": "Gemma Terms of Use",
+          "licence_acceptance": "gemma",
+          "publisher": "this project: LoRA fine-tune of Gemma 3 270M IT on Kaggle with v4's data and recipe (size study); converted to GGUF on the Windows laptop with the pinned llama.cpp (d812350); weights not in the repo",
+          "source": "size study (18 Nov 2026): how small Harfi's model can be (docs/TRAINING.md)",
+          "prompt": {
+                "prefix": "<bos><start_of_turn>user\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.\n\n",
+                "suffix": "<end_of_turn>\n<start_of_turn>model\n"
+          }
     }
   ]
 }

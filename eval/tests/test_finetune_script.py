@@ -137,3 +137,37 @@ def test_gemma_trains_in_fp32_where_bf16_is_missing():
     assert finetune.precision("qwen3-0.6b", (7, 5)) == "fp16"
     assert finetune.precision("llama3.2-1b", (7, 5)) == "fp16"
     assert finetune.precision("gemma3-270m", (8, 0)) == "bf16"
+
+
+def test_tokenizer_model_is_copied_for_the_gguf_export(tmp_path, monkeypatch):
+    # Gemma's SentencePiece vocabulary: the converter needs tokenizer.model, which newer transformers no longer save.
+    import sys
+    import types
+
+    source = tmp_path / "hub" / "tokenizer.model"
+    source.parent.mkdir()
+    source.write_bytes(b"spm")
+
+    class EntryNotFoundError(Exception):
+        pass
+
+    def download(repo, name, revision):
+        if repo == "no/spm":
+            raise EntryNotFoundError(name)
+        return str(source)
+
+    hub = types.ModuleType("huggingface_hub")
+    hub.hf_hub_download = download
+    utils = types.ModuleType("huggingface_hub.utils")
+    utils.EntryNotFoundError = EntryNotFoundError
+    monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
+    monkeypatch.setitem(sys.modules, "huggingface_hub.utils", utils)
+
+    merged = tmp_path / "merged"
+    merged.mkdir()
+    assert finetune.copy_sentencepiece("unsloth/gemma-3-270m-it", "0" * 40, merged)
+    assert (merged / "tokenizer.model").read_bytes() == b"spm"
+    other = tmp_path / "other"
+    other.mkdir()
+    assert not finetune.copy_sentencepiece("no/spm", "0" * 40, other)  # Qwen, Llama: nothing to copy
+    assert not (other / "tokenizer.model").exists()
