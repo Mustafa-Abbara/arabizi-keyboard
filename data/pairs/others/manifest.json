@@ -1,13 +1,13 @@
 {
   "_comment": "Frozen \"others\" held-out set (ADR 0021): real messages by other people, scored with `evalrun ... --others`. `pairs validate` and CI fail if a listed file changes. Re-freeze with `pairs freeze --others --version ... --reason ...`.",
-  "version": "others-v1.2",
+  "version": "others-v1.3",
   "frozen_on": "2026-11-18",
-  "reason": "SPELLING.md v2.0 applied to the references (eval/src/arabizi_eval/spelling_v2.py): أ and إ written ا, verb plural وا written و, leh as ليه and hay as هي; same rows and splits",
-  "previous_version": "others-v1.1",
+  "reason": "SPELLING.md v2.0 fix: ايوا and عفوا keep their final ا (the plural rule had changed them); 1 row",
+  "previous_version": "others-v1.2",
   "unchecked_rows": 0,
   "files": {
     "others/test.jsonl": {
-      "sha256": "24dbee4deb402b1ad62b96c491ec96f6e981c1e5b80dd9d3253bf01b0ed14ff5",
+      "sha256": "663be96fd6ada813cdf4aeacbba7f9b74047af1de90b749b284bb98598c78de8",
       "rows": 299,
       "private": false
     },

@@ -3,7 +3,7 @@ and the rules agree.
 
 1. أ and إ are written ا (انا، اذا، سال). ء, ؤ, ئ and آ are unchanged: ء is not merged with ا.
 2. A verb's plural ending is always و, never وا (يعملوا -> يعملو). Words where وا is part of the word keep it (سوا،
-   الدوا، الهوا، جوا).
+   الدوا، الهوا، جوا، ايوا، عفوا).
 3. A feminine ending is ة (سيارة, never سياره); ه only where it belongs to the word (سفيه، الله). The data already
    follows this (a dry run found 7 words to change, some of them names such as عاليه), so it is not rewritten here.
 4. `leh` is ليه and `lesh` is ليش; `hay` is هي.
@@ -20,7 +20,7 @@ from pathlib import Path
 
 HAMZA_ALIF = str.maketrans({"أ": "ا", "إ": "ا"})
 PREFIXES = ("وبال", "وال", "بال", "عال", "هال", "لل", "ال", "و", "ب", "ل", "ف", "ع", "ك")
-WA_WORDS = {"سوا", "دوا", "هوا", "جوا", "لجوا", "شوا", "كوا", "مكوا"}  # وا belongs to the word
+WA_WORDS = {"سوا", "دوا", "هوا", "جوا", "لجوا", "شوا", "كوا", "مكوا", "ايوا", "عفوا"}  # وا belongs to the word
 LEH = {"leh", "le", "lei", "leih", "leeh", "leeeh", "lehh"}
 LESH = {"lesh", "leysh", "leish", "lech", "lich", "lish", "laysh", "laych", "leshh"}
 HAY = {"hay", "hayy", "hai", "hayyy"}
