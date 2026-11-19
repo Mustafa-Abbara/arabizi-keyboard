@@ -312,6 +312,44 @@ The engine runs one model request at a time, so a conversion that arrives while 
 
 That is +477 ms at the median. The first build asked for a doubtful word's guesses right after every conversion, even when ↑ was never pressed, so typing the next message quickly paid this cost. The keyboards now ask only while a list is open (ADR 0036, update).
 
+## Qwen v2 against v4 (19 Nov 2026)
+
+Qwen3-0.6B v2 (`engine-arabizi-qwen3-0.6b-v2-kb`, Q4, [ADR 0040](decisions/0040-spelling-v2.md)): v1's recipe, 2 epochs, on spelling v2.0 data plus round 6; validation loss 0.2030 after epoch 1, 0.1781 after epoch 2 (`train/runs/20261118-210352-qwen3-0.6b-lora-v2.json`). The references follow spelling v2.0, so every model's saved answers were converted with `arabizi_eval.spelling_v2` before scoring (an older model is not marked wrong for writing أ or a plural وا). Word accuracy; the interval is a paired bootstrap of v2 − v4 over sentences. Each frozen test set was run once for v2.
+
+| Set | Sentences | v4 (Llama 1B) | Qwen v1 | **Qwen v2** | v2 − v4 | Qwen v2 Q8 | Q8 − v4 |
+|---|---|---|---|---|---|---|---|
+| Frozen test | 243 | 0.876 | – | **0.880** | +0.004 [−0.009, +0.017] | 0.880 | +0.004 [−0.009, +0.018] |
+| Others test | 299 | 0.857 | – | **0.840** | −0.017 [−0.028, −0.005] | 0.841 | −0.016 [−0.027, −0.005] |
+| Comparison set | 300 | 0.907 | 0.901 | **0.897** | −0.010 [−0.020, +0.002] | 0.902 | −0.005 [−0.015, +0.006] |
+| Real chats (not committed) | 1,642 | 0.923 | 0.911 | **0.917** | −0.005 [−0.010, −0.000] | 0.918 | −0.005 [−0.010, +0.002] |
+| Synthetic test (v4's) | 3,528 | 0.901 | 0.901 | **0.906** | +0.004 [+0.000, +0.009] | 0.908 | +0.007 [+0.002, +0.011] |
+| Dev | 104 | 0.859 | 0.855 | 0.846 | −0.013 [−0.037, +0.010] | 0.845 | −0.015 [−0.042, +0.012] |
+| Others dev | 200 | 0.852 | 0.830 | 0.842 | −0.010 [−0.027, +0.005] | 0.852 | −0.000 [−0.016, +0.015] |
+
+- Round 6 closed about half of Qwen's gap to v4 on others dev and the real chats; v2 is level with v4 on the frozen and synthetic tests and still behind on text by other people (others test, −0.017).
+- Half of the real chats was used to find Qwen's weak spots for round 6, so that row flatters v2 a little. Round 6 was the last training round, so these test scores stay clean.
+- Q8 (`arabizi-qwen3-0.6b-v2-q8`, 639 MB against Q4's 397 MB and v4's 808 MB) is at most a fraction of a point above Q4 and does not close the gap on the others test (−0.016). Recommendation: keep v4 as the default model; Qwen v2 Q4 is the smaller, faster option (about 20–25% faster on dev).
+- `build/comparison/report.md` scores the older tools' saved answers as they are, in the old spelling (v4 0.802 there); the converted figures above are the fair ones.
+
+## Llama v5 against v4 (19 Nov 2026)
+
+Llama 3.2 1B v5 (`engine-arabizi-llama3.2-1b-v5-kb`, Q4, 808 MB like v4): v4's recipe with 2 epochs instead of 3, on the data Qwen v2 trained on (spelling v2.0 plus round 6, 144,986 examples). Trained in two parts: 147 minutes on Kaggle up to step 3,660 of 8,608, then the rest on Colab from that checkpoint (`train/finetune_llama_v5.ipynb`, `train/finetune_llama_v5_colab.ipynb`; a stopped and resumed run ends with the same weights as an uninterrupted one). Validation loss 0.1896 after epoch 1, 0.1660 after epoch 2 (`train/runs/20261119-082220-llama3.2-1b-lora-v5.json`). Scored as above: every model's answers converted to spelling v2.0, paired bootstrap of v5 − v4; each frozen test set run once.
+
+| Set | Sentences | v4 | Qwen v2 | **Llama v5** | v5 − v4 |
+|---|---|---|---|---|---|
+| Frozen test | 243 | 0.876 | 0.880 | **0.877** | +0.001 [−0.012, +0.014] |
+| Others test | 299 | 0.857 | 0.840 | **0.854** | −0.003 [−0.013, +0.006] |
+| Comparison set | 300 | 0.907 | 0.897 | **0.907** | −0.000 [−0.009, +0.009] |
+| Real chats (not committed) | 1,642 | 0.923 | 0.917 | **0.925** | +0.002 [−0.001, +0.006] |
+| Synthetic test (v4's) | 3,528 | 0.901 | 0.906 | **0.915** | +0.014 [+0.010, +0.018] |
+| Dev | 104 | 0.859 | 0.846 | **0.870** | +0.010 [−0.010, +0.031] |
+| Others dev | 200 | 0.852 | 0.842 | **0.857** | +0.004 [−0.010, +0.018] |
+
+- v5 is level with v4 on every set of real messages (all differences within noise) and better on the synthetic test, whose rows come from the same kind of AI-written pairs as round 6, so that gain says less about real typing. Qwen v2's gap on the others test (−0.017) does not appear in v5 (−0.003).
+- v5 writes spelling v2.0 itself (ا for أ/إ, plural و, ليه/ليش); v4 is only level here because its answers were converted for scoring, and in the keyboard it still writes the old spelling.
+- Same architecture and file size as v4, so the same speed; the latency measured here moves with the laptop's load (dev median 555 ms against v4's 442 ms on 16 Nov, the others test 1,084 ms against 1,150 ms).
+- Recommendation: ship v5 in place of v4.
+
 ## Reproducing a baseline from a fresh clone (11 Nov 2026)
 
 `git clone` of `main` at `0b8ca02`, then `uv run --project eval evalrun run --system b0 --split dev`, against the committed run of 29 Oct (`20261029-153707-b0-dev`): the same data (`data_sha256` 08b3a640…), and every accuracy metric identical (word accuracy 0.756, lenient 0.762). Latency p50 0.019 → 0.021 ms (+10%), p95 0.047 → 0.051 ms (+9%), within the 20% the P3 gate allows. Run: `eval/results/20261111-221425-b0-dev`.

@@ -1,0 +1,56 @@
+{
+  "run_id": "20261119-084714-engine-arabizi-qwen3-0.6b-v2-q8-kb-dev",
+  "system": "engine-arabizi-qwen3-0.6b-v2-q8-kb",
+  "describe": {
+    "kind": "swift-engine",
+    "cli": "arabizi-cli",
+    "model": "arabizi-qwen3-0.6b-v2-q8",
+    "deadline_ms": "keyboard (config/engine.json, ADR 0025)",
+    "pipeline": "ProtectedSpans, saved prompt, model with deadline, clean, OutputChecks, token repair (ADR 0023); rules on fallback",
+    "instruction": "decoded once and kept",
+    "status": {
+      "model": "arabizi-qwen3-0.6b-v2-q8",
+      "load_ms": 4500,
+      "state": "ready",
+      "deadline_ms": 1500
+    },
+    "outcomes": {
+      "model": 102,
+      "fallbackCheckFailed": 2
+    },
+    "fallback_reasons": {
+      "check: new Latin words (1)": 2
+    },
+    "repairs": {
+      "repaired: 1 token(s)": 2
+    }
+  },
+  "split": "dev",
+  "subset": "all",
+  "set": "testset",
+  "private_sentences": 0,
+  "sentences": 104,
+  "data_sha256": "274a510c26fe19c433ebe9c7446d474408b9eb4e6173f8b01615bf2e75d9cd00",
+  "git_sha": "328dede-dirty",
+  "created": "2026-11-19T08:47:14",
+  "metrics": {
+    "sentences": 104,
+    "word_accuracy": 0.844776119402985,
+    "word_accuracy_lenient": 0.844776119402985,
+    "exact_match": 0.4326923076923077,
+    "punctuation_match": 0.9519230769230769,
+    "cer": 0.05126541207008436,
+    "keep_latin_precision": 0.9523809523809523,
+    "keep_latin_recall": 0.9090909090909091,
+    "keep_latin_f1": 0.9302325581395349,
+    "number_preservation": 1.0,
+    "msa_rewrite_rate": 0.0,
+    "hallucination_rate": 0.0,
+    "latency_ms_p50": 532.2641999810003,
+    "latency_ms_p95": 1133.7751999963075,
+    "word_accuracy_ci95": [
+      0.8118190495745016,
+      0.8762740287219196
+    ]
+  }
+}

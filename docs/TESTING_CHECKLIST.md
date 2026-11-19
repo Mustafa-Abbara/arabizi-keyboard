@@ -7,7 +7,7 @@ Use messages of your own, but never paste private chats into a bug report: descr
 ## 0. Before you start
 
 - [ ] The installed version is the one under test: **Settings → Apps → Installed apps → Harfi** shows it (for example 0.4.2).
-- [ ] The model is in place: `%LOCALAPPDATA%\Harfi\models\` has `arabizi-llama3.2-1b-v4-Q4_K_M.gguf` (808 MB).
+- [ ] The model is in place: `%LOCALAPPDATA%\Harfi\models\` has `arabizi-llama3.2-1b-v5-Q4_K_M.gguf` (808 MB).
 - [ ] The first conversion after starting Windows can take a few seconds while the model loads. Wait for it once before timing anything.
 
 ## 1. Install and update

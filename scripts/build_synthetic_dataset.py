@@ -46,7 +46,7 @@ from arabizi_eval.spelling_v2 import Converter
 HOLDOUT = 0.10
 DATE = "2026-11-14"
 # The models used across the runs (which run used which was not recorded), and who checked every row.
-WRITER = "ai: sol-6.1, fable-5.2, opus-5.5, sonnet-5.5 (per-run model not recorded)"
+WRITER = "ai: sol-6.1, sol-6.2, fable-5.2, opus-5.5, sonnet-5.5 (per-run model not recorded)"
 CHECKED_BY = "moustafa"
 BREAKER_KIND = {"new form of a known word": "inflect", "low-frequency word": "low", "new vocabulary": "new",
                 "common word, unusual spelling": "common", "context word / spelling trap": "context",
@@ -271,8 +271,37 @@ def held_out_rows():
     return [r for f in files if f.exists() for _, r, _ in P.read_jsonl(f) if r]
 
 
-def training_rows():
-    return [r for f in sorted(P.PAIRS_DIR.glob("train-*.jsonl")) for _, r, _ in P.read_jsonl(f) if r]
+def training_rows(include_synthetic=False):
+    """The committed training rows. The synthetic rows are this script's own earlier output, so a rebuild leaves them
+    out when it compares (they come back from the inputs); the leak check counts them as training vocabulary."""
+    return [r for f in sorted(P.PAIRS_DIR.glob("train-*.jsonl")) for _, r, _ in P.read_jsonl(f)
+            if r and (include_synthetic or not str(r.get("source", "")).startswith("synthetic "))]
+
+
+LATIN_WORD = re.compile(r"[a-z0-9']*[a-z][a-z0-9']*")
+EVAL_EXTRA = [ROOT / "build" / "comparison" / "comparison_key.jsonl", P.ROOT / "data" / "synthetic" / "synthetic_test.jsonl"]
+
+
+def arabizi_words(text: str) -> set[str]:
+    return set(LATIN_WORD.findall(text.lower()))
+
+
+def eval_only_words(extra_paths) -> set[str]:
+    """Arabizi words found in an evaluation set (dev, test, others, the comparison set, the held-out synthetic test
+    and any --eval file such as the real chats) and never in training. A new row that uses one would teach the model
+    an evaluation word, so it is dropped (ADR 0040)."""
+    seen = set()
+    for f in [*(Path(x) for x in extra_paths), *EVAL_EXTRA]:
+        if f.exists():
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    seen |= arabizi_words(json.loads(line).get("arabizi") or "")
+    for r in held_out_rows():
+        seen |= arabizi_words(r["arabizi"])
+    trained = set()
+    for r in training_rows(include_synthetic=True):
+        trained |= arabizi_words(r["arabizi"])
+    return seen - trained
 
 
 class NearIndex:
@@ -329,6 +358,9 @@ def main():
     ap.add_argument("--previous", action="append", default=[],
                     help="an earlier build's folder: its train rows stay train and its test rows stay test, and new rows "
                          "never put into test a word or sentence an earlier model trained on (repeatable)")
+    ap.add_argument("--eval", action="append", default=[],
+                    help="another evaluation file (jsonl with `arabizi`), e.g. the real chats: new rows may not use a "
+                         "word that appears there and never in training (repeatable)")
     a = ap.parse_args()
     prev_train, prev_test = set(), set()
     for d in a.previous:
@@ -346,6 +378,8 @@ def main():
         held_near.add(r["arabizi"])
     train_z = {key_text(r["arabizi"]) for r in train}
     msa = M.msa_words()
+    leak = eval_only_words(a.eval)
+    leak_hits = collections.Counter()
 
     seen_z, seen_a = set(), set()
     kept, drops = [], collections.Counter()
@@ -398,6 +432,11 @@ def main():
         r["fixed"] = r["rid"] in prev_train or r["rid"] in prev_test
         if r["fixed"]:
             r["test"] = r["rid"] in prev_test
+        else:
+            hit = arabizi_words(z) & leak
+            if hit:
+                leak_hits.update(hit)
+                drops["uses a word found only in an evaluation set"] += 1; continue
         kept.append(r)
 
     # a word held out anywhere is held out everywhere (the breaker's probe rows choose their own words), but a word an
@@ -493,7 +532,7 @@ def main():
     capped = sorted(picked, key=lambda x: x["id"])
     for name, data in (("train-ai_checked.synthetic.jsonl", train_out), ("train-ai_checked.synthetic.capped.jsonl", capped),
                        ("synthetic_test.jsonl", test_out)):
-        (out / name).write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in data), encoding="utf-8")
+        (out / name).write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in data), encoding="utf-8", newline="\n")
 
     # ---------- report ----------
     tr = collections.Counter((r["group"], r["kind"]) for r in final if not r["test"])
@@ -515,6 +554,9 @@ def main():
         + ", ".join(f"{k} ({v:,})" for k, v in digit_stats.most_common()) + ".", "",
         "## Dropped", "", "| Reason | Rows |", "|---|---|",
         *[f"| {k} | {v:,} |" for k, v in drops.most_common()], "",
+        f"Evaluation-only words ({len(leak):,} words in dev, test, others, the comparison set, the held-out synthetic "
+        f"test or an --eval file, never in training): {sum(leak_hits.values()):,} uses in new rows, all dropped. Most "
+        "common: " + (", ".join(f"`{w}` ({n})" for w, n in leak_hits.most_common(15)) or "none") + ".", "",
         "## Train / held-out test by group and kind", "",
         "| Group | " + " | ".join(kinds) + " | total |", "|---|" + "---|" * (len(kinds) + 1),
     ]
@@ -545,7 +587,7 @@ def main():
         "round's rule could not be met); their `source` ends in `fallback`.",
         "- Keep `ai_variants` at 1 (the export default) so the AI rows don't get two rule-made variants each.",
     ]
-    (out / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (out / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     print("\n".join(lines))
 
 
