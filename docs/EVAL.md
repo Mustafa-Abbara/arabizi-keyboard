@@ -316,18 +316,19 @@ That is +477 ms at the median. The first build asked for a doubtful word's guess
 
 Qwen3-0.6B v2 (`engine-arabizi-qwen3-0.6b-v2-kb`, Q4, [ADR 0040](decisions/0040-spelling-v2.md)): v1's recipe, 2 epochs, on spelling v2.0 data plus round 6; validation loss 0.2030 after epoch 1, 0.1781 after epoch 2 (`train/runs/20261118-210352-qwen3-0.6b-lora-v2.json`). The references follow spelling v2.0, so every model's saved answers were converted with `arabizi_eval.spelling_v2` before scoring (an older model is not marked wrong for writing أ or a plural وا). Word accuracy; the interval is a paired bootstrap of v2 − v4 over sentences. Each frozen test set was run once for v2.
 
-| Set | Sentences | v4 (Llama 1B) | Qwen v1 | **Qwen v2** | v2 − v4 |
-|---|---|---|---|---|---|
-| Frozen test | 243 | 0.876 | – | **0.880** | +0.004 [−0.009, +0.017] |
-| Others test | 299 | 0.857 | – | **0.840** | −0.017 [−0.028, −0.005] |
-| Comparison set | 300 | 0.907 | 0.901 | **0.897** | −0.010 [−0.020, +0.002] |
-| Real chats (not committed) | 1,642 | 0.923 | 0.911 | **0.917** | −0.005 [−0.010, −0.000] |
-| Synthetic test (v4's) | 3,528 | 0.901 | 0.901 | **0.906** | +0.004 [+0.000, +0.009] |
-| Dev | 104 | 0.859 | 0.855 | 0.846 | −0.013 [−0.037, +0.010] |
-| Others dev | 200 | 0.852 | 0.830 | 0.842 | −0.010 [−0.027, +0.005] |
+| Set | Sentences | v4 (Llama 1B) | Qwen v1 | **Qwen v2** | v2 − v4 | Qwen v2 Q8 | Q8 − v4 |
+|---|---|---|---|---|---|---|---|
+| Frozen test | 243 | 0.876 | – | **0.880** | +0.004 [−0.009, +0.017] | 0.880 | +0.004 [−0.009, +0.018] |
+| Others test | 299 | 0.857 | – | **0.840** | −0.017 [−0.028, −0.005] | 0.841 | −0.016 [−0.027, −0.005] |
+| Comparison set | 300 | 0.907 | 0.901 | **0.897** | −0.010 [−0.020, +0.002] | 0.902 | −0.005 [−0.015, +0.006] |
+| Real chats (not committed) | 1,642 | 0.923 | 0.911 | **0.917** | −0.005 [−0.010, −0.000] | 0.918 | −0.005 [−0.010, +0.002] |
+| Synthetic test (v4's) | 3,528 | 0.901 | 0.901 | **0.906** | +0.004 [+0.000, +0.009] | 0.908 | +0.007 [+0.002, +0.011] |
+| Dev | 104 | 0.859 | 0.855 | 0.846 | −0.013 [−0.037, +0.010] | 0.845 | −0.015 [−0.042, +0.012] |
+| Others dev | 200 | 0.852 | 0.830 | 0.842 | −0.010 [−0.027, +0.005] | 0.852 | −0.000 [−0.016, +0.015] |
 
 - Round 6 closed about half of Qwen's gap to v4 on others dev and the real chats; v2 is level with v4 on the frozen and synthetic tests and still behind on text by other people (others test, −0.017).
 - Half of the real chats was used to find Qwen's weak spots for round 6, so that row flatters v2 a little. Round 6 was the last training round, so these test scores stay clean.
+- Q8 (`arabizi-qwen3-0.6b-v2-q8`, 639 MB against Q4's 397 MB and v4's 808 MB) is at most a fraction of a point above Q4 and does not close the gap on the others test (−0.016). Recommendation: keep v4 as the default model; Qwen v2 Q4 is the smaller, faster option (about 20–25% faster on dev).
 - `build/comparison/report.md` scores the older tools' saved answers as they are, in the old spelling (v4 0.802 there); the converted figures above are the fair ones.
 
 ## Reproducing a baseline from a fresh clone (11 Nov 2026)
