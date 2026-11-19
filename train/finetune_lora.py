@@ -151,7 +151,52 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--limit", type=int, help="only the first N training examples (smoke run)")
     parser.add_argument("--tag", help="short name added to the run id, e.g. rank32 in a sweep (train/sweep_lora.ipynb)")
+    # Training in parts (Kaggle's quota, Colab's disconnects): checkpoints, a time budget and resuming.
+    parser.add_argument("--save-steps", type=int,
+                        help="save a checkpoint every N optimizer steps (validation stays once per epoch, and the "
+                             "last epoch's model is kept, not the best one)")
+    parser.add_argument("--time-budget", type=float,
+                        help="minutes from the start of this script: when they run out, training saves a checkpoint "
+                             "and stops, and the run is left unfinished (PARTIAL.json) for --resume")
+    parser.add_argument("--resume", type=Path,
+                        help="the run folder of an unfinished run (with checkpoints/): training goes on from its last "
+                             "checkpoint, under the same run id")
+    parser.add_argument("--merged-dir", type=Path, help="where to save the merged model (default: <run>/merged)")
     return parser.parse_args(argv)
+
+
+def time_budget_callback(started: float, minutes: float):
+    """Stops training with a checkpoint once `minutes` have passed since `started`, so the session ends normally (and
+    its output is kept) before a quota or a time limit cuts it off."""
+    from transformers import TrainerCallback
+
+    class TimeBudget(TrainerCallback):
+        def on_step_end(self, args, state, control, **kwargs):
+            if time.time() - started > minutes * 60 and state.global_step < state.max_steps:
+                control.should_save = True
+                control.should_training_stop = True
+            return control
+
+    return TimeBudget()
+
+
+def last_checkpoint(run: Path) -> Path | None:
+    steps = [p for p in (run / "checkpoints").glob("checkpoint-*") if p.name.split("-")[-1].isdigit()]
+    return max(steps, key=lambda p: int(p.name.split("-")[-1])) if steps else None
+
+
+def take_over(previous: Path, out: Path) -> tuple[Path, dict]:
+    """The last checkpoint of an unfinished run, copied into this run's folder when it lives elsewhere (a Kaggle
+    input is read-only), and what the earlier part recorded in PARTIAL.json."""
+    checkpoint = last_checkpoint(previous)
+    if checkpoint is None:
+        raise SystemExit(f"--resume: no checkpoint-* folder in {previous / 'checkpoints'}")
+    partial = json.loads((previous / "PARTIAL.json").read_text()) if (previous / "PARTIAL.json").exists() else {}
+    if previous.resolve() != out.resolve():
+        import shutil
+        shutil.copytree(checkpoint, out / "checkpoints" / checkpoint.name, dirs_exist_ok=True)
+        checkpoint = out / "checkpoints" / checkpoint.name
+    return checkpoint, partial
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -170,8 +215,11 @@ def main(argv: list[str] | None = None) -> int:
     started = time.time()
     hf_id, revision = BASES[args.base]
     run_id = f"{datetime.now(UTC):%Y%m%d-%H%M%S}-{args.base}-lora" + (f"-{args.tag}" if args.tag else "")
+    if args.resume:
+        run_id = args.resume.name
     out = args.out / run_id
     out.mkdir(parents=True, exist_ok=True)
+    resume_from, earlier = take_over(args.resume, out) if args.resume else (None, {})
 
     tokenizer = AutoTokenizer.from_pretrained(hf_id, revision=revision)
     train = load_examples(args.data, "train")[: args.limit]
@@ -193,8 +241,12 @@ def main(argv: list[str] | None = None) -> int:
         per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
         gradient_accumulation_steps=args.grad_accum, lr_scheduler_type="cosine",
         warmup_steps=warmup_steps(len(train_ds), args.batch, args.grad_accum, args.epochs, args.warmup),
-        logging_steps=20, eval_strategy="epoch", save_strategy="epoch", load_best_model_at_end=True,
-        metric_for_best_model="eval_loss", greater_is_better=False, save_total_limit=1,
+        logging_steps=20, eval_strategy="epoch", metric_for_best_model="eval_loss", greater_is_better=False,
+        # Once per epoch, the best epoch is kept; every N steps (training in parts), the last epoch's model is kept
+        # and the latest checkpoints are what a resumed run needs.
+        **({"save_strategy": "steps", "save_steps": args.save_steps, "save_total_limit": 2,
+            "load_best_model_at_end": False} if args.save_steps else
+           {"save_strategy": "epoch", "save_total_limit": 1, "load_best_model_at_end": True}),
         bf16=mode == "bf16", fp16=mode == "fp16", max_length=args.max_length, completion_only_loss=True,
         report_to="none", seed=args.seed,
     )
@@ -202,9 +254,28 @@ def main(argv: list[str] | None = None) -> int:
                       target_modules="all-linear", task_type="CAUSAL_LM")
     trainer = SFTTrainer(model=model, args=config, train_dataset=train_ds, eval_dataset=val_ds,
                          processing_class=tokenizer, peft_config=lora)
-    trainer.train()
+    if args.time_budget:
+        trainer.add_callback(time_budget_callback(started, args.time_budget))
+    if resume_from:
+        print(f"resuming from {resume_from.name}", flush=True)
+    trainer.train(resume_from_checkpoint=str(resume_from) if resume_from else None)
 
-    merged_dir = out / "merged"
+    minutes_before = earlier.get("minutes", 0)
+    if trainer.state.global_step < trainer.state.max_steps:  # the time budget ran out
+        checkpoint = last_checkpoint(out)
+        for old in (out / "checkpoints").glob("checkpoint-*"):  # only the last one is needed to go on
+            if old != checkpoint:
+                import shutil
+                shutil.rmtree(old)
+        partial = {"run_id": run_id, "step": trainer.state.global_step, "max_steps": trainer.state.max_steps,
+                   "checkpoint": checkpoint.name, "minutes": round(minutes_before + (time.time() - started) / 60, 1)}
+        (out / "PARTIAL.json").write_text(json.dumps(partial, indent=2) + "\n")
+        print(f"PARTIAL: stopped at step {partial['step']} of {partial['max_steps']} ({checkpoint.name}); "
+              f"go on with --resume {out}", flush=True)
+        return 0
+    (out / "PARTIAL.json").unlink(missing_ok=True)
+
+    merged_dir = args.merged_dir or out / "merged"
     merged = trainer.model.merge_and_unload()
     merged.save_pretrained(merged_dir, safe_serialization=True)
     tokenizer.save_pretrained(merged_dir)
@@ -239,11 +310,15 @@ def main(argv: list[str] | None = None) -> int:
         "data": {"export_files": export["files"], "rows_total": export["rows_total"], "ai_share": export["ai_share"],
                  "prompt_version": export["prompt_version"],
                  "export_sha256_16": hashlib.sha256(json.dumps(export, sort_keys=True).encode()).hexdigest()[:16]},
-        "best_eval_loss": trainer.state.best_metric, "best_checkpoint": trainer.state.best_model_checkpoint,
+        "best_eval_loss": trainer.state.best_metric if trainer.state.best_metric is not None else
+        min((h["eval_loss"] for h in history if "eval_loss" in h), default=None), "best_checkpoint": trainer.state.best_model_checkpoint,
         "history": history, "public_samples": samples,
         "prompt": prompt,  # copied into config/models.json with the model; the engine uses it verbatim
         "gpu": torch.cuda.get_device_name(0), "precision": mode,
-        "minutes": round((time.time() - started) / 60, 1), "python": platform.python_version(),
+        "minutes": round(minutes_before + (time.time() - started) / 60, 1),
+        **({"resumed": {"from": earlier.get("checkpoint") or resume_from.name,
+                        "minutes_before": minutes_before}} if resume_from else {}),
+        "python": platform.python_version(),
         "versions": {"torch": torch.__version__, "transformers": transformers.__version__,
                      "peft": peft.__version__, "trl": trl.__version__},
     }
