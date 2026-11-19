@@ -327,7 +327,7 @@ Qwen3-0.6B v2 (`engine-arabizi-qwen3-0.6b-v2-kb`, Q4, [ADR 0040](decisions/0040-
 | Others dev | 200 | 0.852 | 0.830 | 0.842 | −0.010 [−0.027, +0.005] |
 
 - Round 6 closed about half of Qwen's gap to v4 on others dev and the real chats; v2 is level with v4 on the frozen and synthetic tests and still behind on text by other people (others test, −0.017).
-- Half of the real chats was used to find Qwen's weak spots for round 6, so that row flatters v2 a little. Round 7 takes its targets from dev, others dev and that half only, never from the test sets.
+- Half of the real chats was used to find Qwen's weak spots for round 6, so that row flatters v2 a little. Round 6 was the last training round, so these test scores stay clean.
 - `build/comparison/report.md` scores the older tools' saved answers as they are, in the old spelling (v4 0.802 there); the converted figures above are the fair ones.
 
 ## Reproducing a baseline from a fresh clone (11 Nov 2026)
