@@ -136,6 +136,14 @@ lr 2e-4, 3 epochs, best epoch kept), so the base model is the only difference fr
   within about 2 points of v4's word accuracy on real messages (v4: 0.912 on the real chats, 0.901 on the comparison
   set).
 
+## Qwen3-1.7B: does a larger Qwen close the gap?
+
+Qwen3-0.6B v2 is level with Llama v4 on the frozen test set but 0.017 behind on the others test set (EVAL.md, "Qwen v2 against v4"). `train/finetune_qwen3_1.7b_v1.ipynb` trains **Qwen3-1.7B** with **exactly Llama v5's recipe and data**: the `harfi-v6` export, LoRA rank 32, alpha 64, lr 2e-4, 2 epochs, a checkpoint every 538 steps, the last epoch's model kept. Qwen3-0.6B v2, Llama 3.2 1B v5 and Qwen3-1.7B then differ only by the base model. Qwen3-1.7B was trained once before, on the 8k-example v1 data only.
+
+- **Time:** expected about 8 hours on a T4. Qwen v2 took 273 min, and in v1 Qwen3-1.7B took about 1.6 times Llama 1B's time. Training stops with a checkpoint after 600 minutes (`BUDGET`), under Kaggle's 12-hour limit. If it prints **NOT FINISHED**, add that version's output as a second input and run it again: it resumes from the last checkpoint (`--resume`).
+- **Export:** Q4_K_M (about 1.1 GB, as shipped) and Q5_K_M (about 1.26 GB). No Q8_0: it cannot fit the 1.5 GB budget, and for Qwen 0.6B it was at most a fraction of a point above Q4.
+- **Scoring:** against Llama v5 and Qwen v2 on dev, others dev and the real chats, with every answer in spelling v2.0. The test sets come only once a model is a final candidate. Memory and speed per message are measured on the 8 GB Air. Base Qwen3-1.7B already peaked at 1,438 MB there with 5-shot prompts, so memory is the main risk. Q5_K_M is kept only if it fits and scores clearly better than Q4_K_M.
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.
