@@ -1,5 +1,11 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.5.0**
+
+- **A new model (v5) that follows Harfi's spelling:** it writes ا for أ and إ (انا، اذا), ends verb plurals in و (قالو، يعملو), and writes `leh` as ليه and `lesh` as ليش, the same spelling the rules and the ↑ list already use. It is as accurate as v4 on real messages.
+
+The installer downloads the new model (808 MB) once, from the `model-v5` release, and resumes if the connection drops. The details: [docs/EVAL.md](https://github.com/Mustafa-Abbara/arabizi-keyboard/blob/main/docs/EVAL.md#llama-v5-against-v4-19-nov-2026).
+
 **New in 0.4.5** (Mac)
 
 - **No more doubled sentences in browsers:** in Brave, Chrome, Claude and other apps built on Chromium, switching to another app in the middle of a sentence left it there once in Latin, but typing on afterwards wrote it a second time. Harfi now ends the sentence itself as you leave, once. To convert it after coming back, select it and press ⌥Enter. In TextEdit, Notes and other Mac apps the sentence stays underlined across a switch, as before.

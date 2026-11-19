@@ -6,11 +6,27 @@ This project builds **Harfi, a local, private keyboard for macOS and Windows**: 
 
 > EECE 503N/798S — Agentic Systems, Fall 2026. Path A (application). Phase 1 scope approved by Dr. Mohanna (see [ADR 0010](docs/decisions/0010-phase1-pivot.md)).
 
-**Status:** Harfi 0.4.0 for Mac and Windows, with model v4. Install: [docs/INSTALL.md](docs/INSTALL.md). Plan and gates: [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** Harfi 0.5.0 for Mac and Windows, with model v5. Install: [docs/INSTALL.md](docs/INSTALL.md). Plan and gates: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Results
 
 Word accuracy of the shipped keyboard engine (words right ÷ words in the longer of reference and output), on held-out messages the models never trained on; 95% bootstrap intervals; each test set run once per model.
+
+### Model v5 (0.5.0)
+
+Both models' answers are scored in spelling v2.0 ([ADR 0040](docs/decisions/0040-spelling-v2.md)): v4's are converted first, so it is not marked wrong for writing أ or a plural وا.
+
+| Test set | Model v4 | **Model v5** | v5 − v4 (paired) |
+|---|---|---|---|
+| Frozen test (243 messages) | 0.876 | **0.877** | +0.001 [−0.012, +0.014] |
+| Others test (299 messages by other writers) | 0.857 | **0.854** | −0.003 [−0.013, +0.006] |
+| Comparison set (300 messages) | 0.907 | **0.907** | −0.000 [−0.009, +0.009] |
+| Real chats by new writers (1,642 messages, private; aggregates only) | 0.923 | **0.925** | +0.002 [−0.001, +0.006] |
+| Held-out synthetic test (3,528 messages) | 0.901 | **0.915** | **+0.014** [+0.010, +0.018] |
+
+v5 is v4's model trained again with the same recipe on the spelling v2.0 data plus a sixth round of AI-written pairs (11,393 rows, checked, with no word taken from an evaluation set). It is as accurate as v4 on real messages and writes the new spelling itself (ا for أ/إ, plural و, ليه/ليش), which v4 does not. The same size and speed. A smaller Qwen3-0.6B trained on the same data was 0.017 behind v4 on the others test and is not shipped. Every comparison: [docs/EVAL.md](docs/EVAL.md#llama-v5-against-v4-19-nov-2026).
+
+### Model v4 (0.4.0)
 
 | Test set | Rules only | Model v3 | **Model v4** | v4 − v3 (paired) |
 |---|---|---|---|---|

@@ -33,7 +33,15 @@ Trained on Kaggle with `train/finetune_lora.py` (ADR 0015) from the frozen data 
 - **Qwen was trained twice:** the first run (`20261016-054238`, validation loss 0.370) finished, but its file was lost when the Kaggle session ended before the download; its run file stays in `train/runs/` as a record. The run above (`20261016-084514`) is the one in `models/` and `config/models.json`. Training is not bit-for-bit repeatable, so the two are different models.
 - **Chosen model:** the Llama fine-tune ([ADR 0005](decisions/0005-final-model.md), accepted 16 Oct 2026).
 
-### The shipped model (v4)
+### The shipped model (v5)
+
+| Id | Run | File | Size | SHA-256 |
+|---|---|---|---|---|
+| `arabizi-llama3.2-1b-v5` | `20261119-082220-llama3.2-1b-lora-v5` (Kaggle T4 for steps 1–3,660, then Colab T4 from that checkpoint; rank 32, 2 epochs, 337 min in all, val. loss 0.166) | `arabizi-llama3.2-1b-v5-Q4_K_M.gguf` | 807,694,016 bytes | `d581df1931d205c94643da636d367fc0a857058363a9d1213e3c61bc9ea96c94` |
+
+v4's recipe with 2 epochs, on the spelling v2.0 data plus round 6 (144,986 examples; [ADR 0040](decisions/0040-spelling-v2.md)). It writes spelling v2.0 itself (ا for أ/إ, plural و, ليه/ليش). Level with v4 on every set of real messages and +0.014 on the synthetic test, with both models' answers in spelling v2.0 ([EVAL.md](EVAL.md#llama-v5-against-v4-19-nov-2026)). Published as the `model-v5` release in 8 parts with their own SHA-256 list, which the installers download and check as for v4.
+
+### v4 (shipped from 0.4.0 to 0.4.5)
 
 | Id | Run | File | Size | SHA-256 |
 |---|---|---|---|---|

@@ -10,8 +10,8 @@ param([switch]$Uninstall)
 $ErrorActionPreference = "Stop"
 $target = Join-Path $env:LOCALAPPDATA "Harfi"
 $dll = Join-Path $target "HarfiTIP.dll"
-$modelRelease = "https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/download/model-v4"
-$modelParts = "Llama-3.2-1B-Harfi-v4-Q4_K_M.gguf"  # the release's part names: .part01 ... and .parts.sha256
+$modelRelease = "https://github.com/Mustafa-Abbara/arabizi-keyboard/releases/download/model-v5"
+$modelParts = "Llama-3.2-1B-Harfi-v5-Q4_K_M.gguf"  # the release's part names: .part01 ... and .parts.sha256
 $shortcut = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Harfi.lnk"
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Harfi"
 # Files an earlier version installed that this one no longer has: an update removes them (copying never does).

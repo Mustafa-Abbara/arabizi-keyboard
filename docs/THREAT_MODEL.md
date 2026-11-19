@@ -61,7 +61,7 @@ There is no telemetry, no crash reporting to a server, no update check and no ac
 - **Engine pipe** `\\.\pipe\harfi-engine-<SID>`: named after the account's SID; open to that account, SYSTEM and app containers (read and write, also from low integrity), never to the network (`PIPE_REJECT_REMOTE_CLIENTS`). One engine per account.
 - **Keyboard in each app:** makes no network calls. Before writing to the pipe it checks that the process at the other end runs as this account (or, when that cannot be read, is its own `harfi-engine.exe`).
 - **Password and PIN fields:** fields whose input scope is a password or PIN are never composed; keys are typed as Latin.
-- **Installer:** the only network use. `install.ps1` downloads the model's parts from this repository's `model-v4` release (`model-v3` for 0.3.x) over HTTPS and checks each part's SHA-256 and the whole file's against `config/models.json`.
+- **Installer:** the only network use. `install.ps1` downloads the model's parts from this repository's `model-v5` release (`model-v4` for 0.4.x, `model-v3` for 0.3.x) over HTTPS and checks each part's SHA-256 and the whole file's against `config/models.json`.
 
 ### Threats and answers
 
