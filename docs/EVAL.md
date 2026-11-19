@@ -312,6 +312,24 @@ The engine runs one model request at a time, so a conversion that arrives while 
 
 That is +477 ms at the median. The first build asked for a doubtful word's guesses right after every conversion, even when ↑ was never pressed, so typing the next message quickly paid this cost. The keyboards now ask only while a list is open (ADR 0036, update).
 
+## Qwen v2 against v4 (19 Nov 2026)
+
+Qwen3-0.6B v2 (`engine-arabizi-qwen3-0.6b-v2-kb`, Q4, [ADR 0040](decisions/0040-spelling-v2.md)): v1's recipe, 2 epochs, on spelling v2.0 data plus round 6; validation loss 0.2030 after epoch 1, 0.1781 after epoch 2 (`train/runs/20261118-210352-qwen3-0.6b-lora-v2.json`). The references follow spelling v2.0, so every model's saved answers were converted with `arabizi_eval.spelling_v2` before scoring (an older model is not marked wrong for writing أ or a plural وا). Word accuracy; the interval is a paired bootstrap of v2 − v4 over sentences. Each frozen test set was run once for v2.
+
+| Set | Sentences | v4 (Llama 1B) | Qwen v1 | **Qwen v2** | v2 − v4 |
+|---|---|---|---|---|---|
+| Frozen test | 243 | 0.876 | – | **0.880** | +0.004 [−0.009, +0.017] |
+| Others test | 299 | 0.857 | – | **0.840** | −0.017 [−0.028, −0.005] |
+| Comparison set | 300 | 0.907 | 0.901 | **0.897** | −0.010 [−0.020, +0.002] |
+| Real chats (not committed) | 1,642 | 0.923 | 0.911 | **0.917** | −0.005 [−0.010, −0.000] |
+| Synthetic test (v4's) | 3,528 | 0.901 | 0.901 | **0.906** | +0.004 [+0.000, +0.009] |
+| Dev | 104 | 0.859 | 0.855 | 0.846 | −0.013 [−0.037, +0.010] |
+| Others dev | 200 | 0.852 | 0.830 | 0.842 | −0.010 [−0.027, +0.005] |
+
+- Round 6 closed about half of Qwen's gap to v4 on others dev and the real chats; v2 is level with v4 on the frozen and synthetic tests and still behind on text by other people (others test, −0.017).
+- Half of the real chats was used to find Qwen's weak spots for round 6, so that row flatters v2 a little. Round 7 takes its targets from dev, others dev and that half only, never from the test sets.
+- `build/comparison/report.md` scores the older tools' saved answers as they are, in the old spelling (v4 0.802 there); the converted figures above are the fair ones.
+
 ## Reproducing a baseline from a fresh clone (11 Nov 2026)
 
 `git clone` of `main` at `0b8ca02`, then `uv run --project eval evalrun run --system b0 --split dev`, against the committed run of 29 Oct (`20261029-153707-b0-dev`): the same data (`data_sha256` 08b3a640…), and every accuracy metric identical (word accuracy 0.756, lenient 0.762). Latency p50 0.019 → 0.021 ms (+10%), p95 0.047 → 0.051 ms (+9%), within the 20% the P3 gate allows. Run: `eval/results/20261111-221425-b0-dev`.

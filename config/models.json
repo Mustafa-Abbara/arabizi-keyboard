@@ -305,6 +305,24 @@
                 "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
                 "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
           }
+    },
+    {
+          "id": "arabizi-qwen3-0.6b-v2",
+          "base": "qwen3-0.6b",
+          "run": "train/runs/20261118-210352-qwen3-0.6b-lora-v2.json",
+          "file": "arabizi-qwen3-0.6b-v2-Q4_K_M.gguf",
+          "size": 396704512,
+          "sha256": "faffb192282f7f6fdfb333bb1533cdd448e495471ec7b06f39ff3424f1331023",
+          "params": "0.6B",
+          "quant": "Q4_K_M",
+          "licence": "Apache-2.0",
+          "licence_acceptance": null,
+          "publisher": "this project: LoRA fine-tune of Qwen3-0.6B on Kaggle with v1's recipe, 2 epochs, on spelling v2.0 data plus round 6 (ADR 0040); weights not in the repo",
+          "source": "Qwen v2 (19 Nov 2026, ADR 0040)",
+          "prompt": {
+                "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+                "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+          }
     }
   ]
 }
