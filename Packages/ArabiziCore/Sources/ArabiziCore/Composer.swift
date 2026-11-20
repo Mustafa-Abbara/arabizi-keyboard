@@ -87,6 +87,9 @@ public struct Suggester: Sendable {
     /// guesses have arrived. nil: the guesses are never used.
     public let candidatesWithGuesses: (@Sendable (_ shown: String, _ latin: String?, _ guesses: WordGuesses.Guesses)
         -> [String])?
+    /// The one merge/split entry for word `index` (ADR 0041): the converted words, and the typed words each came
+    /// from. nil: never offered.
+    public let spanEntry: (@Sendable (_ words: [String], _ index: Int, _ latins: [String?]) -> CandidateList.SpanEntry?)?
 
     public init(candidates: @escaping @Sendable (String, String?) -> [String],
                 align: @escaping @Sendable ([String], [String]) -> [Range<Int>?],
@@ -96,7 +99,8 @@ public struct Suggester: Sendable {
                 doubtful: @escaping @Sendable (String, String?) -> Bool = { _, _ in false },
                 confidence: @escaping @Sendable (String) -> [Double]? = { _ in nil },
                 guesses: WordGuesses? = nil,
-                candidatesWithGuesses: (@Sendable (String, String?, WordGuesses.Guesses) -> [String])? = nil) {
+                candidatesWithGuesses: (@Sendable (String, String?, WordGuesses.Guesses) -> [String])? = nil,
+                spanEntry: (@Sendable ([String], Int, [String?]) -> CandidateList.SpanEntry?)? = nil) {
         self.candidates = candidates
         self.align = align
         self.record = record
@@ -106,6 +110,7 @@ public struct Suggester: Sendable {
         self.confidence = confidence
         self.guesses = guesses
         self.candidatesWithGuesses = candidatesWithGuesses
+        self.spanEntry = spanEntry
     }
 
     /// Whether the model's guesses are asked for at all.
@@ -130,6 +135,33 @@ struct SuggestionSession: Equatable {
     var beforeSending = false
     /// The model's guesses are already in `candidates` (or there were none for this word).
     var guessed = false
+    /// The merge/split entry among `candidates` (ADR 0041), if any.
+    var span: CandidateList.SpanEntry?
+
+    /// The words with `candidate` in place of the selected word: the merge entry replaces it and its neighbour
+    /// (the selection moves onto the merged word), any other candidate the word alone (a split's space included).
+    func showing(_ candidate: String) -> SuggestionSession {
+        var shown = self
+        if let span, span.text == candidate, span.step != 0, words.indices.contains(index + span.step) {
+            let low = min(index, index + span.step), high = max(index, index + span.step)
+            shown.words.replaceSubrange(low...high, with: [WordParts(words[low]).lead + candidate + WordParts(words[high]).trail])
+            shown.index = low
+        } else {
+            shown.words[index] = WordParts(words[index]).with(candidate)
+        }
+        return shown
+    }
+
+    /// `list` with the merge/split entry in its last Arabic place (before the typed word), when there is one.
+    func placing(_ list: [String]) -> [String] {
+        guard let span, !list.contains(span.text) else { return list }
+        let latinLast = list.last.map { !CandidateList.hasArabicLetter($0) } ?? false
+        var body = latinLast ? Array(list.dropLast()) : list
+        let places = CandidateList.listLength - (latinLast ? 1 : 0)
+        if body.count >= places { body = Array(body.prefix(places - 1)) }
+        body.append(span.text)
+        return latinLast ? body + [list.last!] : body
+    }
 
     var text: String { words.joined(separator: " ") }
 
@@ -197,11 +229,8 @@ public struct Composer {
     /// place), which one is selected, and the typed text, so the preview can stay on screen around the chips.
     public var fixingBeforeSending: (words: [String], index: Int, latin: String)? {
         guard let current = session, current.beforeSending, current.speller == nil else { return nil }
-        var words = current.words
-        if let highlighted = current.highlighted {
-            words[current.index] = WordParts(words[current.index]).with(current.candidates[highlighted])
-        }
-        return (words, current.index, current.latin)
+        let shown = current.highlighted.map { current.showing(current.candidates[$0]) } ?? current
+        return (shown.words, shown.index, current.latin)
     }
     /// While suggestions are shown: the sentence as typed (words joined by one space), and the UTF-16 range of the
     /// typed word(s) the selected word came from (nil when it cannot be traced), so the chip row can show what the
@@ -338,8 +367,7 @@ public struct Composer {
         guard let index = current.candidates.firstIndex(of: candidate), index != current.highlighted else { return nil }
         current.highlighted = index
         session = current
-        var shown = current
-        shown.words[shown.index] = WordParts(shown.words[shown.index]).with(candidate)
+        let shown = current.showing(candidate)
         return .suggest(marked: shown.text, selected: shown.selected, candidates: current.candidates,
                         replacingLength: nil)
     }
@@ -392,6 +420,8 @@ public struct Composer {
     private func list(_ session: inout SuggestionSession, _ suggester: Suggester) {
         let i = session.index
         session.highlighted = nil
+        session.span = suggester.spanEntry?(session.words, i, session.words.indices.map { session.latinWord($0) })
+        defer { session.candidates = session.placing(session.candidates) }
         if let guesses = suggester.guesses?.guesses(for: session.query(i)),
            let withGuesses = suggester.candidatesWithGuesses {
             session.candidates = guesses.isEmpty ? suggester.candidates(session.words[i], session.latinWord(i))
@@ -414,16 +444,13 @@ public struct Composer {
         current.guessed = true
         let before = current.candidates
         if !guesses.isEmpty {
-            let reranked = withGuesses(current.words[current.index], current.latinWord(current.index), guesses)
+            let reranked = current.placing(withGuesses(current.words[current.index], current.latinWord(current.index), guesses))
             current.candidates = WordGuesses.merged(instant: before, reranked: reranked,
                                                     keeping: current.highlighted.map { $0 + 1 } ?? 0)
         }
         session = current
         guard current.candidates != before else { return nil }
-        var shown = current
-        if let highlighted = current.highlighted {
-            shown.words[shown.index] = WordParts(shown.words[shown.index]).with(current.candidates[highlighted])
-        }
+        let shown = current.highlighted.map { current.showing(current.candidates[$0]) } ?? current
         return .suggest(marked: shown.text, selected: shown.selected, candidates: current.candidates,
                         replacingLength: nil)
     }
@@ -458,6 +485,10 @@ public struct Composer {
             }
         }
         func take(_ chosen: String) -> Effect {
+            if let span = current.span, span.text == chosen {
+                current.words = current.showing(chosen).words
+                return .commit(finish(current.text))
+            }
             let parts = WordParts(current.words[current.index])
             if let latin = current.latinWord(current.index) {
                 suggester.record(Correction(latin: WordParts(latin).core, chosen: chosen, rejected: parts.core,
@@ -500,8 +531,7 @@ public struct Composer {
                 let highlighted = ((from + (key == .arrowDown ? 1 : -1)) % count + count) % count
                 current.highlighted = highlighted
                 session = current
-                shown = current
-                shown.words[shown.index] = WordParts(shown.words[shown.index]).with(current.candidates[highlighted])
+                shown = current.showing(current.candidates[highlighted])
             }
             return .suggest(marked: shown.text, selected: shown.selected, candidates: current.candidates,
                             replacingLength: nil)

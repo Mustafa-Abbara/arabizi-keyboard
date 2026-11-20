@@ -1,5 +1,11 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.5.1**
+
+- **Fixing a space in the ↑ list:** when Harfi writes two words where you meant one (ع سطح for عالسطح, رح شوف for حشوف) or one where you meant two (وانا for و انا), the ↑ list now offers the fix as its last spelling. Choosing it replaces both words, or puts the space back. On real messages, about 1 in 4 of these mistakes could be fixed from the list before, and about half can be now.
+
+The model is unchanged (v5): if you have it, it is not downloaded again.
+
 **New in 0.5.0**
 
 - **A new model (v5) that follows Harfi's spelling:** it writes ا for أ and إ (انا، اذا), ends verb plurals in و (قالو، يعملو), and writes `leh` as ليه and `lesh` as ليش, the same spelling the rules and the ↑ list already use. It is as accurate as v4 on real messages.

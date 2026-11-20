@@ -133,7 +133,9 @@ final class ArabiziInputController: IMKInputController {
                 return candidates.list?.personalized(for: shown, latin: latin, past: past,
                                                      guesses: guesses.map { ($0.word, $0.logProbability) })
                     ?? suggestions.personalized(for: shown, latin: latin, past: past)
-            })
+            },
+            // A merge or split the model got wrong (ADR 0041), offered in the list's last Arabic place.
+            spanEntry: { words, index, latins in candidates.list?.spanEntry(words: words, index: index, latins: latins) })
     }()
     /// Conversions made ahead while the user types (live preview), by the exact Latin text. Enter takes a ready one.
     private static let previews = PreviewCache(isClitic: { ruleConverter?.isClitic($0) ?? false })

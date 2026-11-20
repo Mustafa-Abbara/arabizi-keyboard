@@ -202,10 +202,10 @@ public struct CandidateList: Sendable {
     }
 
     /// Source 5: a small word typed joined to the next (wamen, bleyle), best score per word.
-    func cliticSpellings(_ typed: String) -> Ordered<Double> {
+    func cliticSpellings(_ typed: String, keep: Int = 8) -> Ordered<Double> {
         var out = Ordered<Double>([])
         for (latin, arabic) in clitics where typed.hasPrefix(latin) && typed.count - latin.count >= 2 {
-            for (word, lp) in odds.spellings(String(typed.dropFirst(latin.count)), known: known, keep: 8) {
+            for (word, lp) in odds.spellings(String(typed.dropFirst(latin.count)), known: known, keep: keep) {
                 let joined = RuleConverter.joinClitic(arabic, word)
                 out[joined] = max(out[joined] ?? -1e9, lp)
             }
@@ -304,6 +304,9 @@ struct Ordered<Value> {
     }
 
     var values: [Value] { keys.compactMap { values_[$0] } }
+
+    /// The keys with their values, in order.
+    var pairs: [(String, Value)] { keys.compactMap { key in values_[key].map { (key, $0) } } }
 
     subscript(key: String) -> Value? {
         get { values_[key] }

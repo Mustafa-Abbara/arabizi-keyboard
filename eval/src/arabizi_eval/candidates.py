@@ -233,6 +233,16 @@ FEATURES = [
 ]
 
 
+# Merge and split (ADR 0041): one-letter prefixes written joined to the next word, words that are usually joined to
+# the next one (never عم، شو، بس، مش، لا، في، ما، يا, which are always written apart), the future particle (رح شوف ->
+# حشوف), and how those small words are typed.
+SPLIT_PREFIXES = ("و", "ب", "ل", "ع", "ف", "ك")
+MERGE_WORDS = {"ع", "ب", "ل", "و", "ف", "ك", "ح", "رح", "راح", "عال", "بال", "هال", "لل", "ال", "وال", "فال"}
+FUTURE_WORDS = ("رح", "راح", "ح", "ها")
+MERGE_TYPED = {"w", "wa", "b", "bi", "l", "la", "li", "3a", "3", "f", "fa", "ka", "el", "il", "al", "bel", "bil", "3al",
+               "lal", "hal", "bhal", "7a", "ra7", "ha", "lel", "lil"}
+
+
 class Candidates:
     """Builds the ↑ list's candidates and their signals for one word, and orders them."""
 
@@ -442,6 +452,112 @@ class Candidates:
             return list(cands)
         return [cands[i] for i in np.argsort(-score(self.ranker, signals), kind="stable")]
 
+    # -- merge and split (ADR 0041): the model wrote two words where one was meant, or one where two were meant
+    def word_options(self, typed: str, keep: int = 4) -> list[tuple[str, float]]:
+        """A typed word's best single spellings with a score (higher is better): letter odds, the training data's,
+        the dictionary's and the rules'. A word not typed in Latin letters is kept as it is."""
+        if not typed:
+            return []
+        if not typed.isascii() or not any(ch.isalpha() for ch in typed):
+            return [(typed, 0.0)]
+        out: dict[str, float] = {}
+        for w, lp in self.spellings(typed, keep=keep):
+            out[w] = max(out.get(w, -1e9), lp)
+        for w, _ in sorted(self.typed_spellings.get(typed, Counter()).items(), key=lambda x: (-x[1], x[0]))[:3]:
+            out[w] = max(out.get(w, -1e9), max(self.typing_lp(typed, w), -3.0))
+        if typed in self.dictionary:
+            w = self.dictionary[typed]
+            out[w] = max(out.get(w, -1e9), -1.0)
+        ruled = b0.ARABIC_CORE.sub("", self.rules.convert(typed))
+        if P.ARABIC_LETTER.search(ruled) and " " not in ruled:
+            out[ruled] = max(out.get(ruled, -1e9), self.typing_lp(typed, ruled))
+        return sorted(out.items(), key=lambda x: (-x[1], x[0]))[:keep]
+
+    def _known_bonus(self, word: str) -> float:
+        return 0.0 if (word in self.known or not P.ARABIC_LETTER.search(word)) else -2.0
+
+    @staticmethod
+    def wants_split(shown: str, typed_words: list[str]) -> bool:
+        """Offer a split only when the word came from two or more typed words."""
+        return bool(P.ARABIC_LETTER.search(shown)) and len(shown) >= 3 and len(typed_words) >= 2
+
+    def split_options(self, shown: str, typed_words: list[str], keep: int = 1) -> list[str]:
+        """The shown word as two words: its own letters with the space put back first (cut where the first part is
+        a spelling of the first typed word, or after a one-letter prefix), then each typed word spelled on its own."""
+        scored: dict[str, float] = {}
+
+        def add(a: str, b: str, score: float) -> None:
+            if a and len(b) >= 2:
+                key = f"{a} {b}"
+                scored[key] = max(scored.get(key, -1e9), score)
+
+        first = dict(self.word_options(typed_words[0])) if len(typed_words) >= 2 else {}
+        for j in range(1, len(shown) - 1):
+            a, b = shown[:j], shown[j:]
+            if a in first or (j == 1 and a in SPLIT_PREFIXES):
+                add(a, b, 0.5 * self._known_bonus(b))
+        if len(typed_words) >= 2:
+            for a, la in self.word_options(typed_words[0], 3):
+                for b, lb in self.word_options("".join(typed_words[1:]), 3):
+                    add(a, b, -1.5 + la + lb + self._known_bonus(a) + self._known_bonus(b))
+        return [k for k, _ in sorted(scored.items(), key=lambda x: (-x[1], x[0]))][:keep]
+
+    @staticmethod
+    def wants_merge(first: str, second: str, typed_first: list[str], typed_second: list[str]) -> bool:
+        """Offer a merge only when both words came from the same typed word(s), or the first was typed as a small
+        word that is usually joined (3a, b, l, 7a, bhal…) and written as one (ع، ب، رح، بهال…)."""
+        if not (P.ARABIC_LETTER.search(first) and P.ARABIC_LETTER.search(second)):
+            return False
+        if typed_first and typed_first == typed_second:
+            return True
+        prefix_like = first in MERGE_WORDS or (first.endswith("ال") and len(first) <= 4)
+        return (len(typed_first) == 1 and prefix_like
+                and (typed_first[0] in MERGE_TYPED or typed_first[0].endswith(("al", "el", "il"))))
+
+    def merge_options(self, first: str, second: str, typed_words: list[str], keep: int = 1) -> list[str]:
+        """The two shown words as one: their own letters joined first (رح + verb as ح + verb, a prefix joined with
+        its article), then ال put in after a one-letter prefix, then the typed words spelled as one word."""
+        if not (P.ARABIC_LETTER.search(first) and P.ARABIC_LETTER.search(second)):
+            return []
+        scored: dict[str, float] = {}
+
+        def add(word: str, score: float) -> None:
+            if word and " " not in word and P.ARABIC_LETTER.search(word):
+                scored[word] = max(scored.get(word, -1e9), score)
+
+        if first in FUTURE_WORDS:
+            add("ح" + second, 0.2 + 0.5 * self._known_bonus("ح" + second))
+        joined = b0.join_clitic(first, second)
+        add(joined, 0.5 * self._known_bonus(joined))
+        add(first + second, -0.1 + 0.5 * self._known_bonus(first + second))
+        if first in SPLIT_PREFIXES and not second.startswith("ال"):
+            w = "لل" + second if first == "ل" else first + "ال" + second
+            add(w, -0.6 + self._known_bonus(w))
+        typed = "".join(typed_words)
+        if typed and typed.isascii():
+            for w, lp in self.word_options(typed, 4):
+                add(w, -1.5 + lp + self._known_bonus(w))
+            for w, lp in self.clitic_spellings(typed, keep=4).items():
+                add(w, -1.5 + lp + self._known_bonus(w))
+        return [k for k, _ in sorted(scored.items(), key=lambda x: (-x[1], x[0]))][:keep]
+
+    def span_entry(self, words: list[str], i: int, typed_of) -> tuple[str, int] | None:
+        """The one merge/split entry for the list on word `i` of `words`, if any: (text, -1 / 0 / +1), where 0
+        replaces word i (a split: the text holds a space), +1 word i and the next, -1 the previous word and word i.
+        `typed_of(j)`: the typed words word j came from."""
+        shown = words[i]
+        if self.wants_split(shown, typed_of(i)):
+            for text in self.split_options(shown, typed_of(i)):
+                return text, 0
+        for j, step in ((i + 1, 1), (i - 1, -1)):
+            if 0 <= j < len(words):
+                a, b = (shown, words[j]) if step == 1 else (words[j], shown)
+                ta, tb = (typed_of(i), typed_of(j)) if step == 1 else (typed_of(j), typed_of(i))
+                if self.wants_merge(a, b, ta, tb):
+                    for text in self.merge_options(a, b, ta + [t for t in tb if t not in ta]):
+                        return text, step
+        return None
+
     def suggestions(self, shown: str, typed_words: list[str], guesses: list[tuple[str, float]] = (),
                     limit: int = LIST_LENGTH) -> list[str]:
         """The ↑ list for one word: the best `limit - 1` Arabic candidates, then the typed word to keep it in Latin."""
@@ -573,6 +689,24 @@ FIXTURE_CASES = [
 ]
 
 
+# Merge and split (ADR 0041): (the converted words, the word the list is on, the typed words each came from).
+SPAN_CASES = [
+    (["وانا", "رايح"], 0, [["w", "ana"], ["rayi7"]]),         # a split: the model joined و to the next word
+    (["هالكتر"], 0, [["hal", "kteer"]]),                       # a split from each typed word spelled on its own
+    (["لاقرا"], 0, [["la", "e2ra"]]),
+    (["ع", "سطح"], 1, [["3a"], ["sate7"]]),                    # a merge with the previous word, ال put in
+    (["ع", "سطح"], 0, [["3a"], ["sate7"]]),                    # the same merge from the first word
+    (["رح", "شوف"], 0, [["7a"], ["shof"]]),                    # the future particle: حشوف
+    (["بهال", "شغلة"], 0, [["bhal"], ["sh8le"]]),              # a prefix-like word ending in ال
+    (["ل", "لين"], 0, [["la"], ["lynn"]]),
+    (["ما", "تعمنا"], 1, [["mata3emna"], ["mata3emna"]]),       # both words from one typed word
+    (["كيفك", "شو"], 0, [["kifak"], ["shu"]]),                 # nothing to offer
+    (["ال", "balcony"], 0, [["el"], ["balcony"]]),             # a Latin word: no merge
+    (["شو", "عم", "تعمل"], 1, [["shu"], ["3am"], ["ta3mel"]]),
+]
+SPAN_TYPED = ["w", "ana", "hal", "kteer", "3a", "sate7", "bhal", "la", "mata3emna", "e2ra", "balcony"]
+
+
 def fixture_cases() -> list[tuple[str, list[str], list[tuple[str, float]]]]:
     rows = [json.loads(line) for line in GUESSES.read_text("utf-8").splitlines() if line.strip()]
     sample = rows[::max(len(rows) // 15, 1)][:15]
@@ -600,6 +734,13 @@ def write_fixture(path: Path = FIXTURE) -> dict:
         "typing": [[t, w, round(cands.typing_lp(t, w), 6)] for t, w in
                    [("kifak", "كيفك"), ("kifak", "كيفاك"), ("kifak", "كفيك"), ("kfk", "كيفك"), ("2alle", "قلي")]],
         "units": {t: units(t) for t in typed},
+        "spans": [{"words": words, "index": i, "typed": typed_of,
+                   "entry": list(e) if (e := cands.span_entry(words, i, lambda j, t=typed_of: t[j])) else None,
+                   "split": cands.split_options(words[i], typed_of[i], keep=3),
+                   "merge_next": (cands.merge_options(words[i], words[i + 1], typed_of[i] + typed_of[i + 1], keep=3)
+                                  if i + 1 < len(words) else [])}
+                  for words, i, typed_of in SPAN_CASES],
+        "word_options": {t: [[w, round(s, 6)] for w, s in cands.word_options(t)] for t in SPAN_TYPED},
     }
     path.write_text(json.dumps(fixture, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     return fixture
