@@ -96,6 +96,30 @@ def test_align_traces_a_run_of_typed_words(cands):
     assert C.align(["shu", "3am"], ["شو", "عم"], cands.rules) == [range(0, 1), range(1, 2)]
 
 
+def test_a_word_from_two_typed_words_can_be_split(cands):
+    # The model joined و to the next word: the split puts the space back in its own letters.
+    assert cands.span_entry(["وانا", "رايح"], 0, lambda j: [["w", "ana"], ["rayi7"]][j]) == ("و انا", 0)
+    assert not C.Candidates.wants_split("كيفك", ["kifak"])  # one typed word: never split
+
+
+def test_two_words_can_be_merged_with_either_one_selected(cands):
+    typed = [["3a"], ["sate7"]]
+    assert cands.span_entry(["ع", "سطح"], 0, lambda j: typed[j]) == ("عالسطح", 1)
+    assert cands.span_entry(["ع", "سطح"], 1, lambda j: typed[j]) == ("عالسطح", -1)
+    assert cands.merge_options("رح", "شوف", ["7a", "shof"]) == ["حشوف"]  # the future particle is joined as ح
+
+
+def test_words_always_written_apart_are_never_merged(cands):
+    assert cands.span_entry(["شو", "عم", "تعمل"], 1, lambda j: [["shu"], ["3am"], ["ta3mel"]][j]) is None
+    assert not C.Candidates.wants_merge("ال", "balcony", ["el"], ["balcony"])  # a Latin word stays apart
+
+
+def test_the_swift_fixture_has_the_merge_and_split_cases():
+    fixture = json.loads(C.FIXTURE.read_text(encoding="utf-8"))
+    assert len(fixture["spans"]) == len(C.SPAN_CASES)
+    assert fixture["spans"][0]["entry"] == ["و انا", 0]
+
+
 def test_committed_letter_odds_are_up_to_date():
     train = [r for r in pairs_cli.all_rows(include_private=False) if r.get("split") == "train"]
     committed = json.loads(C.ODDS_PATH.read_text(encoding="utf-8"))
