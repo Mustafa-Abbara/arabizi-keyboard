@@ -9,6 +9,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
+#include <algorithm>
 #include <atomic>
 #include <string>
 #include <vector>
@@ -140,6 +141,7 @@ public:
                     paragraph(L"If the connection drops, run this again: the download carries on where it stopped.",
                               colours.muted);
                 }
+                button(L"Close", Action::Close, true);  // asks first: closing stops the install (RequestClose)
                 break;
             }
             case State::Done:
@@ -208,7 +210,12 @@ private:
 
 Setup setup;
 
-// Runs install.ps1 hidden and sends each line it prints to the window, then its exit code.
+// The install script and everything it starts (curl, regsvr32) run in this job, so closing the window can stop them
+// all, and none is left running after it.
+HANDLE g_job = nullptr;
+
+// Runs install.ps1 hidden and sends each line it prints to the window, then its exit code. The end is the script's
+// exit, not the end of its output: a process it started could keep the output open and the window would wait forever.
 DWORD WINAPI Run(LPVOID parameter) {
     HWND hwnd = static_cast<HWND>(parameter);
     SECURITY_ATTRIBUTES inherit = {sizeof(inherit), nullptr, TRUE};
@@ -223,22 +230,30 @@ DWORD WINAPI Run(LPVOID parameter) {
         startup.hStdOutput = write;
         startup.hStdError = write;
         PROCESS_INFORMATION process = {};
-        if (CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
-                           ModuleFolder().c_str(), &startup, &process)) {
+        if (CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED,
+                           nullptr, ModuleFolder().c_str(), &startup, &process)) {
+            if (g_job) AssignProcessToJobObject(g_job, process.hProcess);
+            ResumeThread(process.hThread);
             CloseHandle(write);
             write = nullptr;
             std::string pending;
             char buffer[4096];
-            DWORD got = 0;
-            while (ReadFile(read, buffer, sizeof(buffer), &got, nullptr) && got > 0) {
-                pending.append(buffer, got);
-                size_t end;
-                while ((end = pending.find_first_of("\r\n")) != std::string::npos) {
-                    if (end > 0) PostMessageW(hwnd, LineMessage, 0, reinterpret_cast<LPARAM>(new std::wstring(Wide(pending.substr(0, end)))));
-                    pending.erase(0, end + 1);
+            auto take = [&]() {  // whatever the script has printed so far, line by line
+                DWORD ready = 0, got = 0;
+                while (PeekNamedPipe(read, nullptr, 0, nullptr, &ready, nullptr) && ready > 0 &&
+                       ReadFile(read, buffer, (std::min)(ready, static_cast<DWORD>(sizeof(buffer))), &got, nullptr) &&
+                       got > 0) {
+                    pending.append(buffer, got);
+                    size_t end;
+                    while ((end = pending.find_first_of("\r\n")) != std::string::npos) {
+                        if (end > 0) PostMessageW(hwnd, LineMessage, 0, reinterpret_cast<LPARAM>(new std::wstring(Wide(pending.substr(0, end)))));
+                        pending.erase(0, end + 1);
+                    }
                 }
-            }
-            WaitForSingleObject(process.hProcess, INFINITE);
+            };
+            while (WaitForSingleObject(process.hProcess, 100) == WAIT_TIMEOUT) take();
+            take();
+            if (!pending.empty()) PostMessageW(hwnd, LineMessage, 0, reinterpret_cast<LPARAM>(new std::wstring(Wide(pending))));
             GetExitCodeProcess(process.hProcess, &code);
             CloseHandle(process.hThread);
             CloseHandle(process.hProcess);
@@ -248,6 +263,20 @@ DWORD WINAPI Run(LPVOID parameter) {
     }
     PostMessageW(hwnd, FinishedMessage, code, 0);
     return 0;
+}
+
+// Closing while the script runs stops it, after asking: once the keyboard is on only the model is left to download,
+// and the next run carries on where it stopped; before that, Harfi may not work until the installer runs again.
+void RequestClose(HWND hwnd) {
+    if (setup.state == State::Installing) {
+        const wchar_t *question = setup.on
+            ? L"The conversion model is still downloading. Close anyway?\n\nHarfi works on its rules until you run "
+              L"the installer again; the download then carries on where it stopped."
+            : L"Harfi is still being installed. Stop now?\n\nIt may not work until you run the installer again.";
+        if (MessageBoxW(hwnd, question, L"Install Harfi", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) return;
+        if (g_job) TerminateJobObject(g_job, 1);
+    }
+    DestroyWindow(hwnd);
 }
 
 void Do(HWND hwnd, Action action) {
@@ -285,7 +314,7 @@ void Do(HWND hwnd, Action action) {
             DestroyWindow(hwnd);
             return;
         }
-        case Action::Close: DestroyWindow(hwnd); return;
+        case Action::Close: RequestClose(hwnd); return;
     }
     InvalidateRect(hwnd, nullptr, FALSE);
 }
@@ -332,14 +361,14 @@ LRESULT CALLBACK Procedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam
                 else if (setup.state == State::Done) Do(hwnd, Action::Open);
                 return 0;
             }
-            if (wParam == VK_ESCAPE && setup.state != State::Installing) {
-                DestroyWindow(hwnd);
+            if (wParam == VK_ESCAPE) {
+                RequestClose(hwnd);
                 return 0;
             }
             break;
         case WM_CLOSE:
-            if (setup.state == State::Installing) return 0;  // the script is still copying or registering
-            break;
+            RequestClose(hwnd);  // asks first while the script runs
+            return 0;
         case WM_DESTROY: PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd, message, wParam, lParam);
@@ -381,6 +410,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
         return SavePng(bitmap, render) ? 0 : 1;
     }
 
+    // The job for the install script: everything in it also stops when this window's process ends.
+    g_job = CreateJobObjectW(nullptr, nullptr);
+    if (g_job) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(g_job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+    }
     if (HWND open = FindWindowW(ClassName, nullptr)) {
         SetForegroundWindow(open);
         return 0;
