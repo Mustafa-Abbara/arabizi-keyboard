@@ -81,7 +81,7 @@ Sources so far (the full datasheet comes with #126). Decisions: [ADR 0010](decis
 
 ### Moustafa's own chats ([ADR 0014](decisions/0014-private-own-chat-data.md); public since [ADR 0028](decisions/0028-all-data-public.md))
 
-**All 1,987 rows are public since 25 Oct 2026** (ADR 0028): `pairs publish-all` moved the 1,873 that were still private into the public files (source `own-chat-published`), after a scan for other people's details and a manual review. `data/private/` is empty of data now; the rest of this section records how the rows were handled while private.
+**All 1,987 rows are public since 25 Oct 2026** (ADR 0028): `pairs publish-all` moved the 1,873 that were still private into the public files (source `own-chat-published`), after a scan for other people's details and a manual review. `data/private/` is empty of data now; the rest of this section records how the rows were handled while private. The 1,687 training rows among them were checked by Moustafa and carry `checked_by: moustafa` (22 Nov 2026).
 
 | Source | Rows | Where | Split |
 |---|---|---|---|
