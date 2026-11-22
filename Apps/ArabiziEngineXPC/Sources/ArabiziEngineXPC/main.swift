@@ -146,7 +146,9 @@ let host = EngineHost(rulesOnly: rulesOnly)
 // quit 47 minutes after its last request in a 30-minute test, 11 Nov 2026).
 let idleCheck = DispatchSource.makeTimerSource(flags: .strict, queue: .global(qos: .utility))
 idleCheck.schedule(deadline: .now() + 60, repeating: 60, leeway: .seconds(1))
-idleCheck.setEventHandler { [host] in
+// @Sendable: written here in the top-level code, the handler would otherwise belong to the main thread, and Swift 6
+// stops the process when it runs on the timer's queue (the service crashed a minute after every start, 22 Nov 2026).
+idleCheck.setEventHandler { @Sendable [host] in
     if host.idle.isIdle, !host.isLoading {
         log.info("idle for 30 minutes: quitting to free the model's memory")
         exit(0)
