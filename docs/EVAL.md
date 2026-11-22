@@ -219,7 +219,7 @@ The shipped system is **v3 through the keyboard engine** (`engine-arabizi-llama3
 
 The largest group is words the model never saw in training: 53% of the automatic count and the second group by hand. More training rows with those words (v4) is the main lever; one-letter spelling differences are the next, and the ⌥Tab / ↑ suggestions offer most of them (50% / 42% of wrong words on dev).
 
-**Not done:** the per-app results (the app matrix, `docs/spikes/ime_app_matrix.md`); the P4 data ablations (with and without the AI-drafted rows and the rule variants) and Q4_K_M against the unquantised model; a peak-memory measurement of v3.
+**Not done:** the per-app results (the app matrix, `docs/spikes/ime_app_matrix.md`); the P4 data ablations (with and without the AI-drafted rows and the rule variants) and Q4_K_M against the unquantised model; a peak-memory measurement of v3. *Update 22 Nov 2026: the data steps are measured in "Data ablations" below, and the Air's peak memory for v4 in "Speed on the Mac".*
 
 ## Speed on Windows (11 Nov 2026)
 
@@ -350,9 +350,58 @@ Llama 3.2 1B v5 (`engine-arabizi-llama3.2-1b-v5-kb`, Q4, 808 MB like v4): v4's r
 - Same architecture and file size as v4, so the same speed; the latency measured here moves with the laptop's load (dev median 555 ms against v4's 442 ms on 16 Nov, the others test 1,084 ms against 1,150 ms).
 - Recommendation: ship v5 in place of v4.
 
+## Data ablations: what each data step added (22 Nov 2026)
+
+Each shipped model added one data step to the one before, with the same base model (Llama 3.2 1B) and recipe. So the steps can be measured from the test answers already saved, with no new test runs. Every model's saved answers on the two test sets were **rescored against today's references, with every answer converted to spelling v2.0** (ADR 0040). The older scores in this file were measured against earlier versions of the references, so they differ slightly from these. Word accuracy; the interval is a paired bootstrap of each model against the one before it.
+
+| Model | Data step added | Training examples | Frozen test (243) | Others test (299) |
+|---|---|---|---|---|
+| Rules (B0) | (no model) | – | 0.606 | 0.614 |
+| v1 ([ADR 0005](decisions/0005-final-model.md)) | hand-written and AI-drafted pairs, with rule-made spelling variants | 8,385 | 0.792 | 0.676 |
+| v2 ([ADR 0022](decisions/0022-model-v2-real-rows.md)) | + 4,994 real messages by friends and family | 22,712 | 0.839 | 0.798 |
+| v3 ([ADR 0030](decisions/0030-model-v3.md)) | + 9,358 more real messages (second batch) | 44,445 | 0.847 | 0.832 |
+| v4 ([ADR 0038](decisions/0038-model-v4.md)) | + 39,340 checked synthetic rows aimed at v3's errors | 122,492 | 0.876 | 0.857 |
+| v5 ([ADR 0040](decisions/0040-spelling-v2.md)) | spelling v2.0 everywhere + 11,393 round 6 rows, 2 epochs | 144,986 | 0.877 | 0.854 |
+
+| Step | Frozen test | Others test |
+|---|---|---|
+| Rules → v1 (fine-tuning at all) | **+0.186** [+0.155, +0.215] | **+0.062** [+0.042, +0.084] |
+| v1 → v2 (real messages, first batch) | **+0.047** [+0.027, +0.067] | **+0.122** [+0.103, +0.140] |
+| v2 → v3 (real messages, second batch) | +0.009 [−0.008, +0.025] | **+0.034** [+0.021, +0.046] |
+| v3 → v4 (synthetic rows aimed at v3's errors) | **+0.028** [+0.012, +0.044] | **+0.025** [+0.012, +0.038] |
+| v4 → v5 (spelling v2.0, round 6) | +0.001 [−0.012, +0.014] | −0.003 [−0.013, +0.007] |
+
+- **Fine-tuning itself is the largest step** on the frozen test, written mostly by one person, like the first data.
+- **Real messages by other people are the largest step on the others test** (+0.122): the first model had seen almost none.
+- **Synthetic rows aimed at measured errors** gave about +0.025 to +0.028 on both sets.
+- **v5's step adds no accuracy on these sets.** Its gain is the spelling: v5 writes spelling v2.0 itself, which v4 does not (v4 is only level here because its answers were converted).
+- **How to read these steps:**
+  - v1 and v2 were scored as the model alone (`ft-…`), v3 to v5 through the keyboard engine; for v3 the two differ by 0.001.
+  - These are cumulative steps, not leave-one-out ablations, so a step's gain depends on what came before it.
+  - The others test was written by the group that also wrote most of the friends-and-family rows (ADR 0021), so part of that step's gain is shared writing habits.
+
 ## Reproducing a baseline from a fresh clone (11 Nov 2026)
 
 `git clone` of `main` at `0b8ca02`, then `uv run --project eval evalrun run --system b0 --split dev`, against the committed run of 29 Oct (`20261029-153707-b0-dev`): the same data (`data_sha256` 08b3a640…), and every accuracy metric identical (word accuracy 0.756, lenient 0.762). Latency p50 0.019 → 0.021 ms (+10%), p95 0.047 → 0.051 ms (+9%), within the 20% the P3 gate allows. Run: `eval/results/20261111-221425-b0-dev`.
+
+## The reproducibility drill (22 Nov 2026, Windows)
+
+A fresh clone of `main` at `47edc95` in a new folder, following only the README's "Reproduce the results" and `Apps/HarfiWindows/README.md`, on the Windows PC (Python 3.10, Swift 6, Visual Studio's build tools):
+
+| Step | Result |
+|---|---|
+| The rules on dev (`evalrun run --system b0 --split dev`) | Word accuracy **0.762**, as the README says. Run: `eval/results/20261122-080633-b0-dev` |
+| llama.cpp at the pinned commit, then `arabizi-cli` | Built, once the repository was in a short folder and Git had `core.longpaths` (below) |
+| The model (`fetch_models.py --shipped --accept-licence llama`) | 808 MB from the `model-v5` release, each part checked, the joined file's SHA-256 matching `config/models.json` |
+| v5 on dev through the keyboard engine (`engine-arabizi-llama3.2-1b-v5-kb`) | Word accuracy **0.870** [0.840, 0.899], as the README says: 102 of 104 sentences from the model, 1 past the keyboard's deadline, 1 stopped by the output check. Run: `eval/results/20261122-080618-engine-arabizi-llama3.2-1b-v5-kb-dev` |
+
+What the drill found, all fixed in the docs or the code the same day:
+
+- **A long folder breaks the build.** In a deep folder, Git stops with "Filename too long" in llama.cpp, and Visual Studio's build tools cannot compile CMake's test program (paths over 260 characters). The READMEs now say to clone into a short folder and set `core.longpaths`.
+- **The engine needed `llama.dll` on PATH.** `arabizi-cli` could not start without a manual PATH step; the harness now adds the pinned llama.cpp build's folder by itself (`eval/src/arabizi_eval/engine.py`).
+- **The model download.** `fetch_models.py` fetched the base models only; `--shipped` now gets Harfi's own model as the installers do. Two problems showed up on the way and are handled: some of GitHub's servers send a certificate chain that Python cannot complete on Windows ("unable to get issuer certificate", now and then), so on Windows the script then downloads that part with Windows' own `curl.exe`, which checks the certificate the Windows way; and a dropped connection (one happened in part 7) now waits and resumes instead of using up its tries at once.
+
+Still to do: the same drill on a Mac, from a fresh user account (#21).
 
 ## Metrics
 

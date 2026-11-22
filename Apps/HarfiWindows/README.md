@@ -1,4 +1,4 @@
-# Harfi for Windows (in progress)
+# Harfi for Windows
 
 A TSF text input processor (`HarfiTIP.dll`, C++) that uses the same core as the Mac keyboard through its C interface (`HarfiCoreC.dll`, built from `Packages/ArabiziCore`), and the same conversion engine with the fine-tuned model as its own process (`harfi-engine.exe`, built from `Packages/ArabiziEngine`). Design and tasks: [ADR 0032](../../docs/decisions/0032-windows-port.md), issue #34.
 
@@ -35,10 +35,12 @@ cmake -S Apps/HarfiWindows -B build/windows -A x64
 cmake --build build/windows --config Release
 ```
 
+**Keep the repository in a short folder** (for example `C:\src\arabizi-keyboard`): llama.cpp has deeply nested files, and Visual Studio's build tools refuse paths over 260 characters. `core.longpaths` below lets Git check them out; the build itself still needs the short path. (Found by the reproducibility drill, 22 Nov 2026: in a long folder Git stops with "Filename too long" and CMake cannot compile its test program.)
+
 The engine needs llama.cpp at the commit the Mac pins (release b11429, commit `d81235049`), fetched by commit because a tag can be moved, built from source into `build/llama.cpp` (or set `LLAMA_CPP_DIR`):
 
 ```bat
-git init build/llama.cpp && cd build/llama.cpp && git remote add origin https://github.com/ggml-org/llama.cpp.git
+git init build/llama.cpp && cd build/llama.cpp && git config core.longpaths true && git remote add origin https://github.com/ggml-org/llama.cpp.git
 git fetch --depth 1 origin d81235049384534c167caea52b85a694f6103d14 && git checkout FETCH_HEAD
 cmake -S . -B build -A x64 -DBUILD_SHARED_LIBS=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DGGML_AVX2=ON
 cmake --build build --config Release --target llama
@@ -50,6 +52,6 @@ The workflow `.github/workflows/windows.yml` does the same, runs the core's test
 
 ## Known gaps
 
-- The word being fixed is not highlighted inside the underlined text (the chip row shows which one it is).
-- The model runs on the CPU only; the engine is not yet in an app container without network access (the Mac's sandbox counterpart).
-- No installer beyond `install.ps1` (task 6); no settings window or input menu yet.
+- The word being fixed is not highlighted inside the underlined text (the chip row and the preview show which one it is).
+- The model runs on the CPU only; the engine is not in an app container without network access (the Mac's sandbox counterpart).
+- Excel: after Enter, Excel moves to the next cell before the conversion lands (testing sheet T033).

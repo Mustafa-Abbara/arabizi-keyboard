@@ -26,6 +26,16 @@ Both models' answers are scored in spelling v2.0 ([ADR 0040](docs/decisions/0040
 
 v5 is v4's model trained again with the same recipe on the spelling v2.0 data plus a sixth round of AI-written pairs (11,393 rows, checked, with no word taken from an evaluation set). It is as accurate as v4 on real messages and writes the new spelling itself (ا for أ/إ, plural و, ليه/ليش), which v4 does not. The same size and speed. A smaller Qwen3-0.6B trained on the same data was 0.017 behind v4 on the others test and is not shipped. Every comparison: [docs/EVAL.md](docs/EVAL.md#llama-v5-against-v4-19-nov-2026).
 
+**With the ↑ list (0.5.1).** Share of all words, model v5, the model's 5 guesses on (both keyboards):
+
+| Set | Right first time | Right after one pick from the ↑ list | Needs "Spell it" (letter by letter) |
+|---|---|---|---|
+| Real chats by new writers | 92.4% | **97.2%** | **2.8%** |
+| Frozen test | 87.7% | 94.2% | 5.8% |
+| Others test | 85.4% | 92.1% | 7.9% |
+
+"After one pick" counts a wrong word as fixed when its right form is among the 6 entries the list shows, including the merge and split entries ([ADR 0041](docs/decisions/0041-merge-split.md)). What each data step added to the model: [docs/EVAL.md](docs/EVAL.md#data-ablations-what-each-data-step-added-22-nov-2026).
+
 ### Model v4 (0.4.0)
 
 | Test set | Rules only | Model v3 | **Model v4** | v4 − v3 (paired) |
@@ -45,6 +55,41 @@ v4 is v3's model trained again with 39,340 synthetic training pairs, written by 
 
 When a word is wrong, the ↑ list offers the right one among its 6 for 78% of v4's wrong words on the real chats, and puts it first 55% of the time (50% with 0.4.0's ranker). With the model's guesses turned on, that becomes 85% and 62%. "Spell it" is needed for 2.9% of all words (2.5% with guesses). What was tried and what limits it: [docs/RANKER_V4.md](docs/RANKER_V4.md), [ADR 0039](docs/decisions/0039-ranker-v4.md).
 
+## Reproduce the results
+
+You need `git` and [uv](https://docs.astral.sh/uv/). The model runs need Swift 6 too, and on Windows Visual Studio's C++ build tools and CMake.
+
+1. **Clone the repository.** On Windows, use a short folder such as `C:\src`, because the llama.cpp build refuses paths over 260 characters.
+   ```
+   git clone https://github.com/Mustafa-Abbara/arabizi-keyboard.git
+   cd arabizi-keyboard
+   ```
+2. **Run the rules (no model).** This needs Python only, through uv:
+   ```
+   uv run --project eval evalrun run --system b0 --split dev
+   ```
+   Word accuracy 0.762 on dev.
+3. **Get the model** (808 MB, checked part by part):
+   ```
+   python3 scripts/fetch_models.py --shipped --accept-licence llama
+   ```
+4. **Build the engine's command-line tool:**
+   - **Mac:**
+     ```
+     swift build -c release --package-path Packages/ArabiziEngine --product arabizi-cli
+     ```
+   - **Windows:** first build llama.cpp as in [Apps/HarfiWindows/README.md](Apps/HarfiWindows/README.md), then:
+     ```
+     swift build -c release --package-path Packages/ArabiziEngine --product arabizi-cli -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+     ```
+5. **Run the model through the keyboard engine:**
+   ```
+   uv run --project eval evalrun run --system engine-arabizi-llama3.2-1b-v5-kb --split dev
+   ```
+   Word accuracy 0.870 on dev with nothing else running. This system uses the keyboard's own deadline, so a busy computer sends some messages to the rules and scores lower.
+
+Each run writes its answers and scores to `eval/results/`. The test sets need `--final` and are run once per final system ([docs/EVAL.md](docs/EVAL.md)). Installing the keyboard itself: [docs/INSTALL.md](docs/INSTALL.md).
+
 ## Repository map
 
 | Path | Purpose |
@@ -57,8 +102,16 @@ When a word is wrong, the ↑ list offers the right one among its 6 for 78% of v
 | `docs/process/S0_SETUP.md` | Runbook for setting up tools, GitHub, and the S0 gate |
 | `scripts/doctor.py` | Checks that your machine has the required tools |
 | `scripts/github/bootstrap.py` | Creates labels, milestones, issues (from the roadmap) and branch rules on GitHub |
-
-More folders arrive as the stages need them: `Apps/ArabiziIME` (P1), `data/` (P2), `eval/` (P3), `train/` (P4), `Packages/` and `config/` (P5).
+| `Apps/ArabiziIME` | The Mac keyboard (InputMethodKit) and its sandboxed engine service |
+| `Apps/HarfiWindows` | The Windows keyboard (a text service), its installer and the Harfi window |
+| `Packages/ArabiziCore` | What both keyboards share: rules, the composer, the ↑ list, your words |
+| `Packages/ArabiziEngine`, `Packages/ArabiziLLM` | The conversion engine and the model runner (llama.cpp) |
+| `config/` | The engine's settings and the pinned models (`models.json`, with each file's SHA-256) |
+| `data/` | The training pairs, the frozen test set, the rule files (`data/pairs/`, `data/rules/`) |
+| `eval/` | The evaluation harness and every run (`eval/results/`) |
+| `train/` | The fine-tuning scripts and notebooks (Kaggle, Colab) and each run's record |
+| `scripts/` | Builds, installers, data tools and `fetch_models.py` |
+| `site/` | The website |
 
 ## Team
 
