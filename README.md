@@ -73,11 +73,13 @@ You need `git` and [uv](https://docs.astral.sh/uv/). The model runs need Swift 6
    ```
    python3 scripts/fetch_models.py --shipped --accept-licence llama
    ```
+   On a slow connection this can take over an hour (72 minutes in the Mac drill of 22 Nov 2026). If it stops, run the same command again: the parts already downloaded are kept and it carries on.
 4. **Build the engine's command-line tool:**
    - **Mac:**
      ```
      swift build -c release --package-path Packages/ArabiziEngine --product arabizi-cli
      ```
+     The first build downloads the llama.cpp framework (an XCFramework zip from GitHub) through SwiftPM. If that download times out, fetch the zip named in `swift package resolve -vv --package-path Packages/ArabiziLLM` with a resuming `curl -L -C - -O <url>`, put it in `~/Library/Caches/org.swift.swiftpm/artifacts/` under the file name SwiftPM prints, and build again; SwiftPM still checks its checksum.
    - **Windows:** first build llama.cpp as in [Apps/HarfiWindows/README.md](Apps/HarfiWindows/README.md), then:
      ```
      swift build -c release --package-path Packages/ArabiziEngine --product arabizi-cli -Xcc -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
@@ -86,7 +88,7 @@ You need `git` and [uv](https://docs.astral.sh/uv/). The model runs need Swift 6
    ```
    uv run --project eval evalrun run --system engine-arabizi-llama3.2-1b-v5-kb --split dev
    ```
-   Word accuracy 0.870 on dev with nothing else running. This system uses the keyboard's own deadline, so a busy computer sends some messages to the rules and scores lower.
+   Word accuracy 0.870 on dev with nothing else running. This system uses the keyboard's own deadline, so a busy computer sends some messages to the rules and scores lower. For the timings, run on power: on battery the Mac's were 2–4 times slower (the accuracy was the same).
 
 Each run writes its answers and scores to `eval/results/`. The test sets need `--final` and are run once per final system ([docs/EVAL.md](docs/EVAL.md)). Installing the keyboard itself: [docs/INSTALL.md](docs/INSTALL.md).
 
