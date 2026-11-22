@@ -11,7 +11,7 @@ As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026; the i
 | Model file missing (not installed, not yet published) | Arabic from the rules (less accurate); the installer says the model can be added later | `withoutAModelTheRulesAnswer`, `missingModelFileThrows` (ArabiziLLM); installer: `scripts/test_harfi_setup.sh` (not published yet) |
 | Model file corrupt (SHA-256 differs from `config/models.json`) | Arabic from the rules; the installer deletes a damaged download and asks to run it again | `aModelFileWithTheWrongHashIsNotUsed`; installer: `scripts/test_harfi_setup.sh` (damaged download) |
 | Model too slow for the message's deadline (ADR 0025) | Arabic from the rules for that message | `badAnswersGiveTheRules` (deadline case), `theDeadlineGrowsWithTheMessageUpToItsCap` |
-| Model still loading after login | Arabic from the rules until it is ready (about 1.5 s) | `withoutAModelTheRulesAnswer`; load in background: **manual** (`arabizi-engine-check` status) |
+| Model still loading after login | Arabic from the rules until it is ready (about 1.5 s) | `withoutAModelTheRulesAnswer`; load in background: **manual** (`arabizi-engine-check` status); checked by hand on the 8 GB Air, 22 Nov 2026: a freshly started engine reports `loading: 1` and answers from the rules in 2 ms |
 | Model answer unusable: invented Latin words, lost placeholder, runaway length, emoji changed | Repaired word by word when each word can be traced, otherwise Arabic from the rules | `badAnswersGiveTheRules`, `mixedTokensAreSplit`, `anInventedWordIsReplacedByTheRulesForItsInputWord`, `untraceableLatinStillGivesTheRules`, `aMisreadArabiziWordLeftInLatinIsConvertedByTheRules`, `emojiMustComeBackAsTyped` |
 | Model throws an error | Arabic from the rules | `aFailingModelGivesTheRules` |
 | Very long input (over `max_input_chars`) | Arabic from the rules, without the model | `tooLongInputSkipsTheModel` |
@@ -28,14 +28,14 @@ As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026; the i
 |---|---|---|
 | Engine service crashes or does not answer | The keyboard's own rules answer (after the deadline plus 0.5 s); the next message reconnects | `aServiceThatNeverAnswersGivesUpAfterTheDeadline`, `aServiceThatCrashesIsReachedAgainOnTheNextMessage` (`swift test --package-path Apps/ArabiziIME`) |
 | Engine service idle for 30 minutes | It quits and gives back the model's memory (about 1 GB); the next message gets the rules while the model loads again (about 3 s) | `theEngineIsIdleOnlyAfterTheLimitWithoutRequests`, `theDefaultLimitIsHalfAnHour` (ArabiziEngine); the quit itself: **manual** (`log stream`: "idle for 30 minutes", 11 Nov 2026) |
-| Engine tries the network | Refused by the sandbox (no network entitlement); nothing is sent | **manual**: `arabizi-engine-check` must report `network: blocked` |
-| Engine config unreadable | The keyboard's own rules | `committedConfigLoads` (the shipped config loads); unreadable case: **manual** |
+| Engine tries the network | Refused by the sandbox (no network entitlement); nothing is sent | **manual**: `arabizi-engine-check` must report `network: blocked`; checked by hand on the 8 GB Air, 22 Nov 2026: `network: blocked` (0.5.2) |
+| Engine config unreadable | The keyboard's own rules | `committedConfigLoads` (the shipped config loads); unreadable case: **manual**; checked by hand on the 8 GB Air, 22 Nov 2026: with a broken `engine.json` the service logs "engine service cannot start" and exits; the keyboard gets a connection error and uses its rules |
 | Rule dictionary missing | Letter rules only | `missingDictionaryMeansLetterRulesOnly` |
 | English word list missing | The guard is off; English goes to the model, which keeps English words itself | `theGuardIsOffWithoutItsFile` |
-| Rule files missing altogether | The toy letter converter keeps typing usable | **manual** (logged as "Rule files not loaded") |
+| Rule files missing altogether | The toy letter converter keeps typing usable | `noRuleFilesAtAllIsRefusedAndTheToyConverterStillTypes` (ArabiziCore); the keyboard logs "Rule files not loaded" |
 | Correction record unreadable or its key replaced | No personal suggestions; nothing else changes | `theStoreEncryptsKeepsAndExpiresCorrections` (wrong key reads nothing) |
 | Model download drops | It resumes the part in progress, also on a later run | `scripts/test_harfi_setup.sh` (resumed part, already downloaded) |
-| App quarantined (downloaded through a browser or Homebrew) | macOS refuses to open it ("could not check it for malicious software"); the one-line installer avoids it | **manual**; documented in `docs/INSTALL.md` |
+| App quarantined (downloaded through a browser or Homebrew) | macOS refuses to open it ("could not check it for malicious software"); the one-line installer avoids it | **manual**; documented in `docs/INSTALL.md`; checked by hand on the 8 GB Air, 22 Nov 2026: the 0.5.2 zip with a Safari quarantine mark is `rejected` by `spctl --assess` (ad hoc, no Team ID); the one-line installer installs it |
 
 ## Typing in apps
 
@@ -43,9 +43,9 @@ As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026; the i
 |---|---|---|
 | Password field (secure input) | Nothing is underlined or converted; keys go straight to the field | `secureInputNeverComposes`, `passwordFieldsForgetTheLastConversion` |
 | App cannot report the cursor | ⌘Z stays the app's own undo, ⌥Enter beeps, ⌥Tab does nothing | `undoIsTheAppsOwnWhenTheCursorMoved`, `optionTabDoesNothingWhenTheCursorMovedOrNothingWasConverted` |
-| App reports no or a wrong text position | The preview and chips sit at the last good position, above the text | **manual** (`lineRect` / `plausibleLine`) |
+| App reports no or a wrong text position | The preview and chips sit at the last good position, above the text | **manual** (`lineRect` / `plausibleLine`); Brave and Claude, 17 Nov 2026: they report no cursor or marked range while ending a sentence, and typing goes on; where the boxes then sit was not checked by hand |
 | No room above the line for the preview and the chips | Both go below the line, the chips on the far side of the preview, never over the text | `withRoomThePreviewIsAboveTheLineAndTheChipsAboveIt`, `whenThePreviewFitsAboveButNotTheChipsBothGoBelow` |
-| App drops marked text set over a range (Notes) | ⌘Z and ↑ right after Enter still work: the converted text is deleted first, then the Latin or the spellings are composed at the cursor | **manual** (`replace(_:with:)`; Notes and WhatsApp, 11 Nov 2026) |
+| App drops marked text set over a range (Notes) | ⌘Z and ↑ right after Enter still work: the converted text is deleted first, then the Latin or the spellings are composed at the cursor | **manual** (`replace(_:with:)`; Notes and WhatsApp, 11 Nov 2026; Notes again on the 8 GB Air with 0.5.2, 22 Nov 2026: ⌘Z after Enter brought the Latin back) |
 | ↑ pressed when nothing was just converted, or after the cursor moved | The app's own ↑ (the cursor moves) | `upIsTheAppsWhenTheCursorMovedOrAnotherKeyCameFirst`, `upRightAfterAConversionOrAFixOpensTheSpellings` |
 | Focus moves away while composing | The Latin text is committed unchanged | `focusLossCommitsLatinNotConverted`, `focusLossForgetsTheLastConversion` |
 | App without marked-text support | Per app, recorded in the matrix | **open**: `docs/spikes/ime_app_matrix.md` |
