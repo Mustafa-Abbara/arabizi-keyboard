@@ -16,6 +16,8 @@ Use messages of your own, but never paste private chats into a bug report: descr
 - [ ] **"Show me how to use it"** opens the Harfi window **in front**, not only as a flashing button in the taskbar.
 - [ ] **Update over an older version:** the old version is replaced, and the model is **not** downloaded again when it is already there.
 - [ ] **Keyboard list:** Harfi appears in Windows' keyboards under **Arabic (Lebanon)**, with the Harfi icon.
+- [ ] **Close during install:** start the installer when the model must download, and press Close (or the window's ✕) while it downloads. It **asks first**; "No" keeps installing; "Yes" closes it at once. Running the installer again carries on the download where it stopped.
+- [ ] **Old models removed:** after an update that brings a new model, `%LOCALAPPDATA%\Harfi\models\` holds only the current model.
 - [ ] **Uninstall** (Installed apps → Harfi → Uninstall) removes it from the keyboard list and deletes `%LOCALAPPDATA%\Harfi`, including the model and your words. Do this last, or on a test account.
 
 ## 2. Switching to Harfi
@@ -78,6 +80,12 @@ In Notepad, with Harfi on:
 - [ ] **Your highlight stays:** if you already moved to a spelling with ↓ before the guesses arrive, that spelling and those before it **stay in place**. Only the ones after it can change.
 - [ ] **Next message isn't slowed:** send a message, then quickly type and send the next one without pressing ↑. The second one isn't noticeably slower.
 
+### Merge and split (0.5.1 and later)
+
+- [ ] **Merge:** type `3a sate7 l bet` and Enter. If Harfi wrote ع سطح as two words, press ↑ and move to either word: the **last Arabic chip is عالسطح**. While it is highlighted, the preview shows one merged word, selected. Picking it replaces both words.
+- [ ] **Split:** type `w ana rayi7` and Enter. If Harfi joined وانا, the list on it ends with **و انا**. Picking it puts the space back.
+- [ ] **Never offered:** on عم in `shu 3am ta3mel`, no merge chip.
+
 ### Spell it
 
 - [ ] Click **Spell it** (or press Alt+Tab a second time): you spell the word letter by letter. **Tab** changes the letter and **Enter** takes it.
@@ -131,6 +139,17 @@ For each app, check type → preview → Enter → ↑ → hover → pick:
 - [ ] **Model loading:** right after switching on, the first message may use the rules. Within a few seconds the preview starts showing the model's Arabic.
 - [ ] **Idle:** after 30 minutes without typing, `harfi-engine.exe` quits, freeing memory, and the next message starts it again. That message is a little slower.
 - [ ] **Offline:** with Wi-Fi off, everything above still works. Harfi never needs the internet after installing.
+
+## 9b. The failure matrix's hand checks (docs/FAILURE_MATRIX.md)
+
+Add the date and the result of each to the matrix's "Hand checks (dated)" table.
+
+- [ ] **Engine not running:** in Task Manager, end `harfi-engine.exe`, then type a message in Notepad and press Enter. It converts at once with the rules; the next message (a few seconds later) is the model's.
+- [ ] **Engine killed while typing:** type a long message, end `harfi-engine.exe` just before Enter. Arabic from the rules appears within about 2 s, and typing never freezes.
+- [ ] **Download drops:** during a model download, turn Wi-Fi off; the installer says it failed. Turn Wi-Fi on and run the installer again: it carries on from the parts already done.
+- [ ] **Files in use:** with Harfi in use in Notepad, run the installer again. It installs; Notepad keeps working; `status.ps1` marks Notepad "OLDER: restart this app" until it is restarted.
+- [ ] **Switching keyboards while typing:** type a few words (no Enter) and press Win+Space. The Latin stays; the app doesn't freeze.
+- [ ] **Ending the composition:** type a few words and click elsewhere in the document. The Latin stays as typed.
 
 ## 10. Reporting a problem
 

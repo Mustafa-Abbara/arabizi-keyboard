@@ -2,7 +2,7 @@
 
 Every failure Harfi can meet, what the user sees, and what checks it. The rule throughout: a failure never stops typing; the worst case is the rule converter's Arabic, or the Latin text unchanged. Tests are Swift tests (`swift test --package-path Packages/<package>`) unless marked **manual**; manual rows are gaps for the P7 gate (every row needs a passing test).
 
-As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026.
+As of 1 Nov 2026 (v0.1.0, model v3); the Windows section as of 7 Nov 2026; the installer rows and the hand-check log as of 22 Nov 2026 (v0.5.1, model v5).
 
 ## Engine and model
 
@@ -87,9 +87,22 @@ The same rule holds: a failure never stops typing. On Windows the model runs in 
 |---|---|---|
 | Model download drops | Run `install.ps1` again: it keeps the parts already complete (checked by SHA-256), resumes the part in progress and checks every part | **manual** |
 | Keyboard files in use by open apps | Installed anyway: the old files are moved aside and removed at a later install | **manual** (`install.ps1`, 7 Nov 2026) |
+| The installer window is closed while it installs | It asks first. Yes stops the install script and everything it started (a job object); once the keyboard is on, only the model is left, and the next run carries on where it stopped | **manual**: "Install Harfi.exe" with stand-in scripts, 22 Nov 2026 (asked, then the script and its child process stopped) |
+| A process the install script started keeps its output open | The window still finishes when the script exits (it no longer waits for the output to close) | **manual**: the same stand-in check, 22 Nov 2026 (reached Done and closed) |
+| Earlier models left from an older version (808 MB each) | Removed once the current model is in place, with any leftover download parts; on the Mac since #101 | `install.ps1` (22 Nov 2026); Mac: `scripts/test_harfi_setup.sh` |
 | Learned-words record unreadable (or its key replaced) | No personal suggestions or habits; nothing else changes | `theStoreEncryptsKeepsAndExpiresCorrections`, `refusedHabitsAreKeptSealedAndCanBeAllowedAgain` |
 | A habit the user does not want | Esc while the tip shows refuses it; "Don't" under Your words in the Harfi window later (`harfi-words refuse WORD` for developers) | `aThirdPickOnASecondDayBecomesAHabitThatCanBeRefused` |
 | Two apps record a fix at the same moment | Both fixes are kept: a change waits for the other app (a lock folder beside the record; one left by an app that ended is taken over after 10 s) | `twoAppsSavingAtTheSameMomentKeepBothFixes`, `aLockLeftByAnAppThatEndedIsTakenOver` |
+
+## Hand checks (dated)
+
+| Date | Where | Row | Result |
+|---|---|---|---|
+| 22 Nov 2026 | Windows laptop, 0.5.1 | Store app (app container) | Pass: `icacls %LOCALAPPDATA%\Harfi\words` lists only `NT AUTHORITY\SYSTEM` and the account |
+| 22 Nov 2026 | Windows laptop, 0.5.1 | An app still holds an older build | `status.ps1` runs and reports the installed build (2026-11-20) and the engine's state; no app had Harfi loaded at the time, so the "OLDER" mark was not exercised |
+| 22 Nov 2026 | Windows laptop | Installer closed while installing; output kept open | Pass with stand-in scripts (rows above) |
+
+Still by hand and not yet dated: on Windows, the engine killed or not running while typing, a model download that drops, keyboard files in use, an app with no text position, ending the composition, switching keyboards while typing, and the pipe rows (another account, an administrator app, a pipe error). On the Mac: the rows in `MAC_HANDOFF.md` §5b.
 
 ## Gaps to close for the P7 gate
 

@@ -230,4 +230,14 @@ if ($model) {
         Stop-Engine
         Write-Host "Model downloaded: Harfi uses it from the next sentence."
     }
+    # Earlier models (808 MB each) and the parts of an older download go once this one is in place, as on the Mac.
+    if ((Test-Path $modelFile) -and (Get-Item $modelFile).Length -eq $model.size) {
+        $old = @(Get-ChildItem (Split-Path $modelFile) -Filter "*.gguf" -File | Where-Object Name -ne $model.file)
+        if ($old.Count -gt 0) {
+            Stop-Engine
+            $old | Remove-Item -Force -ErrorAction SilentlyContinue
+            Write-Host "Removed $($old.Count) earlier model file(s)."
+        }
+        Remove-Item -Recurse -Force (Join-Path $target "models\download") -ErrorAction SilentlyContinue
+    }
 }
