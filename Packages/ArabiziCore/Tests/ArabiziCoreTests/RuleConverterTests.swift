@@ -172,6 +172,17 @@ enum JSONValue: Decodable {
     #expect(converter.convert("ktir") == "كتير")
 }
 
+/// Failure matrix: rule files missing altogether. The converter refuses the empty folder, and the keyboards fall
+/// back to the toy letter converter, which still gives Arabic letters, so typing stays usable.
+@Test func noRuleFilesAtAllIsRefusedAndTheToyConverterStillTypes() throws {
+    let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    #expect(throws: (any Error).self) { try RuleConverter(rulesDirectory: folder) }
+    let typed = ToyTransliterator.convert("kifak")
+    #expect(!typed.isEmpty && typed.unicodeScalars.contains { (0x0600...0x06FF).contains($0.value) })
+}
+
 @Test func overlappingWordEndingsAreRejected() throws {
     var rules = try #require(JSONSerialization.jsonObject(with: rulesData) as? [String: Any])
     var letters = try #require(rules["letters"] as? [String: Any])
