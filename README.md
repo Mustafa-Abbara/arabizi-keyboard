@@ -6,7 +6,7 @@ This project builds **Harfi, a local, private keyboard for macOS and Windows**: 
 
 > EECE 503N/798S — Agentic Systems, Fall 2026. Path A (application). Phase 1 scope approved by Dr. Mohanna (see [ADR 0010](docs/decisions/0010-phase1-pivot.md)).
 
-**Status:** Harfi 0.5.1 for Mac and Windows, with model v5. Install: [docs/INSTALL.md](docs/INSTALL.md). Plan and gates: [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** Harfi 0.5.2 for Mac and Windows, with model v5. Install: [docs/INSTALL.md](docs/INSTALL.md). Plan and gates: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Results
 
