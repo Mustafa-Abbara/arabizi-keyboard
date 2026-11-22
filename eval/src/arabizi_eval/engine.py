@@ -11,6 +11,7 @@ and the outcomes (model, fallbackTimeout, fallbackCheckFailed…) and fallback r
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import uuid
 from collections import Counter
@@ -60,8 +61,14 @@ class EngineSystem(System):
         args += [] if self.repair else ["--no-repair"]
         args += ["--keyboard-deadline"] if self.keyboard_deadline else []
         args += [] if self.pin else ["--no-pin"]
+        # On Windows the engine needs llama.dll from the pinned llama.cpp build (Apps/HarfiWindows/README.md); without
+        # it on PATH the engine cannot start and only "no status line" is seen.
+        env = dict(os.environ)
+        dll = P.ROOT / "build" / "llama.cpp" / "build" / "bin" / "Release"
+        if dll.exists():
+            env["PATH"] = str(dll) + os.pathsep + env.get("PATH", "")
         self.process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        text=True, encoding="utf-8", bufsize=1)
+                                        text=True, encoding="utf-8", bufsize=1, env=env)
         status = self._status()
         self.describe["status"] = status
         if self.model_id and status.get("state") != "ready":

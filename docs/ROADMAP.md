@@ -351,9 +351,9 @@ arabizi-keyboard/
 **Deliverables:** `docs/EVAL.md`, `docs/FAILURE_MATRIX.md`, `docs/THREAT_MODEL.md`, report, demo video, tagged release `v1.0`.
 
 **Gate (final):**
-- [ ] Every P1–P6 gate is ticked with linked evidence.
-- [ ] The reproducibility drill passes using only the docs.
-- [ ] Every failure-matrix row has a passing test. *12 Nov 2026: 36 of 53 rows name a test, and every named test exists; 17 rows are checked by hand (most on Windows: the engine's pipe, app containers, installs over open apps).*
+- [ ] Every P1–P6 gate is ticked with linked evidence. *22 Nov 2026: P2–P5 are ticked except two P2 boxes (rows without `checked_by`, licence lines); P3 and P5's issues are closed with their evidence. P0, P1 and P6 have boxes only a Mac or a hand check can tick (`MAC_HANDOFF` §3–5).*
+- [ ] The reproducibility drill passes using only the docs. *22 Nov 2026, Windows, fresh clone in a new folder: passes after three fixes found on the way (a short folder and `core.longpaths`, the engine finding `llama.dll` by itself, `fetch_models.py --shipped`); rules 0.762 and v5 0.870 on dev, as the README says (EVAL.md, "The reproducibility drill"). The Mac drill on a fresh user account is still to do (#21).*
+- [ ] Every failure-matrix row has a passing test. *12 Nov 2026: 36 of 53 rows name a test, and every named test exists; 17 rows are checked by hand (most on Windows: the engine's pipe, app containers, installs over open apps). 22 Nov 2026: three installer rows added; the hand checks are dated in the matrix's log as they are done (the learned-words access passes), with the remaining Windows steps in `docs/TESTING_CHECKLIST.md` §9b.*
 
 **Rubric mapping:** all categories; Documentation 10%.
 
@@ -395,7 +395,7 @@ Starting Phase 2 needs a new ADR and a revised roadmap section.
 ## 8. Final submission checklist
 
 - [ ] Repo: README with install steps, licence, `docs/` complete, CI green, tagged `v1.0`.
-- [ ] Model: GGUF hash in `docs/MODELS.md`, `scripts/fetch_models.sh` works, licences listed. *The shipped v3 file's SHA-256 is in MODELS.md (12 Nov 2026); the installers download and check it from the `model-v3` release. `scripts/fetch_models.py` fetches the base models only.*
+- [ ] Model: GGUF hash in `docs/MODELS.md`, `scripts/fetch_models.sh` works, licences listed. *The shipped model's SHA-256 is in MODELS.md (v5 since 19 Nov 2026); the installers download and check it from the `model-v5` release, and so does `scripts/fetch_models.py --shipped --accept-licence llama` (22 Nov 2026) for a developer. Licences: MODELS.md and NOTICE.*
 - [ ] Data: `docs/DATA.md` datasheet, frozen test set + manifest, provenance on every row.
-- [ ] Evaluation: `docs/EVAL.md` with CIs, ablations, latency/RSS on the 8 GB Air. *CIs and latency on the Air: yes. Not done: the data ablations, and v3's peak memory (EVAL.md, "Not done").*
+- [ ] Evaluation: `docs/EVAL.md` with CIs, ablations, latency/RSS on the 8 GB Air. *CIs and latency on the Air: yes. Data steps: measured from every model's saved test answers, rescored on today's references (EVAL.md, "Data ablations", 22 Nov 2026). Peak memory on the Air: v4 measured (901 MB footprint at its peak, EVAL.md "Speed on the Mac"); v5 to measure (`MAC_HANDOFF` §4).*
 - [ ] Demo: live demo in WhatsApp/Slack + backup video.
