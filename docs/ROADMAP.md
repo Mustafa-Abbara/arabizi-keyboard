@@ -174,7 +174,7 @@ About 8–12 hours in W1, spread over the week:
 
 **Gate:**
 - [x] Test + dev ≥ 300 human-written sentences, each with a delayed self-check; the freeze check fails CI when one test line is edited on a branch. *347 (test 243 + dev 104), all `method: hand`, `checked_by: moustafa-delayed`; `test_freeze.py` and `test_repository_pairs_are_valid` fail on an edited line, in the required `python` check, and `testset guard` refuses a manifest change without its label.*
-- [ ] Training set ≥ 2,000 pairs with `method` and `checked_by` on every row; the schema test passes. *18,039 rows, `method` on every row, the schema test passes. Not met: 1,687 rows of `train-hand.jsonl` (`own-chat-published`, Moustafa's own messages, 14 Oct 2026) have `checked_by: null`.*
+- [x] Training set ≥ 2,000 pairs with `method` and `checked_by` on every row; the schema test passes. *18,039 rows, `method` on every row, the schema test passes. The 1,687 rows of `train-hand.jsonl` (`own-chat-published`, Moustafa's own messages, 14 Oct 2026) had `checked_by: null`; Moustafa checked them and they carry `checked_by: moustafa` since 22 Nov 2026.*
 - [x] No training row matches a dev/test row (duplicate check in CI). *`pairs.validate` reports a training row that repeats a held-out one ("train row leaks held-out row"); `test_repository_pairs_are_valid` runs it on every PR in the required `python` check.*
 - [ ] Every source in `docs/DATA.md` has a licence line, and every `ai_checked` batch has its provider-terms note. *The four `ai_checked` batches have the Anthropic terms note. Not met: no source has a licence line (the repository is MIT; the data's licence is not stated), and the "full datasheet" DATA.md points to (#126) does not exist.*
 
