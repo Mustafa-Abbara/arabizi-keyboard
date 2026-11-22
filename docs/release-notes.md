@@ -1,5 +1,12 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.5.2** (Windows)
+
+- **The installer window can always be closed:** closing it, Esc or the Close button now work at every step. While it is installing, it asks first; once the keyboard is on, only the model download is left, and the next install resumes it. It also no longer waits forever if the install ends without saying so.
+- **Old models are removed:** once the current model is in place, the files of earlier models (about 800 MB each) are deleted.
+
+Nothing changes on the Mac but the version number. The model is unchanged (v5): if you have it, it is not downloaded again.
+
 **New in 0.5.1**
 
 - **Fixing a space in the ↑ list:** when Harfi writes two words where you meant one (ع سطح for عالسطح, رح شوف for حشوف) or one where you meant two (وانا for و انا), the ↑ list now offers the fix as its last spelling. Choosing it replaces both words, or puts the space back. On real messages, about 1 in 4 of these mistakes could be fixed from the list before, and about half can be now.
