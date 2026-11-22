@@ -280,6 +280,22 @@ running.
 - **Memory:** the engine service's physical footprint 380 MB while converting, 901 MB at its peak (`vmmap --summary`);
   its resident size peaks at 1.7 GB, which also counts the 808 MB model file mapped into memory.
 
+**Model v5** (22 Nov 2026, ADR 0040): the same setup with v5 on AC power, one run each, nothing else running; with a
+v4 control run on frozen dev the same hour.
+
+| System | Frozen dev (104): word acc. | p50 / p95 ms | Others dev (200): word acc. | p50 / p95 ms | Rule fallbacks (deadline + check) |
+|---|---|---|---|---|---|
+| v4 control (`engine-arabizi-llama3.2-1b-v4-kb`, 22 Nov) | 0.759 | 200 / 406 | – | – | 0 + 1 |
+| **v5** (`engine-arabizi-llama3.2-1b-v5-kb`) | **0.870** | **186 / 340** | **0.857** | **328 / 550** | 0 + 2 |
+
+- **Accuracy:** the same as v5 on the Windows processor (0.870 / 0.857). The v4 control scores 0.759 because the dev
+  references are now in spelling v2.0, which v4 does not write.
+- **Speed:** v5 is as fast as v4 measured the same hour, and well inside the Mac budgets on both sets. The v4 run of
+  16 Nov above was slower under that day's conditions (442 / 847 ms); a first v5 run on battery gave 415 / 727 and
+  290 / 1,296 ms and was not kept.
+- **Memory:** the engine service's physical footprint 374 MB while converting, 900 MB at its peak (`vmmap --summary`;
+  v4: 380 / 901); its resident size peaks at 1.29 GB, which also counts the 808 MB model file mapped into memory.
+
 ## Speed of the ↑ list's model guesses (16 Nov 2026)
 
 The model's 5 guesses for a wrong word (ADR 0036 #5, ADR 0039 #5), asked the way the keyboards ask: the Swift engine
