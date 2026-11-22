@@ -1,5 +1,11 @@
 Harfi turns Lebanese Arabizi into Arabic as you type, entirely on your own computer.
 
+**New in 0.5.3** (Mac)
+
+- **The conversion engine no longer stops a minute after it starts:** in 0.5.x the Mac's engine crashed about a minute after each start. Harfi carried on with its rules and started it again, so typing never stopped, but some sentences came out from the less accurate rules and the model was loaded again each time. It now keeps running until 30 minutes without use, as intended.
+
+Nothing changes on Windows but the version number. The model is unchanged (v5): if you have it, it is not downloaded again.
+
 **New in 0.5.2** (Windows)
 
 - **The installer window can always be closed:** closing it, Esc or the Close button now work at every step. While it is installing, it asks first; once the keyboard is on, only the model download is left, and the next install resumes it. It also no longer waits forever if the install ends without saying so.
