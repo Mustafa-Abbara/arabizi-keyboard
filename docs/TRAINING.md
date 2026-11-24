@@ -145,6 +145,8 @@ Qwen3-0.6B v2 is level with Llama v4 on the frozen test set but 0.017 behind on 
 - **Export:** Q4_K_M (about 1.1 GB, as shipped) and Q5_K_M (about 1.26 GB). No Q8_0: it cannot fit the 1.5 GB budget, and for Qwen 0.6B it was at most a fraction of a point above Q4.
 - **Scoring:** against Llama v5 and Qwen v2 on dev, others dev and the real chats, with every answer in spelling v2.0. The test sets come only once a model is a final candidate. Memory and speed per message are measured on the 8 GB Air. Base Qwen3-1.7B already peaked at 1,438 MB there with 5-shot prompts, so memory is the main risk. Q5_K_M is kept only if it fits and scores clearly better than Q4_K_M.
 
+**Trained** (run `20261119-151244-qwen3-1.7b-lora-v1`, registered as `arabizi-qwen3-1.7b-v1` and `-q5` in `config/models.json`): 2 epochs, 8,608 steps on a T4 in fp16, over several Colab sessions (the free GPU quota ran out twice). Best validation loss 0.1630 at epoch 2 (0.1752 after epoch 1), against 0.1781 for Qwen v2 and 0.1660 for Llama v5. Different tokenizers, so only accuracy decides. The record's `minutes` (36.8) counts only the last session, resumed from checkpoint-8070. A disconnect writes no `PARTIAL.json`, so the earlier sessions' time is not added. GGUFs: Q4_K_M 1,107,408,640 bytes and Q5_K_M 1,257,879,296 bytes. Not scored yet.
+
 ## Smoke run first (optional)
 
 Add `--limit 200 --epochs 1` to the training command in the notebook to check everything end to end in a few minutes before the full run.

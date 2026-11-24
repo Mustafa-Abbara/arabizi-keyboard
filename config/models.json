@@ -359,6 +359,42 @@
             "prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 19 Nov 2026\n\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n",
             "suffix": "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
       }
+    },
+    {
+      "id": "arabizi-qwen3-1.7b-v1",
+      "base": "qwen3-1.7b",
+      "run": "train/runs/20261119-151244-qwen3-1.7b-lora-v1.json",
+      "file": "arabizi-qwen3-1.7b-v1-Q4_K_M.gguf",
+      "size": 1107408640,
+      "sha256": "5b509947e67235e5dc0a22633c850ba6be0a7eb956fb48a43fc2ca129808dd68",
+      "params": "1.7B",
+      "quant": "Q4_K_M",
+      "licence": "Apache-2.0",
+      "licence_acceptance": null,
+      "publisher": "this project: LoRA fine-tune of Qwen3-1.7B on Colab with Llama v5's recipe, 2 epochs, on spelling v2.0 data plus round 6 (ADR 0040); weights not in the repo (1.11 GB)",
+      "source": "Qwen3-1.7B v1 (24 Nov 2026): does a larger Qwen close Qwen v2's gap on the others test?",
+      "prompt": {
+            "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+            "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+      }
+    },
+    {
+      "id": "arabizi-qwen3-1.7b-v1-q5",
+      "base": "qwen3-1.7b",
+      "run": "train/runs/20261119-151244-qwen3-1.7b-lora-v1.json",
+      "file": "arabizi-qwen3-1.7b-v1-Q5_K_M.gguf",
+      "size": 1257879296,
+      "sha256": "1cdaa181d25c9c6d36309c17ffc85cbd5504c258f5a1c7e23c913d490c60f81f",
+      "params": "1.7B",
+      "quant": "Q5_K_M",
+      "licence": "Apache-2.0",
+      "licence_acceptance": null,
+      "publisher": "this project: LoRA fine-tune of Qwen3-1.7B on Colab with Llama v5's recipe, 2 epochs, on spelling v2.0 data plus round 6 (ADR 0040); weights not in the repo (1.26 GB)",
+      "source": "Qwen3-1.7B v1 (24 Nov 2026): kept only if it fits the 1.5 GB budget and scores clearly above Q4_K_M",
+      "prompt": {
+            "prefix": "<|im_start|>system\nConvert Lebanese Arabizi to Lebanese Arabic script. Keep English words, numbers, links and emoji as they are.<|im_end|>\n<|im_start|>user\n",
+            "suffix": "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+      }
     }
   ]
 }
