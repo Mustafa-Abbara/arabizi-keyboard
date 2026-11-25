@@ -101,6 +101,7 @@ Each run writes its answers and scores to `eval/results/`. The test sets need `-
 | `docs/QUESTIONS_BEFORE_BUILDING.md` | 100 design questions with recommended answers (written for v1; ADR 0010 overrides where they conflict) |
 | `docs/ASSUMPTIONS.md` | Every unconfirmed assumption and its status |
 | `docs/decisions/` | Architecture decision records (ADRs) |
+| `docs/OBSERVABILITY.md` | Conversion traces (route, step times, token counts; never text) and `evalrun ops`, the operational metrics |
 | `docs/process/S0_SETUP.md` | Runbook for setting up tools, GitHub, and the S0 gate |
 | `scripts/doctor.py` | Checks that your machine has the required tools |
 | `scripts/github/bootstrap.py` | Creates labels, milestones, issues (from the roadmap) and branch rules on GitHub |

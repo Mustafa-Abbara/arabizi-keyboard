@@ -2,11 +2,13 @@
 // engine. One ConvertRequest per line on stdin, one ConvertResponse per line on stdout (docs/API_CONTRACTS.md).
 // The engine's status goes to stderr as one JSON line at start-up. Never prints the text it converts to stderr.
 //
-//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--no-repair] [--no-pin] [--no-incremental] [--keyboard-deadline]
+//   arabizi-cli [--config DIR] [--rules DIR] [--models DIR] [--model ID | --no-model] [--skip-hash] [--explain] [--trace] [--no-repair] [--no-pin] [--no-incremental] [--keyboard-deadline]
 // A line that is a WordGuessRequest (`"kind": "wordGuesses"`) gets a WordGuessResponse: the ↑ list's model guesses
 // (ADR 0036). Conversions and guesses can be mixed, as the keyboard sends them.
 // --explain writes one line per request to stderr: why a fallback happened, or how many tokens of a model answer
 // were repaired (ADR 0023); reason null otherwise. Counts only, no text.
+// --trace (with --explain) adds each conversion's trace to that line: its route, the time of each step and the
+// model's token counts (ConversionTrace, docs/OBSERVABILITY.md). No text either.
 import ArabiziContracts
 import ArabiziCore
 import ArabiziEngine
@@ -23,7 +25,7 @@ func json(_ value: Any) -> String {
 }
 
 var configDirectory = "config", rulesDirectory = "data/rules", modelsDirectory = "models"
-var modelOverride: String?, noModel = false, verifyHash = true, explain = false, repair = true
+var modelOverride: String?, noModel = false, verifyHash = true, explain = false, trace = false, repair = true
 var keyboardDeadline = false, pin = true, incremental = true
 var arguments = CommandLine.arguments.dropFirst().makeIterator()
 @MainActor func value(after flag: String) -> String {
@@ -39,6 +41,7 @@ while let argument = arguments.next() {
     case "--no-model": noModel = true
     case "--skip-hash": verifyHash = false
     case "--explain": explain = true
+    case "--trace": trace = true
     case "--no-repair": repair = false
     case "--no-pin": pin = false  // the whole prompt decoded for every conversion, as before the instruction was kept
     case "--no-incremental": incremental = false  // every text converted on its own (ADR 0037)
@@ -100,11 +103,12 @@ while let line = readLine(strippingNewline: true) {
                                      deadlineMs: engine.config.deadlineMs(for: request.text),
                                      incremental: request.incremental)
         }
-        let (response, reason) = engine.convertExplained(request)
+        let (response, reason, conversionTrace) = engine.convertTraced(request)
         FileHandle.standardOutput.write(try encoder.encode(response) + Data("\n".utf8))
         if explain {
             let shown = reason.map(json) ?? "null"
-            FileHandle.standardError.write(Data((#"{"line": \#(lineNumber), "reason": "# + shown + "}\n").utf8))
+            let traced = trace ? #", "trace": "# + conversionTrace.jsonLine() : ""
+            FileHandle.standardError.write(Data((#"{"line": \#(lineNumber), "reason": "# + shown + traced + "}\n").utf8))
         }
     } catch {
         // The request is not echoed: it can hold private text.

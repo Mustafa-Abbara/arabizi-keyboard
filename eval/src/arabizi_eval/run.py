@@ -3,6 +3,7 @@
   uv run --project eval evalrun run --system identity --split dev
   uv run --project eval evalrun score predictions.jsonl --split dev --name qwen-0.5b-kaggle
   uv run --project eval evalrun compare eval/results/RUN_A eval/results/RUN_B
+  uv run --project eval evalrun ops eval/results/RUN            (or an engine's traces.jsonl)
 
 Tune on dev; the test split needs --final and should be run once per final candidate (roadmap §4).
 Each run writes eval/results/<run_id>/predictions.jsonl (per sentence: output + scores) and metrics.json.
@@ -54,7 +55,7 @@ def git_sha() -> str:
 
 
 def score_outputs(rows: list[dict], outputs: dict[str, dict]) -> tuple[list[dict], dict]:
-    """Score `outputs` ({id: {"prediction": str, "latency_ms": float?}}) for every row."""
+    """Score `outputs` ({id: {"prediction": str, "latency_ms": float?, "trace": dict?}}) for every row."""
     records, scores = [], []
     for row in rows:
         result = outputs.get(row["id"])
@@ -64,6 +65,8 @@ def score_outputs(rows: list[dict], outputs: dict[str, dict]) -> tuple[list[dict
         scores.append(score)
         records.append({"id": row["id"], "arabizi": row["arabizi"], "reference": row["arabic"],
                         "prediction": result["prediction"], **metrics.to_dict(score)})
+        if result.get("trace"):
+            records[-1]["trace"] = result["trace"]
     summary = metrics.aggregate(scores)
     if scores:
         _, low, high = bootstrap.ratio_ci([s.words_correct for s in scores], [s.words_total for s in scores])
@@ -121,6 +124,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             start = time.perf_counter()
             prediction = system.convert(row)
             outputs[row["id"]] = {"prediction": prediction, "latency_ms": (time.perf_counter() - start) * 1000}
+            trace = getattr(system, "last_trace", None)  # the engine's trace of this sentence (no text)
+            if trace:
+                outputs[row["id"]]["trace"] = trace
             if n % 25 == 0:
                 print(f"  {n}/{len(rows)} sentences", flush=True)
     finally:
@@ -168,6 +174,13 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ops(args: argparse.Namespace) -> int:
+    from arabizi_eval import ops
+    summary = ops.summarise_source(args.source)
+    print(json.dumps(summary, ensure_ascii=False, indent=2) if args.json else ops.render(summary))
+    return 0 if summary["requests"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="evalrun", description=__doc__,
@@ -195,8 +208,12 @@ def main(argv: list[str] | None = None) -> int:
     compare = sub.add_parser("compare", help="paired bootstrap on word accuracy between two runs")
     compare.add_argument("run_a", type=Path)
     compare.add_argument("run_b", type=Path)
+    ops_parser = sub.add_parser("ops", help="operational metrics from the engine's traces (docs/OBSERVABILITY.md)")
+    ops_parser.add_argument("source", type=Path, help="a run folder, a traces.jsonl file, or `log show` ndjson")
+    ops_parser.add_argument("--json", action="store_true", help="print the summary as JSON")
     args = parser.parse_args(argv)
-    return {"run": cmd_run, "score": cmd_score, "compare": cmd_compare}[args.command](args)
+    return {"run": cmd_run, "score": cmd_score, "compare": cmd_compare,
+            "ops": cmd_ops}[args.command](args)
 
 
 if __name__ == "__main__":
