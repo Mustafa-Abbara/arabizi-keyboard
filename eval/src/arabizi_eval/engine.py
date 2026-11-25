@@ -6,6 +6,8 @@
 `engine-<id>` runs the engine with that fine-tuned model switched on; `engine-rules` with the model off (the Swift
 rule fallback). Each sentence is one ConvertRequest on the CLI's stdin; the response's text and latency are scored,
 and the outcomes (model, fallbackTimeout, fallbackCheckFailed…) and fallback reasons (counts only) are recorded.
+Each sentence's trace (route, time of each step, token counts; never text: docs/OBSERVABILITY.md) is kept in
+`last_trace`, which `evalrun run` saves with the prediction; `evalrun ops` summarises them.
 """
 
 from __future__ import annotations
@@ -53,10 +55,11 @@ class EngineSystem(System):
         self.outcomes: Counter = Counter()
         self.reasons: Counter = Counter()
         self.repairs: Counter = Counter()
+        self.last_trace: dict | None = None
 
     def start(self) -> None:
         args = [str(cli_path()), "--config", str(P.ROOT / "config"), "--rules", str(P.ROOT / "data" / "rules"),
-                "--models", str(P.ROOT / "models"), "--explain"]
+                "--models", str(P.ROOT / "models"), "--explain", "--trace"]
         args += ["--model", self.model_id] if self.model_id else ["--no-model"]
         args += [] if self.repair else ["--no-repair"]
         args += ["--keyboard-deadline"] if self.keyboard_deadline else []
@@ -97,7 +100,8 @@ class EngineSystem(System):
         self.process.stdin.flush()
         response = json.loads(self.process.stdout.readline())
         self.outcomes[response["outcome"]] += 1
-        reason = json.loads(self.process.stderr.readline()).get("reason")  # --explain: one line per request
+        explained = json.loads(self.process.stderr.readline())  # --explain --trace: one line per request
+        reason, self.last_trace = explained.get("reason"), explained.get("trace")
         if response["outcome"] not in ("model", "passthrough"):
             self.reasons[reason or "?"] += 1
         elif reason:  # a model answer repaired token by token (ADR 0023)

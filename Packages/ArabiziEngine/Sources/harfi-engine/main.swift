@@ -5,7 +5,8 @@
 // ConvertRequest in, its ConvertResponse out, or a WordGuessRequest in (`"kind": "wordGuesses"`, ADR 0036), its
 // WordGuessResponse out; the line `status` gets the model state. One engine per user: a second
 // one finds the pipe taken and quits. After half an hour without a request it quits, which frees the model's memory;
-// the next conversion starts it again. Never logs user text: only states, outcomes and timings (engine.log).
+// the next conversion starts it again. Never logs user text: only states, outcomes and timings (engine.log), and each
+// conversion's trace (traces.jsonl: route, step times, token counts).
 import ArabiziContracts
 import ArabiziCore
 import ArabiziEngine
@@ -38,6 +39,31 @@ func log(_ message: String) {
         try? line.write(to: file)
     }
 }
+
+/// One conversion's trace (ConversionTrace: route, step times, token counts, never text), appended to traces.jsonl
+/// next to engine.log for `evalrun ops` (docs/OBSERVABILITY.md). Past 2 MB the file becomes traces.1.jsonl (the one
+/// before is dropped), so at most about 4 MB, some 10,000 conversions, are kept.
+func record(_ trace: ConversionTrace) {
+    traceLock.withLock {
+        let file = Setup.folder.appending(path: "traces.jsonl")
+        let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0
+        if size > 2_000_000 {
+            let previous = Setup.folder.appending(path: "traces.1.jsonl")
+            try? FileManager.default.removeItem(at: previous)
+            try? FileManager.default.moveItem(at: file, to: previous)
+        }
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let line = Data(#"{"at": "\#(stamp)", "trace": \#(trace.jsonLine())}"#.utf8 + [10])
+        if let handle = try? FileHandle(forWritingTo: file) {
+            handle.seekToEndOfFile()
+            handle.write(line)
+            try? handle.close()
+        } else {
+            try? line.write(to: file)
+        }
+    }
+}
+let traceLock = NSLock()
 
 final class Host: @unchecked Sendable {  // `engine`, `loading` and `lastUse` are behind `lock`
     private let lock = NSLock()
@@ -89,8 +115,9 @@ final class Host: @unchecked Sendable {  // `engine`, `loading` and `lastUse` ar
             return (try? Contract.encoder().encode(response)) ?? Data("{}".utf8)
         }
         guard let request = try? decoder.decode(ConvertRequest.self, from: line) else { return Data("{}".utf8) }
-        let response = current.convert(request)
+        let (response, _, trace) = current.convertTraced(request)
         log("converted: \(response.outcome.rawValue) in \(response.latencyMs) ms")
+        record(trace)
         return (try? Contract.encoder().encode(response)) ?? Data("{}".utf8)
     }
 

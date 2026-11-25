@@ -9,7 +9,7 @@ Harfi is an input method: it sees every key typed while it is selected. The desi
 | Text being typed (Latin and its Arabic) | Memory of the keyboard and the engine service, for the message being typed; the live preview keeps the last 16 conversions in memory | Never. Not logged, not stored |
 | Corrections: one typed word, the spelling chosen and the one replaced, with a date | `~/Library/Application Support/ArabiziKeyboard/corrections.bin`, AES-GCM encrypted, entries older than 30 days dropped; the key in `corrections.key` beside it (mode 0600, folder 0700), folder excluded from backups | Never. "Forget" and "Forget all" in Harfi's window delete them |
 | Settings and practice ticks | The keyboard's user defaults (`lb.aub.arabizi.inputmethod.ArabiziIME`) | Never |
-| Logs | macOS unified log, subsystem `lb.aub.arabizi`: key kinds, word positions, lengths, outcomes, timings, model status | Only if the user shares a log. Never the text (log calls mark only these values public) |
+| Logs | macOS unified log, subsystem `lb.aub.arabizi`: key kinds, word positions, lengths, outcomes, timings, model status, and each conversion's trace (category `trace`: route, step times, word and token counts; docs/OBSERVABILITY.md) | Only if the user shares a log. Never the text (log calls mark only these values public; a test checks a trace holds none of the typed or converted words) |
 | Model and rule files | Inside the app bundle | They are downloaded once by the installer; nothing goes up |
 
 There is no telemetry, no crash reporting to a server, no update check and no account.
@@ -50,6 +50,7 @@ The same goal on Windows: what a user types never leaves the PC and is never wri
 | Settings (the Harfi window) | `%LOCALAPPDATA%\Harfi\settings.json`: on/off switches only (live preview, faster preview), no text | Never |
 | Tip counters | `HKCU\Software\Harfi` (how many times a tip was shown or a feature used: numbers only) | Never |
 | Engine log | `%LOCALAPPDATA%\Harfi\engine.log`: start, model state, each conversion's outcome and time | Only if the user shares it. Never the text |
+| Conversion traces | `%LOCALAPPDATA%\Harfi	races.jsonl` (and `traces.1.jsonl`, at most about 4 MB together): each conversion's route, step times, word and token counts (docs/OBSERVABILITY.md) | Only if the user shares it. Never the text |
 | Debug log (off unless `HKCU\Software\Harfi\DebugLog` is 1) | `%LOCALAPPDATA%\Harfi\debug.log`: lifecycle events and the app's name | Only if shared. Never the text |
 | Model and rule files | `%LOCALAPPDATA%\Harfi` | Downloaded once by `install.ps1`; nothing goes up |
 

@@ -9,6 +9,7 @@ import Foundation
 import os
 
 let log = Logger(subsystem: "lb.aub.arabizi", category: "engine")
+let traces = Logger(subsystem: "lb.aub.arabizi", category: "trace")
 let resources = Bundle.main.resourceURL ?? Bundle.main.bundleURL
 
 final class EngineHost: NSObject, ArabiziEngineServiceProtocol, @unchecked Sendable {  // state behind `lock`
@@ -51,8 +52,12 @@ final class EngineHost: NSObject, ArabiziEngineServiceProtocol, @unchecked Senda
             return
         }
         let current = lock.withLock { engine }
-        let response = current.convert(decoded)
+        let (response, _, trace) = current.convertTraced(decoded)
         log.debug("converted: \(response.outcome.rawValue, privacy: .public) in \(response.latencyMs) ms")
+        // The conversion's trace (route, step times, token counts; never text), at the default level so the system
+        // keeps it: `log show --predicate 'subsystem == "lb.aub.arabizi" AND category == "trace"' --style ndjson`
+        // (docs/OBSERVABILITY.md).
+        traces.notice("\(trace.jsonLine(), privacy: .public)")
         reply((try? encoder.encode(response)) ?? Data())
     }
 

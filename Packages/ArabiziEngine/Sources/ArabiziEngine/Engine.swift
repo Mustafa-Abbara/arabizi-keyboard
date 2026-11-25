@@ -123,14 +123,52 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
     /// The response and, for a fallback, why: a short reason with counts only, never user text (for logs and
     /// arabizi-cli --explain).
     public func convertExplained(_ request: ConvertRequest) -> (response: ConvertResponse, reason: String?) {
+        let (response, reason, _) = convertTraced(request)
+        return (response, reason)
+    }
+
+    /// The response, the reason, and the conversion's trace: its route, the time of each step and the model's token
+    /// counts (ConversionTrace). Like the reason, the trace holds no user text.
+    public func convertTraced(_ request: ConvertRequest)
+        -> (response: ConvertResponse, reason: String?, trace: ConversionTrace) {
         let started = ContinuousClock.now
+        var mark = started
+        var spans: [ConversionTrace.Span] = []
+        var route = "model"
         var reason: String?
+        var generated: Generation?
+        var repairedCount: Int?
+        /// Ends the current step: its time runs from the end of the previous one.
+        func lap(_ name: String) {
+            let now = ContinuousClock.now
+            spans.append(ConversionTrace.Span(name: name, ms: ConversionTrace.milliseconds(now - mark)))
+            mark = now
+        }
         func respond(_ text: String, _ outcome: Outcome, confidence: [Double]? = nil)
-            -> (response: ConvertResponse, reason: String?) {
+            -> (response: ConvertResponse, reason: String?, trace: ConversionTrace) {
             let elapsed = ContinuousClock.now - started
             let ms = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+            let wordCount = { (s: String) in s.split(whereSeparator: \.isWhitespace).count }
+            let stop: String? = generated.map {
+                switch $0.stop {
+                case .endOfTurn: "endOfTurn"
+                case .maxTokens: "maxTokens"
+                case .deadline: "deadline"
+                }
+            }
+            let trace = ConversionTrace(
+                route: route, outcome: outcome.rawValue, reason: reason, inputWords: wordCount(request.text),
+                outputWords: wordCount(text), deadlineMs: request.deadlineMs, promptTokens: generated?.promptTokens,
+                generatedTokens: generated?.generatedTokens, stop: stop, repairedTokens: repairedCount, spans: spans,
+                totalMs: ConversionTrace.milliseconds(elapsed))
             return (ConvertResponse(id: request.id, text: text, outcome: outcome, latencyMs: ms,
-                                    wordConfidence: confidence), reason)
+                                    wordConfidence: confidence), reason, trace)
+        }
+        /// The rules answer instead of the model.
+        func fallback(_ outcome: Outcome) -> (response: ConvertResponse, reason: String?, trace: ConversionTrace) {
+            let answer = ruled(request.text)
+            lap("rules")
+            return respond(answer, outcome)
         }
         /// The model's confidence per word, when the answer still has as many words as the model wrote.
         func confidence(_ answer: String, _ generation: Generation) -> [Double]? {
@@ -140,57 +178,77 @@ public final class Engine: @unchecked Sendable {  // immutable after init; the g
         }
         let text = request.text
         guard text.unicodeScalars.contains(where: { $0.isASCII && $0.properties.isAlphabetic }) else {
+            route = "passthrough"
+            lap("route")
             return respond(text, .passthrough)
         }
         if let englishGuard, englishGuard.isEnglish(text) {
+            route = "english"
             reason = "english"
+            lap("route")
             return respond(text, .passthrough)
         }
         guard let generator, let template else {
+            route = "noModel"
             reason = "no model"
-            return respond(ruled(text), .fallbackModelUnavailable)
+            lap("route")
+            return fallback(.fallbackModelUnavailable)
         }
         guard text.count <= config.maxInputChars else {
+            route = "tooLong"
             reason = "input longer than max_input_chars"
-            return respond(ruled(text), .fallbackModelUnavailable)
+            lap("route")
+            return fallback(.fallbackModelUnavailable)
         }
+        lap("route")
         let protected = ProtectedSpans.protect(text)
         let words = protected.masked.split(whereSeparator: \.isWhitespace).count
         let limit = min(10 * words + 32, config.maxOutputTokens)
+        lap("protect")
         let generation: Generation
         do {
             generation = try generator.generate(template.render(protected.masked), maxTokens: limit,
                                                 timeout: .milliseconds(request.deadlineMs),
                                                 reuseLast: request.incremental ?? true)
         } catch {
+            lap("generate")
             reason = "generation error: \(error)"
-            return respond(ruled(text), .fallbackModelUnavailable)
+            return fallback(.fallbackModelUnavailable)
         }
+        generated = generation
+        lap("generate")
         switch generation.stop {
         case .deadline:
             reason = "deadline after \(generation.generatedTokens) tokens"
-            return respond(ruled(text), .fallbackTimeout)
+            return fallback(.fallbackTimeout)
         case .maxTokens:
             reason = "token limit \(limit)"
-            return respond(ruled(text), .fallbackCheckFailed)
+            return fallback(.fallbackCheckFailed)
         case .endOfTurn:
-            switch checks.check(Self.clean(generation.text), for: protected) {
+            let checked = checks.check(Self.clean(generation.text), for: protected)
+            lap("check")
+            switch checked {
             case .success(let converted):
                 let answer = kept(converted, typed: text)
+                lap("restore")
                 return respond(answer, .model, confidence: confidence(answer, generation))
             case .failure(.newLatin(let invented)):
                 let answer = Self.clean(generation.text)
-                if repairTokens, let (repaired, count) = Self.repair(answer, input: protected.masked, rules: rules),
-                   case .success(let converted) = checks.check(repaired, for: protected) {
+                let repaired = repairTokens ? Self.repair(answer, input: protected.masked, rules: rules) : nil
+                let rechecked = repaired.map { checks.check($0.0, for: protected) }
+                lap("repair")
+                if let (_, count) = repaired, case .success(let converted) = rechecked {
                     reason = "repaired: \(count) token(s)"
+                    repairedCount = count
                     let final = kept(converted, typed: text)
+                    lap("restore")
                     return respond(final, .model, confidence: confidence(final, generation))
                 }
                 reason = Self.describe(.newLatin(invented))
-                return respond(ruled(text), .fallbackCheckFailed)
+                return fallback(.fallbackCheckFailed)
             case .failure(let failure):
                 reason = Self.describe(failure)
-                return respond(ruled(text), .fallbackCheckFailed)
+                return fallback(.fallbackCheckFailed)
             }
         }
     }
